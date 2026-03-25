@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Дэшборд — {{ app_name }}{% endblock %}
+
+{% block topbar %}
+<nav class="topbar">
+  <span class="topbar-brand">{{ app_name }}</span>
+  <div class="topbar-nav">
+    <span class="small muted" style="font-size:13px;">{{ user_id }}</span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Выйти</a>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px;">
+    <div>
+      <h1 style="margin:0; font-size: 22px; font-weight: 700;">Компании</h1>
+      <div class="small muted mt-4">Управляйте компаниями и запускайте AI-анализ рисков</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Добавить компанию</div>
+    <form method="post" action="/companies/create" id="company-form">
+      <div class="row">
+        <div class="field" style="margin-bottom:0;">
+          <label for="name">Название компании</label>
+          <input id="name" name="name" type="text" placeholder="ТОО «Пример»" required />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="ceo_email">Email CEO</label>
+          <input id="ceo_email" name="ceo_email" type="email" placeholder="ceo@company.com" required />
+        </div>
+        <div style="display:flex; align-items:flex-end; min-width:auto; flex:0;">
+          <button type="submit" class="btn btn-primary" id="add-btn" style="white-space:nowrap;">
+            + Добавить
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      Список компаний
+      {% if companies %}
+        <span class="badge" style="margin-left:8px; font-weight:400;">{{ companies|length }}</span>
+      {% endif %}
+    </div>
+
+    {% if companies|length == 0 %}
+      <div style="text-align:center; padding: 32px 0; color: var(--text-muted);">
+        <div style="font-size:36px; margin-bottom:12px;">🏢</div>
+        <div style="font-weight:500;">Нет компаний</div>
+        <div class="small mt-4">Добавьте первую компанию выше</div>
+      </div>
+    {% else %}
+      {% for c in companies %}
+        <div class="company-row">
+          <div>
+            <div style="font-weight: 600;">{{ c.name }}</div>
+            <div class="small muted mt-4">{{ c.ceo_email }}</div>
+          </div>
+          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">
+            Открыть →
+          </a>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+<script>
+document.getElementById('company-form').addEventListener('submit', function() {
+  var btn = document.getElementById('add-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+});
+</script>
+{% endblock %}

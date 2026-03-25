@@ -1,0 +1,760 @@
+{% extends "base.html" %}
+{% block title %}{{ company.name }} — {{ app_name }}{% endblock %}
+
+{% block topbar %}
+<nav class="topbar">
+  <span class="topbar-brand">{{ app_name }}</span>
+  <div class="topbar-nav">
+    <a href="/dashboard" class="btn btn-ghost btn-sm">← Компании</a>
+    <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-ghost btn-sm">⬇ PDF</a>
+    <a href="/logout" class="btn btn-ghost btn-sm">Выйти</a>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+  /* ── Header ── */
+  .page-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 20px;
+  }
+  .page-title { font-size: 22px; font-weight: 700; margin: 0; }
+  .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── Top metrics ── */
+  .metrics-row {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  @media (max-width: 640px) { .metrics-row { grid-template-columns: 1fr; } }
+
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 22px;
+  }
+  .metric-label {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px;
+  }
+  .metric-value { font-size: 40px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
+  .metric-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+  }
+  .metric-badge-yellow { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .metric-badge-green  { background: rgba(74,222,128,0.15);  color: #4ade80; }
+  .metric-badge-red    { background: rgba(248,113,113,0.15); color: #f87171; }
+  .metric-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .metric-delta { font-size: 14px; font-weight: 700; }
+  .delta-up   { color: #f87171; }
+  .delta-down { color: #4ade80; }
+  .delta-flat { color: var(--text-muted); }
+
+  /* ── Category cards ── */
+  .categories-grid {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px; margin-bottom: 16px;
+  }
+  @media (max-width: 800px) { .categories-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 480px) { .categories-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  .cat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 12px;
+    cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    position: relative; min-width: 0; overflow: hidden;
+  }
+  .cat-card:hover { background: var(--surface-hover); }
+  .cat-card.active {
+    border-color: var(--cat-color, var(--accent));
+    background: rgba(79,143,255,0.06);
+  }
+  .cat-icon { font-size: 20px; margin-bottom: 8px; }
+  .cat-name { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .cat-score { font-size: 28px; font-weight: 800; color: var(--cat-color, var(--text)); line-height: 1; margin-bottom: 6px; }
+  .cat-bar-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .cat-bar-fill  { height: 100%; border-radius: 2px; background: var(--cat-color, var(--accent)); transition: width 0.6s ease; }
+
+  /* ── Risk tab panel ── */
+  .risk-panel { display: none; }
+  .risk-panel.active { display: block; }
+
+  .risk-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .risk-panel-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .risk-panel-score {
+    font-size: 32px; font-weight: 800;
+    padding: 4px 16px; border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .risk-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-bullet {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px;
+  }
+  .risk-body { flex: 1; min-width: 0; }
+  .risk-text { font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
+  .risk-sources { display: flex; flex-wrap: wrap; gap: 6px; }
+  .source-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--accent); text-decoration: none; transition: background 0.15s;
+  }
+  .source-link:hover { background: rgba(79,143,255,0.12); }
+  .source-tag {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    border-radius: 3px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-right: 2px;
+  }
+  .tag-news     { background: rgba(79,143,255,0.15); color: #93bbff; }
+  .tag-threads  { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+  .tag-hh       { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .tag-market   { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .tag-regulatory { background: rgba(248,113,113,0.15); color: #f87171; }
+
+  /* ── Charts row ── */
+  .charts-row {
+    display: grid; grid-template-columns: 180px 1fr; gap: 12px; margin-bottom: 16px;
+    align-items: start;
+  }
+  @media (max-width: 660px) { .charts-row { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; min-width: 0; overflow: hidden;
+  }
+  .chart-label {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px;
+  }
+  .gauge-wrap {
+    position: relative; width: 140px; height: 76px; margin: 0 auto 6px;
+  }
+  .gauge-val {
+    position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+    font-size: 28px; font-weight: 800; line-height: 1;
+  }
+  .gauge-sub { text-align: center; font-size: 12px; color: var(--text-muted); }
+
+  /* ── Advice card ── */
+  .advice-card {
+    background: rgba(79,143,255,0.06); border: 1px solid rgba(79,143,255,0.2);
+    border-left: 3px solid var(--accent); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.6;
+  }
+  .advice-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+
+  /* ── Loading overlay ── */
+  .analysis-loading {
+    display: none; position: fixed; inset: 0;
+    background: rgba(11,18,32,0.88); backdrop-filter: blur(4px);
+    z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  }
+  .analysis-loading.active { display: flex; }
+  .loading-spinner {
+    width: 48px; height: 48px; border: 4px solid rgba(79,143,255,0.2);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  .loading-step { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-muted); transition: color 0.3s; }
+  .loading-step.active { color: var(--text); }
+  .loading-step.done { color: #4ade80; }
+  .step-icon { width: 20px; text-align: center; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ── Misc ── */
+  .section-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin: 20px 0 10px; }
+</style>
+
+<!-- Loading overlay -->
+<div class="analysis-loading" id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div style="text-align:center">
+    <div style="font-size:16px;font-weight:600;margin-bottom:20px">Анализируем компанию…</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="loading-step active" id="step-0"><span class="step-icon">📰</span> Получаем новости…</div>
+      <div class="loading-step" id="step-1"><span class="step-icon">🧵</span> Сканируем Threads…</div>
+      <div class="loading-step" id="step-2"><span class="step-icon">💼</span> Вакансии HH.ru…</div>
+      <div class="loading-step" id="step-3"><span class="step-icon">⚖️</span> Регуляторные сигналы…</div>
+      <div class="loading-step" id="step-4"><span class="step-icon">📊</span> Рыночная аналитика…</div>
+      <div class="loading-step" id="step-5"><span class="step-icon">🤖</span> Claude AI анализирует…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications -->
+{% if msg == 'sent' %}<div class="alert alert-success" style="margin-bottom:12px"><span class="alert-icon">✓</span> Сообщение отправлено CEO.</div>{% endif %}
+{% if msg == 'email_added' %}<div class="alert alert-success" style="margin-bottom:12px"><span class="alert-icon">✓</span> Сигнал добавлен в базу.</div>{% endif %}
+{% if error == 'webhook_failed' %}<div class="alert alert-error" style="margin-bottom:12px"><span class="alert-icon">✕</span> Ошибка отправки. Проверьте настройку вебхука в n8n.</div>{% endif %}
+
+<!-- Header -->
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ company.name }}</h1>
+    <div class="page-sub">CEO: <a href="mailto:{{ company.ceo_email }}">{{ company.ceo_email }}</a> · Risk Intelligence Center</div>
+  </div>
+  <form method="post" action="/risks/run" id="risk-form">
+    <input type="hidden" name="company_id" value="{{ company.id }}" />
+    <button type="submit" class="btn btn-primary" id="risk-btn">▶ Запустить анализ</button>
+  </form>
+</div>
+
+{% set latest = risk_runs[0] if risk_runs else none %}
+{% set cats = latest.categories if latest and latest.categories else none %}
+{% set prev = risk_runs[1] if risk_runs|length > 1 else none %}
+
+<!-- Top metrics -->
+<div class="metrics-row">
+  <!-- Overall Risk -->
+  <div class="metric-card">
+    <div class="metric-label">Overall Risk Level</div>
+    {% if latest and latest.score is not none %}
+      {% set s = latest.score | int %}
+      <div class="metric-value {% if s < 35 %}stat-green{% elif s < 65 %}stat-yellow{% else %}stat-red{% endif %}">{{ s }}</div>
+      <div>
+        <span class="metric-badge {% if s < 35 %}metric-badge-green{% elif s < 65 %}metric-badge-yellow{% else %}metric-badge-red{% endif %}">
+          {% if s < 35 %}Low Risk{% elif s < 65 %}Moderate Risk{% else %}High Risk{% endif %}
+        </span>
+      </div>
+    {% else %}
+      <div class="metric-value" style="color:var(--text-muted);font-size:28px">Нет данных</div>
+      <div class="metric-sub">Запустите анализ</div>
+    {% endif %}
+  </div>
+
+  <!-- Risk Velocity -->
+  <div class="metric-card">
+    <div class="metric-label">Risk Velocity</div>
+    {% if latest and prev and latest.score is not none and prev.score is not none %}
+      {% set delta = (latest.score | int) - (prev.score | int) %}
+      {% if delta > 0 %}
+        <div class="metric-value delta-up" style="font-size:36px">↑</div>
+        <div class="metric-delta delta-up">+{{ delta }} пунктов</div>
+      {% elif delta < 0 %}
+        <div class="metric-value delta-down" style="font-size:36px">↓</div>
+        <div class="metric-delta delta-down">{{ delta }} пунктов</div>
+      {% else %}
+        <div class="metric-value delta-flat" style="font-size:36px">→</div>
+        <div class="metric-delta delta-flat">Без изменений</div>
+      {% endif %}
+      <div class="metric-sub">vs предыдущий анализ</div>
+    {% else %}
+      <div class="metric-value" style="color:var(--text-muted);font-size:28px">—</div>
+      <div class="metric-sub">Нужно 2+ анализа</div>
+    {% endif %}
+  </div>
+
+  <!-- Crisis Probability -->
+  <div class="metric-card">
+    <div class="metric-label">Crisis Probability</div>
+    {% if latest and latest.score is not none %}
+      {% set s = latest.score | int %}
+      {% set crisis = (s * 0.8 + 5) | int %}
+      <div class="metric-value {% if crisis < 30 %}stat-green{% elif crisis < 60 %}stat-yellow{% else %}stat-red{% endif %}">{{ crisis }}%</div>
+      <div class="metric-sub">Based on signal analysis</div>
+    {% else %}
+      <div class="metric-value" style="color:var(--text-muted);font-size:28px">—</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 5 Category cards -->
+{% set cat_meta = [
+  ("media", "📰", "InfoField & Media",    "#93bbff"),
+  ("hr",    "👥", "Human Resources",      "#4ade80"),
+  ("gr",    "⚖️", "Gov. Relations",       "#f87171"),
+  ("pr",    "🌐", "PR Environment",       "#c4b5fd"),
+  ("market","📊", "Market & Industry",    "#fbbf24"),
+] %}
+
+<div class="section-title">Company Risk Overview</div>
+<div class="categories-grid">
+  {% for key, icon, label, color in cat_meta %}
+    {% set score = cats[key].score if cats and cats[key] else none %}
+    <div class="cat-card {% if loop.first %}active{% endif %}"
+         data-cat="{{ key }}"
+         style="--cat-color: {{ color }}"
+         onclick="switchTab('{{ key }}')">
+      <div class="cat-icon">{{ icon }}</div>
+      <div class="cat-name">{{ label }}</div>
+      <div class="cat-score">{{ score if score is not none else '—' }}</div>
+      <div class="cat-bar-track">
+        <div class="cat-bar-fill" style="width: {{ score ~ '%' if score is not none else '0%' }}"></div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Advice -->
+{% if latest and latest.advice %}
+<div class="advice-card">
+  <div class="advice-label">🤖 AI Advice</div>
+  {{ latest.advice }}
+</div>
+{% endif %}
+
+<!-- Risk panels per category -->
+{% if cats %}
+  {% for key, icon, label, color in cat_meta %}
+    {% set cat = cats[key] %}
+    <div class="card risk-panel {% if loop.first %}active{% endif %}" id="panel-{{ key }}" style="padding:0">
+      <div class="risk-panel-header">
+        <div class="risk-panel-title">
+          <span>{{ icon }}</span>
+          <span>{{ label }}</span>
+        </div>
+        <div class="risk-panel-score" style="color:{{ color }}">
+          {{ cat.score if cat else '—' }}
+        </div>
+      </div>
+      {% if cat and cat.risks %}
+        {% for risk in cat.risks %}
+          {% set idx = loop.index0 %}
+          <div class="risk-item">
+            <div class="risk-bullet" style="background:{% if idx < 2 %}#f87171{% elif idx < 4 %}#fbbf24{% else %}{{ color }}{% endif %}"></div>
+            <div class="risk-body">
+              <div class="risk-text">{{ risk.text if risk is mapping else risk }}</div>
+              {% if risk is mapping and risk.sources %}
+                <div class="risk-sources">
+                  {% for src in risk.sources %}
+                    {% set tag_class = 'tag-news' if src.type == 'news' else 'tag-threads' if src.type == 'threads' else 'tag-hh' if src.type == 'hh' else 'tag-market' if src.type == 'market' else 'tag-regulatory' %}
+                    {% set tag_label = 'News' if src.type == 'news' else 'Threads' if src.type == 'threads' else 'HH.ru' if src.type == 'hh' else 'Market' if src.type == 'market' else 'GR' %}
+                    {% if src.url %}
+                      <a href="{{ src.url }}" target="_blank" rel="noopener" class="source-link">
+                        <span class="source-tag {{ tag_class }}">{{ tag_label }}</span>
+                        {{ src.title[:50] if src.title else 'Источник' }}
+                      </a>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div style="padding:20px;color:var(--text-muted);font-size:14px;text-align:center">
+          Нет данных — запустите анализ
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
+    <div style="font-size:36px;margin-bottom:12px">🔍</div>
+    <div style="font-weight:600;margin-bottom:6px">Анализ не запускался</div>
+    <div class="small">Нажмите «Запустить анализ» чтобы получить оценку по 5 категориям риска</div>
+  </div>
+{% endif %}
+
+<!-- Charts -->
+{% if risk_runs | selectattr("score", "ne", none) | list %}
+  {% set completed = risk_runs | selectattr("score", "ne", none) | list %}
+  <div class="section-title" style="margin-top:24px">История анализов</div>
+  <div class="charts-row">
+    <div class="chart-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0">
+      <div class="chart-label" style="text-align:center">Risk Score</div>
+      <div class="gauge-wrap" style="flex-shrink:0">
+        <canvas id="gaugeChart"></canvas>
+        <div class="gauge-val {% if latest.score|int < 35 %}stat-green{% elif latest.score|int < 65 %}stat-yellow{% else %}stat-red{% endif %}">
+          {{ latest.score | int }}
+        </div>
+      </div>
+      <div class="gauge-sub">
+        {% set s = latest.score | int %}
+        {% if s < 35 %}Low Risk{% elif s < 65 %}Moderate Risk{% else %}High Risk{% endif %}
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-label">Динамика риска</div>
+      <div style="position:relative;height:160px">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {% if latest and cats %}
+  <div class="chart-card" style="margin-bottom:16px">
+    <div class="chart-label">Разбивка по категориям</div>
+    <div style="position:relative;height:240px">
+      <canvas id="radarChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+<!-- News -->
+<div class="section-title">Последние новости</div>
+<div class="card">
+  {% if company_news %}
+    {% for n in company_news %}
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:14px;font-weight:500;line-height:1.4;display:block">{{ n.title }}</a>
+        <div class="small muted mt-4">
+          {% if n.source %}<span>{{ n.source }}</span>{% endif %}
+          {% if n.source and n.pub_date %} · {% endif %}
+          {% if n.pub_date %}<span>{{ n.pub_date }}</span>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div style="text-align:center;padding:24px;color:var(--text-muted)">
+      <div style="font-size:28px;margin-bottom:8px">📰</div>
+      <div class="small">Новости не найдены</div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Email signals -->
+<div class="section-title" style="display:flex;align-items:center;gap:8px">
+  Сигналы от сотрудников
+  <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">
+    <span id="emails-live-dot" style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block;transition:background 0.5s"></span>
+    Live
+  </span>
+</div>
+<div class="card">
+  <details>
+    <summary style="cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);user-select:none">+ Добавить сигнал вручную</summary>
+    <form method="post" action="/emails/add" style="margin-top:14px">
+      <input type="hidden" name="company_id" value="{{ company.id }}" />
+      <div class="row">
+        <div class="field">
+          <label>Email отправителя</label>
+          <input name="from_email" type="email" placeholder="hr@company.com" />
+        </div>
+        <div class="field">
+          <label>Должность / роль</label>
+          <input name="position" type="text" placeholder="HR, PR, GR, Legal..." />
+        </div>
+      </div>
+      <div class="field mt-8">
+        <label>Текст сообщения</label>
+        <textarea name="text" rows="4" placeholder="Вставьте текст письма или сообщения..." required style="resize:vertical"></textarea>
+      </div>
+      <div class="mt-8">
+        <button type="submit" class="btn btn-primary btn-sm">Добавить сигнал</button>
+      </div>
+    </form>
+  </details>
+
+  <div id="emails-container" style="margin-top:{% if emails %}16{% else %}0{% endif %}px">
+    {% if emails %}
+      {% for em in emails %}
+        <div class="email-row" data-id="{{ em.id }}" style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            {% if em.position %}
+              {% set pos = em.position | lower %}
+              {% if 'hr' in pos or 'кадр' in pos %}
+                <span class="badge badge-green" style="font-size:10px">HR</span>
+              {% elif 'pr' in pos or 'маркетинг' in pos %}
+                <span class="badge badge-blue" style="font-size:10px">PR</span>
+              {% elif 'gr' in pos or 'юрид' in pos or 'legal' in pos %}
+                <span class="badge badge-red" style="font-size:10px">GR</span>
+              {% else %}
+                <span class="badge" style="font-size:10px">{{ em.position }}</span>
+              {% endif %}
+            {% endif %}
+            {% if em.from_email %}<span class="small muted">{{ em.from_email }}</span>{% endif %}
+            <span class="small muted">{{ em.created_at[:10] if em.created_at else '' }}</span>
+          </div>
+          <div class="small" style="color:var(--text);line-height:1.5">{{ em.text[:300] }}{% if em.text|length > 300 %}…{% endif %}</div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div id="emails-empty" class="small muted mt-8">Сигналов пока нет. Ожидаем данные…</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Employees -->
+<div class="section-title">Сотрудники</div>
+<div class="card">
+  {% if employees %}
+    {% for e in employees %}
+      <div class="emp-card">
+        <div>
+          <div class="emp-name">{{ e.full_name }}</div>
+          <div class="emp-meta">
+            {% if e.position %}{{ e.position }}{% endif %}
+            {% if e.position and e.department %} · {% endif %}
+            {% if e.department %}{{ e.department }}{% endif %}
+          </div>
+          <div class="emp-meta"><a href="mailto:{{ e.email }}">{{ e.email }}</a></div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="small muted">Сотрудников пока нет.</div>
+  {% endif %}
+
+  <details style="margin-top:16px">
+    <summary style="cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);user-select:none">+ Добавить сотрудника</summary>
+    <form method="post" action="/employees/create" style="margin-top:14px" id="emp-form">
+      <input type="hidden" name="company_id" value="{{ company.id }}" />
+      <div class="row">
+        <div class="field">
+          <label>ФИО</label>
+          <input name="full_name" type="text" placeholder="Иванов Иван Иванович" required />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input name="email" type="email" placeholder="ivan@company.com" required />
+        </div>
+      </div>
+      <div class="row mt-8">
+        <div class="field">
+          <label>Должность</label>
+          <input name="position" type="text" placeholder="Директор по продажам" />
+        </div>
+        <div class="field">
+          <label>Отдел</label>
+          <input name="department" type="text" placeholder="Продажи" />
+        </div>
+      </div>
+      <div class="mt-12">
+        <button type="submit" class="btn btn-primary btn-sm" id="emp-btn">Добавить</button>
+      </div>
+    </form>
+  </details>
+</div>
+
+<!-- Run history -->
+{% if risk_runs %}
+<div class="section-title">История запусков</div>
+<div class="card">
+  {% for rr in risk_runs %}
+    <div class="risk-card">
+      <div class="risk-header">
+        <div>
+          {% if rr.status in ('done','completed') %}
+            <span class="badge badge-green">✓ Завершён</span>
+          {% elif rr.status in ('queued','processing') %}
+            <span class="badge badge-yellow">⏳ {{ rr.status }}</span>
+          {% elif rr.status == 'error' %}
+            <span class="badge badge-red">✕ Ошибка</span>
+          {% else %}
+            <span class="badge badge-blue">{{ rr.status }}</span>
+          {% endif %}
+          {% if rr.score is not none %}
+            {% set s = rr.score | int %}
+            <span class="badge {% if s < 35 %}badge-green{% elif s < 65 %}badge-yellow{% else %}badge-red{% endif %}" style="margin-left:6px">
+              Риск: {{ s }}/100
+            </span>
+          {% endif %}
+        </div>
+        <div class="risk-id">{{ rr.created_at[:19].replace('T',' ') if rr.created_at else '—' }}</div>
+      </div>
+      {% if rr.advice %}
+        <div class="risk-advice">{{ rr.advice }}</div>
+      {% endif %}
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--accent);user-select:none">✉ Отправить CEO</summary>
+        <form method="post" action="/ceo/send" style="margin-top:12px">
+          <input type="hidden" name="company_id" value="{{ company.id }}" />
+          <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
+          <div class="row">
+            <div class="field">
+              <label>Тема</label>
+              <input name="subject" type="text" placeholder="Отчет по рискам" />
+            </div>
+            <div class="field">
+              <label>Комментарий</label>
+              <input name="message" type="text" placeholder="Дополнительный текст" />
+            </div>
+          </div>
+          <div class="mt-8">
+            <button type="submit" class="btn btn-secondary btn-sm">Отправить</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+const riskRuns = {{ risk_runs | tojson | safe }};
+const cats = {{ (latest.categories if latest and latest.categories else {}) | tojson | safe }};
+const completedRuns = riskRuns.filter(r => r.score !== null && r.score !== undefined);
+
+// ── Realtime emails polling ──
+const COMPANY_ID = '{{ company.id }}';
+let lastEmailIds = new Set({{ emails | map(attribute='id') | list | tojson | safe }});
+
+function renderEmail(em) {
+  const pos = (em.position || '').toLowerCase();
+  let badgeClass = 'badge', badgeText = em.position || '';
+  if (pos.includes('hr') || pos.includes('кадр')) { badgeClass = 'badge badge-green'; badgeText = 'HR'; }
+  else if (pos.includes('pr') || pos.includes('маркетинг') || pos.includes('marketing')) { badgeClass = 'badge badge-blue'; badgeText = 'PR'; }
+  else if (pos.includes('gr') || pos.includes('юрид') || pos.includes('legal')) { badgeClass = 'badge badge-red'; badgeText = 'GR'; }
+  const date = em.created_at ? em.created_at.slice(0,10) : '';
+  const text = em.text ? (em.text.length > 300 ? em.text.slice(0,300) + '…' : em.text) : '';
+  return `<div class="email-row" data-id="${em.id}" style="padding:10px 0;border-bottom:1px solid var(--border);animation:fadeIn 0.4s ease">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      ${badgeText ? `<span class="${badgeClass}" style="font-size:10px">${badgeText}</span>` : ''}
+      ${em.from_email ? `<span class="small muted">${em.from_email}</span>` : ''}
+      <span class="small muted">${date}</span>
+    </div>
+    <div class="small" style="color:var(--text);line-height:1.5">${text}</div>
+  </div>`;
+}
+
+async function pollEmails() {
+  try {
+    const res = await fetch(`/api/companies/${COMPANY_ID}/emails`);
+    if (!res.ok) return;
+    const emails = await res.json();
+    const newEmails = emails.filter(e => !lastEmailIds.has(e.id));
+    if (newEmails.length > 0) {
+      const container = document.getElementById('emails-container');
+      const empty = document.getElementById('emails-empty');
+      if (empty) empty.remove();
+      newEmails.forEach(em => {
+        lastEmailIds.add(em.id);
+        container.insertAdjacentHTML('afterbegin', renderEmail(em));
+      });
+      // pulse indicator
+      const dot = document.getElementById('emails-live-dot');
+      if (dot) { dot.style.background = '#4ade80'; setTimeout(() => dot.style.background = '', 1000); }
+    }
+  } catch(e) {}
+}
+setInterval(pollEmails, 5000);
+
+// ── Tab switching ──
+function switchTab(key) {
+  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.risk-panel').forEach(p => p.classList.remove('active'));
+  const card = document.querySelector('[data-cat="' + key + '"]');
+  const panel = document.getElementById('panel-' + key);
+  if (card) card.classList.add('active');
+  if (panel) panel.classList.add('active');
+}
+
+// ── Loading animation ──
+document.getElementById('risk-form').addEventListener('submit', function() {
+  var btn = document.getElementById('risk-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Анализируем…';
+  document.getElementById('loading-overlay').classList.add('active');
+  const delays = [0, 4000, 8000, 12000, 16000, 20000];
+  delays.forEach(function(d, i) {
+    setTimeout(function() {
+      document.querySelectorAll('.loading-step').forEach(function(el, idx) {
+        if (idx < i) { el.className = 'loading-step done'; el.querySelector('.step-icon').textContent = '✓'; }
+        else if (idx === i) el.className = 'loading-step active';
+      });
+    }, d);
+  });
+});
+
+document.getElementById('emp-btn') && document.getElementById('emp-form').addEventListener('submit', function() {
+  document.getElementById('emp-btn').disabled = true;
+});
+
+// ── Charts ──
+if (completedRuns.length > 0) {
+  const latest = completedRuns[0];
+  const score = Math.round(latest.score);
+  const gaugeColor = score < 35 ? '#4ade80' : score < 65 ? '#fbbf24' : '#f87171';
+
+  // Gauge
+  const gaugeCtx = document.getElementById('gaugeChart');
+  if (gaugeCtx) {
+    new Chart(gaugeCtx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [score, 100 - score, 100],
+          backgroundColor: [gaugeColor, 'rgba(255,255,255,0.07)', 'transparent'],
+          borderWidth: 0, circumference: 180, rotation: 270,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '72%',
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        animation: { duration: 900, easing: 'easeOutCubic' }
+      }
+    });
+  }
+
+  // History line
+  const histCtx = document.getElementById('historyChart');
+  if (histCtx) {
+    const rev = [...completedRuns].reverse();
+    new Chart(histCtx, {
+      type: 'line',
+      data: {
+        labels: rev.map(r => r.created_at ? r.created_at.slice(0,10) : '—'),
+        datasets: [{
+          label: 'Риск', data: rev.map(r => Math.round(r.score)),
+          borderColor: '#4f8fff', backgroundColor: 'rgba(79,143,255,0.08)',
+          borderWidth: 2, fill: true, tension: 0.3,
+          pointBackgroundColor: rev.map(r => r.score < 35 ? '#4ade80' : r.score < 65 ? '#fbbf24' : '#f87171'),
+          pointRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: '#1a2540', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1,
+            callbacks: { label: ctx => ' Риск: ' + ctx.raw + '/100' } }
+        },
+        scales: {
+          y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.06)' },
+               ticks: { color: 'rgba(230,237,243,0.5)', font: { size: 11 }, stepSize: 25 }, border: { display: false } },
+          x: { grid: { display: false }, ticks: { color: 'rgba(230,237,243,0.5)', font: { size: 11 } }, border: { display: false } }
+        }
+      }
+    });
+  }
+
+  // Radar — categories
+  const radarCtx = document.getElementById('radarChart');
+  if (radarCtx && cats && Object.keys(cats).length) {
+    const labels = ['InfoField & Media', 'Human Resources', 'Gov. Relations', 'PR Environment', 'Market & Industry'];
+    const keys = ['media', 'hr', 'gr', 'pr', 'market'];
+    const data = keys.map(k => cats[k] ? cats[k].score : 0);
+    new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Риск по категориям',
+          data: data,
+          borderColor: '#4f8fff',
+          backgroundColor: 'rgba(79,143,255,0.12)',
+          borderWidth: 2,
+          pointBackgroundColor: '#4f8fff',
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          r: {
+            min: 0, max: 100,
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            angleLines: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { display: false, stepSize: 25 },
+            pointLabels: { color: 'rgba(230,237,243,0.7)', font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+}
+</script>
+{% endblock %}

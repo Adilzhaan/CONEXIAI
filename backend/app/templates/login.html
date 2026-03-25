@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Вход — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="auth-page">
+  <div class="auth-box">
+
+    <div class="auth-logo">
+      <div class="auth-logo-text">{{ app_name }}</div>
+      <div class="auth-logo-sub">AI-анализ рисков для бизнеса</div>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error">
+        <span class="alert-icon">✕</span>
+        <div>{{ error }}</div>
+      </div>
+    {% endif %}
+
+    <div class="card" style="padding: 28px;">
+      <h2 style="margin: 0 0 20px; font-size: 20px; font-weight: 600;">Войти в аккаунт</h2>
+
+      <form method="post" action="/login" id="login-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input
+            id="email" name="email" type="email"
+            placeholder="you@company.com"
+            autocomplete="email"
+            required
+            value="{{ prefill_email or '' }}"
+          />
+        </div>
+
+        <div class="field mt-12">
+          <label for="password">Пароль</label>
+          <div class="pwd-wrap">
+            <input
+              id="password" name="password" type="password"
+              placeholder="Введите пароль"
+              autocomplete="current-password"
+              required
+            />
+            <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)" title="Показать/скрыть пароль">
+              👁
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-20">
+          <button type="submit" class="btn btn-primary btn-full" id="submit-btn">
+            Войти
+          </button>
+        </div>
+      </form>
+
+      <div class="divider"><span class="divider-text">нет аккаунта?</span></div>
+
+      <a href="/register" class="btn btn-secondary btn-full">
+        Создать аккаунт
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function togglePwd(id, btn) {
+  var input = document.getElementById(id);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', function() {
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Входим…';
+});
+</script>
+{% endblock %}

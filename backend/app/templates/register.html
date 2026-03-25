@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="auth-page">
+  <div class="auth-box">
+
+    <div class="auth-logo">
+      <div class="auth-logo-text">{{ app_name }}</div>
+      <div class="auth-logo-sub">AI-анализ рисков для бизнеса</div>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error">
+        <span class="alert-icon">✕</span>
+        <div>{{ error }}</div>
+      </div>
+    {% endif %}
+
+    {% if message %}
+      <div class="alert alert-success">
+        <span class="alert-icon">✓</span>
+        <div>
+          <strong>Аккаунт создан!</strong><br>
+          Мы отправили письмо со ссылкой для подтверждения.<br>
+          Перейдите по ссылке в письме, затем <a href="/login">войдите</a>.
+        </div>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <div style="font-weight: 600; margin-bottom: 12px;">Что дальше?</div>
+        <ol style="margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 14px; line-height: 1.8;">
+          <li>Откройте почту и найдите письмо от CONEXIAI</li>
+          <li>Нажмите на ссылку «Подтвердить email»</li>
+          <li>Вернитесь и <a href="/login">войдите в аккаунт</a></li>
+        </ol>
+        <div class="hint mt-12">Не пришло письмо? Проверьте папку «Спам».</div>
+      </div>
+
+    {% else %}
+      <div class="card" style="padding: 28px;">
+        <h2 style="margin: 0 0 20px; font-size: 20px; font-weight: 600;">Создать аккаунт</h2>
+
+        <form method="post" action="/register" id="reg-form">
+          <div class="field">
+            <label for="email">Email</label>
+            <input
+              id="email" name="email" type="email"
+              placeholder="you@company.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+
+          <div class="field mt-12">
+            <label for="password">Пароль</label>
+            <div class="pwd-wrap">
+              <input
+                id="password" name="password" type="password"
+                placeholder="Минимум 6 символов"
+                autocomplete="new-password"
+                required minlength="6"
+                oninput="checkStrength(this.value)"
+              />
+              <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)" title="Показать/скрыть пароль">
+                👁
+              </button>
+            </div>
+            <div class="hint" id="pwd-hint">Минимум 6 символов</div>
+            <div id="pwd-bar" style="margin-top:6px; height:3px; border-radius:2px; background:var(--border); overflow:hidden;">
+              <div id="pwd-fill" style="height:100%; width:0; transition:width 0.2s, background 0.2s;"></div>
+            </div>
+          </div>
+
+          <div class="mt-20">
+            <button type="submit" class="btn btn-primary btn-full" id="submit-btn">
+              Создать аккаунт
+            </button>
+          </div>
+        </form>
+
+        <div class="divider"><span class="divider-text">уже есть аккаунт?</span></div>
+
+        <a href="/login" class="btn btn-secondary btn-full">
+          Войти
+        </a>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<script>
+function togglePwd(id, btn) {
+  var input = document.getElementById(id);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function checkStrength(val) {
+  var fill = document.getElementById('pwd-fill');
+  var hint = document.getElementById('pwd-hint');
+  var len = val.length;
+  var pct, color, text;
+  if (len === 0) { pct = 0; color = '#4b5563'; text = 'Минимум 6 символов'; }
+  else if (len < 6) { pct = 25; color = '#f87171'; text = 'Слишком короткий'; }
+  else if (len < 10) { pct = 55; color = '#fbbf24'; text = 'Средний'; }
+  else if (len < 14) { pct = 80; color = '#4ade80'; text = 'Хороший'; }
+  else { pct = 100; color = '#4ade80'; text = 'Отличный'; }
+  fill.style.width = pct + '%';
+  fill.style.background = color;
+  hint.textContent = text;
+}
+
+document.getElementById('reg-form').addEventListener('submit', function() {
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Создаём аккаунт…';
+});
+</script>
+{% endblock %}
