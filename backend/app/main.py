@@ -115,6 +115,33 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
             return None
 
 
+async def _activate_pending_memberships(user_email: str, user_id: str, access_token: str) -> None:
+    """Activate any pending invites that match this user's email."""
+    try:
+        await supabase.rest_update_raw(
+            f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
+            access_token=access_token,
+            patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
+            returning="minimal",
+        )
+    except Exception as e:
+        logger.warning("Could not activate memberships for %s: %s", user_email, e)
+
+
+async def _get_member_companies(user_id: str, access_token: str) -> list[dict]:
+    """Return companies this user is a member of (not owner)."""
+    try:
+        return await supabase.rest_select(
+            table="company_members",
+            access_token=access_token,
+            select="id,company_id,role,status,companies(id,name,ceo_email)",
+            query_params={"user_id": f"eq.{user_id}", "status": "eq.active"},
+        )
+    except Exception as e:
+        logger.warning("Could not fetch member companies: %s", e)
+        return []
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(req: Request):
     user = await get_current_user(req)
@@ -140,6 +167,8 @@ async def login_submit(
         refresh_token = auth.get("refresh_token")
         if not access_token or not refresh_token:
             raise RuntimeError("No access/refresh token returned by Supabase.")
+        user_id = auth.get("user", {}).get("id") or auth.get("user_id") or ""
+        await _activate_pending_memberships(email, user_id, access_token)
         resp = RedirectResponse(url="/dashboard", status_code=302)
         _set_tokens(resp, access_token, refresh_token)
         return resp
@@ -172,6 +201,8 @@ async def register_submit(
         refresh_token = auth.get("refresh_token")
         resp: RedirectResponse
         if access_token and refresh_token:
+            user_id = auth.get("user", {}).get("id") or auth.get("user_id") or ""
+            await _activate_pending_memberships(email, user_id, access_token)
             resp = RedirectResponse(url="/dashboard", status_code=302)
             _set_tokens(resp, access_token, refresh_token)
             return resp
@@ -207,11 +238,14 @@ async def dashboard(req: Request):
     effective_token = new_access or access_token
 
     try:
-        companies = await supabase.rest_select(
-            table="companies",
-            access_token=effective_token,
-            select="id,name,ceo_email,created_at",
-            order_by="created_at.desc",
+        companies, member_rows = await asyncio.gather(
+            supabase.rest_select(
+                table="companies",
+                access_token=effective_token,
+                select="id,name,ceo_email,created_at",
+                order_by="created_at.desc",
+            ),
+            _get_member_companies(user.get("id", ""), effective_token),
         )
     except Exception as e:
         if "401" in str(e) or "403" in str(e):
@@ -220,31 +254,20 @@ async def dashboard(req: Request):
             return resp
         raise
 
+    ctx = {
+        "companies": companies,
+        "member_rows": member_rows,
+        "user_id": user.get("id"),
+        "app_name": settings.APP_NAME,
+    }
+
     if new_access and new_refresh:
-        resp = templates.TemplateResponse(
-            req, "dashboard.html",
-            {
-                "companies": companies,
-                "user_id": user.get("id"),
-                "app_name": settings.APP_NAME,
-            },
-        )
-        resp.set_cookie(
-            settings.SESSION_ACCESS_COOKIE_NAME,
-            new_access,
-            **_cookie_params(),
-        )
-        resp.set_cookie(
-            settings.SESSION_REFRESH_COOKIE_NAME,
-            new_refresh,
-            **_cookie_params(),
-        )
+        resp = templates.TemplateResponse(req, "dashboard.html", ctx)
+        resp.set_cookie(settings.SESSION_ACCESS_COOKIE_NAME, new_access, **_cookie_params())
+        resp.set_cookie(settings.SESSION_REFRESH_COOKIE_NAME, new_refresh, **_cookie_params())
         return resp
 
-    return templates.TemplateResponse(
-        req, "dashboard.html",
-        {"companies": companies, "user_id": user.get("id"), "app_name": settings.APP_NAME},
-    )
+    return templates.TemplateResponse(req, "dashboard.html", ctx)
 
 
 @app.post("/companies/create")
@@ -288,7 +311,20 @@ async def company_detail(req: Request, company_id: str):
             logger.warning("Could not fetch emails: %s", e)
             return []
 
-    company_rows, employees, risk_runs, emails_rows = await asyncio.gather(
+    async def _safe_members():
+        try:
+            return await supabase.rest_select(
+                table="company_members",
+                access_token=effective_token,
+                select="id,invited_email,role,status,joined_at",
+                order_by="invited_at.asc",
+                query_params={"company_id": f"eq.{company_id}"},
+            )
+        except Exception as e:
+            logger.warning("Could not fetch members: %s", e)
+            return []
+
+    company_rows, employees, risk_runs, emails_rows, members = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -310,6 +346,7 @@ async def company_detail(req: Request, company_id: str):
             query_params={"company_id": f"eq.{company_id}"},
         ),
         _safe_emails(),
+        _safe_members(),
     )
     company = company_rows[0] if company_rows else None
 
@@ -321,6 +358,8 @@ async def company_detail(req: Request, company_id: str):
     msg = req.query_params.get("msg")
     error = req.query_params.get("error")
 
+    is_owner = company.get("owner_user_id") == user.get("id") if "owner_user_id" in company else True
+
     return templates.TemplateResponse(
         req, "company_detail.html",
         {
@@ -329,11 +368,91 @@ async def company_detail(req: Request, company_id: str):
             "risk_runs": risk_runs,
             "company_news": company_news,
             "emails": emails_rows,
+            "members": members,
+            "is_owner": is_owner,
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
         },
     )
+
+
+@app.post("/members/invite")
+async def members_invite(
+    req: Request,
+    company_id: str = Form(...),
+    invited_email: str = Form(...),
+    role: str = Form(""),
+):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    email_clean = invited_email.lower().strip()
+    role_clean = role.strip() or None
+
+    try:
+        company_rows = await supabase.rest_select(
+            table="companies",
+            access_token=access_token,
+            select="name",
+            query_params={"id": f"eq.{company_id}"},
+        )
+        company_name = company_rows[0]["name"] if company_rows else ""
+
+        await supabase.rest_insert(
+            table="company_members",
+            access_token=access_token,
+            row={"company_id": company_id, "invited_email": email_clean, "role": role_clean},
+            returning="minimal",
+        )
+
+        # Send invite email via n8n if webhook is configured
+        if settings.N8N_INVITE_WEBHOOK_URL:
+            _role_labels = {
+                "media": "InfoField & Media", "hr": "Human Resources",
+                "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
+            }
+            # Determine app base URL from request
+            base_url = str(req.base_url).rstrip("/")
+            try:
+                await supabase.webhook_post(
+                    settings.N8N_INVITE_WEBHOOK_URL,
+                    payload={
+                        "invited_email": email_clean,
+                        "company_id": company_id,
+                        "company_name": company_name,
+                        "role": role_clean,
+                        "role_label": _role_labels.get(role_clean or "", ""),
+                        "register_url": f"{base_url}/register",
+                        "invited_by_user_id": user.get("id"),
+                    },
+                )
+            except Exception as e:
+                logger.warning("Invite webhook failed: %s", e)
+
+    except Exception as e:
+        logger.warning("Invite failed: %s", e)
+    return RedirectResponse(url=f"/companies/{company_id}?msg=invited", status_code=302)
+
+
+@app.post("/members/{member_id}/remove")
+async def members_remove(req: Request, member_id: str, company_id: str = Form(...)):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    try:
+        await supabase.rest_delete(
+            table="company_members",
+            access_token=access_token,
+            query_params={"id": f"eq.{member_id}"},
+        )
+    except Exception as e:
+        logger.warning("Remove member failed: %s", e)
+    return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
 
 
 @app.post("/employees/create")
@@ -468,6 +587,68 @@ async def risks_run(
     )
 
     return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
+
+
+_CAT_META = {
+    "media":  ("📰", "InfoField & Media",  "#93bbff"),
+    "hr":     ("👥", "Human Resources",    "#4ade80"),
+    "gr":     ("⚖️", "Gov. Relations",     "#f87171"),
+    "pr":     ("🌐", "PR Environment",     "#c4b5fd"),
+    "market": ("📊", "Market & Industry",  "#fbbf24"),
+}
+
+
+@app.get("/companies/{company_id}/category/{category_key}", response_class=HTMLResponse)
+async def category_detail(req: Request, company_id: str, category_key: str):
+    if category_key not in _CAT_META:
+        return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
+
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows, risk_runs = await asyncio.gather(
+        supabase.rest_select(
+            table="companies",
+            access_token=effective_token,
+            select="id,name,ceo_email",
+            query_params={"id": f"eq.{company_id}"},
+        ),
+        supabase.rest_select(
+            table="risk_runs",
+            access_token=effective_token,
+            select="id,categories",
+            order_by="created_at.desc",
+            query_params={"company_id": f"eq.{company_id}"},
+        ),
+    )
+
+    company = company_rows[0] if company_rows else None
+    if not company:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    latest = risk_runs[0] if risk_runs else None
+    cats = latest.get("categories") if latest else None
+
+    icon, label, color = _CAT_META[category_key]
+    cat_data = cats.get(category_key) if cats else None
+
+    return templates.TemplateResponse(
+        req, "category_detail.html",
+        {
+            "company": company,
+            "active_key": category_key,
+            "cat_icon": icon,
+            "cat_label": label,
+            "cat_color": color,
+            "cat": cat_data,
+            "cats": cats,
+            "app_name": settings.APP_NAME,
+        },
+    )
 
 
 @app.get("/api/companies/{company_id}/emails")

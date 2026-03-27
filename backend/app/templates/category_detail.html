@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}{{ cat_label }} — {{ company.name }} — {{ app_name }}{% endblock %}
+
+{% block topbar %}
+<nav class="topbar">
+  <span class="topbar-brand">{{ app_name }}</span>
+  <div class="topbar-nav">
+    <a href="/companies/{{ company.id }}" class="btn btn-ghost btn-sm">← Overview</a>
+    <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-ghost btn-sm">⬇ PDF</a>
+    <a href="/logout" class="btn btn-ghost btn-sm">Выйти</a>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Category nav tabs ── */
+  .cat-tabs {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .cat-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
+  }
+  .cat-tab:hover { background: var(--surface-hover); color: var(--text); text-decoration: none; }
+  .cat-tab.active {
+    border-color: var(--tab-color, var(--accent));
+    color: var(--tab-color, var(--accent));
+    background: rgba(79,143,255,0.07);
+  }
+  .cat-tab-score {
+    font-size: 11px; font-weight: 700;
+    padding: 1px 7px; border-radius: 999px;
+    background: rgba(255,255,255,0.07);
+    color: var(--tab-color, var(--text-muted));
+  }
+  .cat-tab.active .cat-tab-score {
+    background: color-mix(in srgb, var(--tab-color, var(--accent)) 20%, transparent);
+  }
+
+  /* ── Page header ── */
+  .cat-page-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+  }
+  .cat-page-title {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .cat-page-icon { font-size: 28px; }
+  .cat-page-name { font-size: 22px; font-weight: 800; }
+  .cat-page-company { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .cat-score-badge {
+    font-size: 42px; font-weight: 800; line-height: 1;
+    color: var(--cat-color);
+    background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+    padding: 8px 20px; border-radius: var(--radius);
+    border: 1px solid color-mix(in srgb, var(--cat-color) 30%, transparent);
+  }
+
+  /* ── Risk items ── */
+  .risk-list { }
+  .risk-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-num {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .risk-num.high { background: rgba(248,113,113,0.15); color: #f87171; }
+  .risk-num.med  { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+  .risk-num.low  { background: color-mix(in srgb, var(--cat-color) 15%, transparent); color: var(--cat-color); }
+  .risk-body { flex: 1; min-width: 0; }
+  .risk-text { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+  .risk-sources { display: flex; flex-wrap: wrap; gap: 6px; }
+  .source-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--accent); text-decoration: none; transition: background 0.15s;
+  }
+  .source-link:hover { background: rgba(79,143,255,0.12); }
+  .source-tag {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    border-radius: 3px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-right: 2px;
+  }
+  .tag-news       { background: rgba(79,143,255,0.15);  color: #93bbff; }
+  .tag-threads    { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+  .tag-hh         { background: rgba(74,222,128,0.15);  color: #4ade80; }
+  .tag-market     { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+  .tag-regulatory { background: rgba(248,113,113,0.15); color: #f87171; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center; padding: 60px 24px; color: var(--text-muted);
+  }
+  .empty-state-icon { font-size: 40px; margin-bottom: 14px; }
+  .empty-state-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .empty-state-sub { font-size: 13px; }
+
+  /* ── Section title ── */
+  .section-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin: 20px 0 10px; }
+</style>
+
+{% set cat_meta = [
+  ("media", "📰", "InfoField & Media",   "#93bbff"),
+  ("hr",    "👥", "Human Resources",     "#4ade80"),
+  ("gr",    "⚖️", "Gov. Relations",      "#f87171"),
+  ("pr",    "🌐", "PR Environment",      "#c4b5fd"),
+  ("market","📊", "Market & Industry",   "#fbbf24"),
+] %}
+
+<!-- Category tabs -->
+<div class="cat-tabs">
+  {% for key, icon, label, color in cat_meta %}
+    {% set tab_score = cats[key].score if cats and cats[key] else none %}
+    <a class="cat-tab {% if key == active_key %}active{% endif %}"
+       href="/companies/{{ company.id }}/category/{{ key }}"
+       style="--tab-color: {{ color }}">
+      {{ icon }} {{ label }}
+      {% if tab_score is not none %}
+        <span class="cat-tab-score">{{ tab_score }}</span>
+      {% endif %}
+    </a>
+  {% endfor %}
+</div>
+
+<!-- Page header -->
+<div class="cat-page-header">
+  <div class="cat-page-title">
+    <div class="cat-page-icon">{{ cat_icon }}</div>
+    <div>
+      <div class="cat-page-name">{{ cat_label }}</div>
+      <div class="cat-page-company">{{ company.name }}</div>
+    </div>
+  </div>
+  {% if cat and cat.score is not none %}
+    <div class="cat-score-badge" style="--cat-color: {{ cat_color }}">{{ cat.score }}</div>
+  {% endif %}
+</div>
+
+<!-- Risk list -->
+{% if cat and cat.risks %}
+  <div class="card" style="padding: 0;">
+    <div class="risk-list">
+      {% for risk in cat.risks %}
+        {% set idx = loop.index0 %}
+        <div class="risk-item">
+          <div class="risk-num {% if idx < 2 %}high{% elif idx < 4 %}med{% else %}low{% endif %}">
+            {{ loop.index }}
+          </div>
+          <div class="risk-body">
+            <div class="risk-text">{{ risk.text if risk is mapping else risk }}</div>
+            {% if risk is mapping and risk.sources %}
+              <div class="risk-sources">
+                {% for src in risk.sources %}
+                  {% if src.url %}
+                    {% set tag_class = 'tag-news' if src.type == 'news' else 'tag-threads' if src.type == 'threads' else 'tag-hh' if src.type == 'hh' else 'tag-market' if src.type == 'market' else 'tag-regulatory' %}
+                    {% set tag_label = 'News' if src.type == 'news' else 'Threads' if src.type == 'threads' else 'HH.ru' if src.type == 'hh' else 'Market' if src.type == 'market' else 'GR' %}
+                    <a href="{{ src.url }}" target="_blank" rel="noopener" class="source-link">
+                      <span class="source-tag {{ tag_class }}">{{ tag_label }}</span>
+                      {{ src.title[:60] if src.title else 'Источник' }}
+                    </a>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% else %}
+  <div class="card">
+    <div class="empty-state">
+      <div class="empty-state-icon">🔍</div>
+      <div class="empty-state-title">Нет данных по этой категории</div>
+      <div class="empty-state-sub">
+        <a href="/companies/{{ company.id }}" style="color: var(--accent)">Запустите анализ</a> на странице компании
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Other categories quick nav -->
+<div class="section-title" style="margin-top: 28px">Другие категории</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+  {% for key, icon, label, color in cat_meta %}
+    {% if key != active_key %}
+      {% set other_score = cats[key].score if cats and cats[key] else none %}
+      <a href="/companies/{{ company.id }}/category/{{ key }}"
+         style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);text-decoration:none;color:inherit;transition:background 0.15s;border-left:3px solid {{ color }}">
+        <span style="font-size:18px">{{ icon }}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">{{ label }}</div>
+          {% if other_score is not none %}
+            <div style="font-size:20px;font-weight:800;color:{{ color }};line-height:1.2">{{ other_score }}</div>
+          {% else %}
+            <div style="font-size:13px;color:var(--text-muted)">—</div>
+          {% endif %}
+        </div>
+        <span style="color:var(--text-muted);font-size:14px">→</span>
+      </a>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endblock %}

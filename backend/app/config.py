@@ -19,6 +19,8 @@ class Settings:
     # n8n
     N8N_FIND_RISKS_WEBHOOK_URL: str = _get("N8N_FIND_RISKS_WEBHOOK_URL")
     N8N_CEO_EMAIL_WEBHOOK_URL: str = _get("N8N_CEO_EMAIL_WEBHOOK_URL")
+    # Optional — if set, n8n sends an invite email to new members
+    N8N_INVITE_WEBHOOK_URL: str = os.getenv("N8N_INVITE_WEBHOOK_URL", "")
 
     # App
     SESSION_COOKIE_SECURE: bool = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"

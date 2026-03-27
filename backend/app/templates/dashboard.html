@@ -69,6 +69,33 @@
     {% endif %}
   </div>
 
+{% if member_rows %}
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">
+      Компании, в которых я участник
+      <span class="badge" style="margin-left:8px;font-weight:400;">{{ member_rows|length }}</span>
+    </div>
+    {% for m in member_rows %}
+      {% set c = m.companies %}
+      {% if c %}
+        <div class="company-row">
+          <div>
+            <div style="font-weight:600;">{{ c.name }}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <div class="small muted">{{ c.ceo_email }}</div>
+              {% if m.role %}
+                {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+                <span class="badge badge-blue" style="font-size:10px">{{ role_labels.get(m.role, m.role) }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">Открыть →</a>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
+
 <script>
 document.getElementById('company-form').addEventListener('submit', function() {
   var btn = document.getElementById('add-btn');

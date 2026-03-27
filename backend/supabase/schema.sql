@@ -140,3 +140,108 @@ with check (
 -- No UPDATE policy for authenticated users by default.
 -- n8n should update risk_runs using its Supabase service role key.
 
+-- ─────────────────────────────────────────────
+-- Company members (team access to dashboard)
+-- ─────────────────────────────────────────────
+create table if not exists public.company_members (
+  id            uuid primary key default gen_random_uuid(),
+  company_id    uuid not null references public.companies(id) on delete cascade,
+  invited_email text not null,
+  user_id       uuid references auth.users(id) on delete set null,
+  role          text,          -- optional display label: 'hr', 'pr', 'gr', 'market', 'media'
+  status        text not null default 'pending',  -- 'pending' | 'active'
+  invited_at    timestamptz not null default now(),
+  joined_at     timestamptz,
+  unique (company_id, invited_email)
+);
+
+create index if not exists company_members_company_id_idx on public.company_members(company_id);
+create index if not exists company_members_user_id_idx    on public.company_members(user_id);
+create index if not exists company_members_email_idx      on public.company_members(invited_email);
+
+alter table public.company_members enable row level security;
+
+-- Owner can read all members of their company
+drop policy if exists members_owner_select on public.company_members;
+create policy members_owner_select
+on public.company_members for select to authenticated
+using (
+  exists (
+    select 1 from public.companies c
+    where c.id = company_members.company_id and c.owner_user_id = auth.uid()
+  )
+);
+
+-- Owner can invite (insert) members into their company
+drop policy if exists members_owner_insert on public.company_members;
+create policy members_owner_insert
+on public.company_members for insert to authenticated
+with check (
+  exists (
+    select 1 from public.companies c
+    where c.id = company_members.company_id and c.owner_user_id = auth.uid()
+  )
+);
+
+-- Owner can remove members
+drop policy if exists members_owner_delete on public.company_members;
+create policy members_owner_delete
+on public.company_members for delete to authenticated
+using (
+  exists (
+    select 1 from public.companies c
+    where c.id = company_members.company_id and c.owner_user_id = auth.uid()
+  )
+);
+
+-- A member can read their own membership row
+drop policy if exists members_self_select on public.company_members;
+create policy members_self_select
+on public.company_members for select to authenticated
+using (user_id = auth.uid());
+
+-- A user can activate their own pending invite (set user_id + status)
+drop policy if exists members_self_activate on public.company_members;
+create policy members_self_activate
+on public.company_members for update to authenticated
+using (invited_email = (select email from auth.users where id = auth.uid()))
+with check (user_id = auth.uid());
+
+-- ── Members can read their company, its risk_runs and employees ──
+
+drop policy if exists companies_member_select on public.companies;
+create policy companies_member_select
+on public.companies for select to authenticated
+using (
+  exists (
+    select 1 from public.company_members m
+    where m.company_id = companies.id
+      and m.user_id = auth.uid()
+      and m.status = 'active'
+  )
+);
+
+drop policy if exists risk_runs_member_select on public.risk_runs;
+create policy risk_runs_member_select
+on public.risk_runs for select to authenticated
+using (
+  exists (
+    select 1 from public.company_members m
+    where m.company_id = risk_runs.company_id
+      and m.user_id = auth.uid()
+      and m.status = 'active'
+  )
+);
+
+drop policy if exists employees_member_select on public.employees;
+create policy employees_member_select
+on public.employees for select to authenticated
+using (
+  exists (
+    select 1 from public.company_members m
+    where m.company_id = employees.company_id
+      and m.user_id = auth.uid()
+      and m.status = 'active'
+  )
+);
+

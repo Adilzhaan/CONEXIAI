@@ -66,11 +66,12 @@
     border-radius: var(--radius); padding: 14px 12px;
     cursor: pointer; transition: border-color 0.2s, background 0.2s;
     position: relative; min-width: 0; overflow: hidden;
+    text-decoration: none; display: block; color: inherit;
   }
-  .cat-card:hover { background: var(--surface-hover); }
-  .cat-card.active {
+  .cat-card:hover {
+    background: var(--surface-hover);
     border-color: var(--cat-color, var(--accent));
-    background: rgba(79,143,255,0.06);
+    text-decoration: none;
   }
   .cat-icon { font-size: 20px; margin-bottom: 8px; }
   .cat-name { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
@@ -78,50 +79,11 @@
   .cat-bar-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
   .cat-bar-fill  { height: 100%; border-radius: 2px; background: var(--cat-color, var(--accent)); transition: width 0.6s ease; }
 
-  /* ── Risk tab panel ── */
-  .risk-panel { display: none; }
-  .risk-panel.active { display: block; }
-
-  .risk-panel-header {
-    display: flex; align-items: center; justify-content: space-between;
-    flex-wrap: wrap; gap: 10px;
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  .cat-card-arrow {
+    position: absolute; right: 10px; bottom: 10px;
+    font-size: 11px; color: var(--cat-color, var(--accent)); opacity: 0.6;
   }
-  .risk-panel-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-  .risk-panel-score {
-    font-size: 32px; font-weight: 800;
-    padding: 4px 16px; border-radius: var(--radius-sm);
-    background: rgba(255,255,255,0.05);
-  }
-
-  .risk-item {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 14px 20px; border-bottom: 1px solid var(--border);
-  }
-  .risk-item:last-child { border-bottom: none; }
-  .risk-bullet {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px;
-  }
-  .risk-body { flex: 1; min-width: 0; }
-  .risk-text { font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
-  .risk-sources { display: flex; flex-wrap: wrap; gap: 6px; }
-  .source-link {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    border: 1px solid var(--border); background: var(--surface);
-    color: var(--accent); text-decoration: none; transition: background 0.15s;
-  }
-  .source-link:hover { background: rgba(79,143,255,0.12); }
-  .source-tag {
-    display: inline-block; font-size: 10px; padding: 1px 6px;
-    border-radius: 3px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.05em; margin-right: 2px;
-  }
-  .tag-news     { background: rgba(79,143,255,0.15); color: #93bbff; }
-  .tag-threads  { background: rgba(167,139,250,0.15); color: #c4b5fd; }
-  .tag-hh       { background: rgba(74,222,128,0.15); color: #4ade80; }
-  .tag-market   { background: rgba(251,191,36,0.15); color: #fbbf24; }
-  .tag-regulatory { background: rgba(248,113,113,0.15); color: #f87171; }
+  .cat-card:hover .cat-card-arrow { opacity: 1; }
 
   /* ── Charts row ── */
   .charts-row {
@@ -196,6 +158,7 @@
 <!-- Notifications -->
 {% if msg == 'sent' %}<div class="alert alert-success" style="margin-bottom:12px"><span class="alert-icon">✓</span> Сообщение отправлено CEO.</div>{% endif %}
 {% if msg == 'email_added' %}<div class="alert alert-success" style="margin-bottom:12px"><span class="alert-icon">✓</span> Сигнал добавлен в базу.</div>{% endif %}
+{% if msg == 'invited' %}<div class="alert alert-success" style="margin-bottom:12px"><span class="alert-icon">✓</span> Приглашение отправлено. Участник получит доступ после входа.</div>{% endif %}
 {% if error == 'webhook_failed' %}<div class="alert alert-error" style="margin-bottom:12px"><span class="alert-icon">✕</span> Ошибка отправки. Проверьте настройку вебхука в n8n.</div>{% endif %}
 
 <!-- Header -->
@@ -282,17 +245,17 @@
 <div class="categories-grid">
   {% for key, icon, label, color in cat_meta %}
     {% set score = cats[key].score if cats and cats[key] else none %}
-    <div class="cat-card {% if loop.first %}active{% endif %}"
-         data-cat="{{ key }}"
-         style="--cat-color: {{ color }}"
-         onclick="switchTab('{{ key }}')">
+    <a class="cat-card"
+       href="/companies/{{ company.id }}/category/{{ key }}"
+       style="--cat-color: {{ color }}">
       <div class="cat-icon">{{ icon }}</div>
       <div class="cat-name">{{ label }}</div>
       <div class="cat-score">{{ score if score is not none else '—' }}</div>
       <div class="cat-bar-track">
         <div class="cat-bar-fill" style="width: {{ score ~ '%' if score is not none else '0%' }}"></div>
       </div>
-    </div>
+      <span class="cat-card-arrow">→</span>
+    </a>
   {% endfor %}
 </div>
 
@@ -304,52 +267,8 @@
 </div>
 {% endif %}
 
-<!-- Risk panels per category -->
-{% if cats %}
-  {% for key, icon, label, color in cat_meta %}
-    {% set cat = cats[key] %}
-    <div class="card risk-panel {% if loop.first %}active{% endif %}" id="panel-{{ key }}" style="padding:0">
-      <div class="risk-panel-header">
-        <div class="risk-panel-title">
-          <span>{{ icon }}</span>
-          <span>{{ label }}</span>
-        </div>
-        <div class="risk-panel-score" style="color:{{ color }}">
-          {{ cat.score if cat else '—' }}
-        </div>
-      </div>
-      {% if cat and cat.risks %}
-        {% for risk in cat.risks %}
-          {% set idx = loop.index0 %}
-          <div class="risk-item">
-            <div class="risk-bullet" style="background:{% if idx < 2 %}#f87171{% elif idx < 4 %}#fbbf24{% else %}{{ color }}{% endif %}"></div>
-            <div class="risk-body">
-              <div class="risk-text">{{ risk.text if risk is mapping else risk }}</div>
-              {% if risk is mapping and risk.sources %}
-                <div class="risk-sources">
-                  {% for src in risk.sources %}
-                    {% set tag_class = 'tag-news' if src.type == 'news' else 'tag-threads' if src.type == 'threads' else 'tag-hh' if src.type == 'hh' else 'tag-market' if src.type == 'market' else 'tag-regulatory' %}
-                    {% set tag_label = 'News' if src.type == 'news' else 'Threads' if src.type == 'threads' else 'HH.ru' if src.type == 'hh' else 'Market' if src.type == 'market' else 'GR' %}
-                    {% if src.url %}
-                      <a href="{{ src.url }}" target="_blank" rel="noopener" class="source-link">
-                        <span class="source-tag {{ tag_class }}">{{ tag_label }}</span>
-                        {{ src.title[:50] if src.title else 'Источник' }}
-                      </a>
-                    {% endif %}
-                  {% endfor %}
-                </div>
-              {% endif %}
-            </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div style="padding:20px;color:var(--text-muted);font-size:14px;text-align:center">
-          Нет данных — запустите анализ
-        </div>
-      {% endif %}
-    </div>
-  {% endfor %}
-{% else %}
+<!-- Category hint -->
+{% if not cats %}
   <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
     <div style="font-size:36px;margin-bottom:12px">🔍</div>
     <div style="font-weight:600;margin-bottom:6px">Анализ не запускался</div>
@@ -476,6 +395,76 @@
     {% endif %}
   </div>
 </div>
+
+<!-- Team members (only owner sees this section) -->
+{% if is_owner %}
+<div class="section-title" style="display:flex;align-items:center;gap:8px">
+  Команда
+  {% if members %}<span class="badge badge-blue" style="font-size:10px;font-weight:700;text-transform:none;letter-spacing:0">{{ members|length }}</span>{% endif %}
+</div>
+<div class="card">
+  {% if members %}
+    {% for m in members %}
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:500">{{ m.invited_email }}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+            {% if m.role %}
+              {% set role_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c4b5fd','market':'#fbbf24'} %}
+              {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+              <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;background:rgba(255,255,255,0.07);color:{{ role_colors.get(m.role, 'var(--text-muted)') }}">
+                {{ role_labels.get(m.role, m.role) }}
+              </span>
+            {% endif %}
+            {% if m.status == 'active' %}
+              <span style="font-size:10px;color:#4ade80">● активен</span>
+            {% else %}
+              <span style="font-size:10px;color:var(--text-muted)">○ ожидает входа</span>
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="/members/{{ m.id }}/remove" onsubmit="return confirm('Удалить {{ m.invited_email }}?')">
+          <input type="hidden" name="company_id" value="{{ company.id }}" />
+          <button type="submit" class="btn btn-ghost btn-sm" style="color:#f87171;font-size:12px;padding:4px 10px">✕</button>
+        </form>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="small muted">Участников пока нет.</div>
+  {% endif %}
+
+  <details style="margin-top:16px">
+    <summary style="cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);user-select:none">+ Пригласить участника</summary>
+    <form method="post" action="/members/invite" style="margin-top:14px">
+      <input type="hidden" name="company_id" value="{{ company.id }}" />
+      <div class="row">
+        <div class="field">
+          <label>Email</label>
+          <input name="invited_email" type="email" placeholder="colleague@company.com" required />
+        </div>
+        <div class="field">
+          <label>Сфера (необязательно)</label>
+          <select name="role" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px">
+            <option value="">— без ограничений —</option>
+            <option value="media">📰 InfoField & Media</option>
+            <option value="hr">👥 Human Resources</option>
+            <option value="gr">⚖️ Gov. Relations</option>
+            <option value="pr">🌐 PR Environment</option>
+            <option value="market">📊 Market & Industry</option>
+          </select>
+        </div>
+      </div>
+      <div class="small muted mt-8" style="line-height:1.5">
+        Участник получит доступ к дашборду компании после входа с этим email.
+        Если аккаунта ещё нет — пусть зарегистрируется на этом сайте.
+      </div>
+      <div class="mt-8">
+        <button type="submit" class="btn btn-primary btn-sm">Пригласить</button>
+      </div>
+    </form>
+  </details>
+</div>
+{% endif %}
 
 <!-- Employees -->
 <div class="section-title">Сотрудники</div>
@@ -631,16 +620,6 @@ async function pollEmails() {
   } catch(e) {}
 }
 setInterval(pollEmails, 5000);
-
-// ── Tab switching ──
-function switchTab(key) {
-  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
-  document.querySelectorAll('.risk-panel').forEach(p => p.classList.remove('active'));
-  const card = document.querySelector('[data-cat="' + key + '"]');
-  const panel = document.getElementById('panel-' + key);
-  if (card) card.classList.add('active');
-  if (panel) panel.classList.add('active');
-}
 
 // ── Loading animation ──
 document.getElementById('risk-form').addEventListener('submit', function() {
