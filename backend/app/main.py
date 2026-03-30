@@ -244,7 +244,8 @@ async def logout(_req: Request):
 @app.get("/auth/google")
 async def auth_google(req: Request):
     verifier, challenge = _pkce_pair()
-    callback_url = str(req.base_url).rstrip("/") + "/auth/callback"
+    base = settings.SITE_URL.rstrip("/") if settings.SITE_URL else str(req.base_url).rstrip("/")
+    callback_url = base + "/auth/callback"
     oauth_url = (
         f"{settings.SUPABASE_URL}/auth/v1/authorize"
         f"?provider=google"

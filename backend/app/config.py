@@ -39,6 +39,7 @@ class Settings:
 
     # UI
     APP_NAME: str = os.getenv("APP_NAME", "CONEXIAI")
+    SITE_URL: str = os.getenv("SITE_URL", "")
 
 
 settings = Settings()
