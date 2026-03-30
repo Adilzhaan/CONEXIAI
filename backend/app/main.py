@@ -3,6 +3,7 @@ import base64
 import hashlib
 import logging
 import secrets
+from urllib.parse import quote
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -249,7 +250,7 @@ async def auth_google(req: Request):
     oauth_url = (
         f"{settings.SUPABASE_URL}/auth/v1/authorize"
         f"?provider=google"
-        f"&redirect_to={callback_url}"
+        f"&redirect_to={quote(callback_url, safe='')}"
         f"&code_challenge={challenge}"
         f"&code_challenge_method=S256"
     )
