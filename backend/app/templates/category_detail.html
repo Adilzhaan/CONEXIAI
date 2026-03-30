@@ -32,12 +32,12 @@
   .cat-tab.active {
     border-color: var(--tab-color, var(--accent));
     color: var(--tab-color, var(--accent));
-    background: rgba(79,143,255,0.07);
+    background: color-mix(in srgb, var(--tab-color, var(--accent)) 8%, transparent);
   }
   .cat-tab-score {
     font-size: 11px; font-weight: 700;
     padding: 1px 7px; border-radius: 999px;
-    background: rgba(255,255,255,0.07);
+    background: rgba(0,0,0,0.06);
     color: var(--tab-color, var(--text-muted));
   }
   .cat-tab.active .cat-tab-score {
@@ -74,7 +74,7 @@
     width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700;
-    background: rgba(255,255,255,0.06); color: var(--text-muted);
+    background: rgba(0,0,0,0.06); color: var(--text-muted);
     margin-top: 2px;
   }
   .risk-num.high { background: rgba(248,113,113,0.15); color: #f87171; }

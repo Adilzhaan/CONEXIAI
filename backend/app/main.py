@@ -1,5 +1,8 @@
 import asyncio
+import base64
+import hashlib
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -14,6 +17,7 @@ from . import news as news_client
 from . import apify as apify_client
 from . import hh as hh_client
 from . import ai as ai_client
+from . import finance as finance_client
 from .pdf import generate_report
 
 logger = logging.getLogger("conexiai")
@@ -25,8 +29,8 @@ def _friendly_error(e: Exception, context: str = "auth") -> str:
         return "Неверный email или пароль. Проверьте данные и попробуйте снова."
     if "email not confirmed" in msg:
         return "Email не подтверждён. Проверьте почту и перейдите по ссылке из письма."
-    if "user already registered" in msg or "already been registered" in msg:
-        return "Пользователь с таким email уже существует. Попробуйте войти."
+    if "user already registered" in msg or "already been registered" in msg or "already registered" in msg or "email address is already" in msg:
+        return "exists"  # special marker — template will show a redirect to login
     if "password should be at least" in msg or "weak_password" in msg:
         return "Пароль слишком простой. Используйте минимум 6 символов."
     if "rate limit" in msg or "too many requests" in msg:
@@ -34,17 +38,25 @@ def _friendly_error(e: Exception, context: str = "auth") -> str:
     if "network" in msg or "connection" in msg:
         return "Ошибка сети. Проверьте подключение к интернету."
     logger.exception("Auth error (%s)", context)
-    return f"Произошла ошибка. Попробуйте позже."
+    return "Произошла ошибка. Попробуйте позже."
+
+
+def _pkce_pair() -> tuple[str, str]:
+    verifier = secrets.token_urlsafe(48)
+    digest = hashlib.sha256(verifier.encode()).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return verifier, challenge
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     yield
     await supabase.close()
     await news_client.close()
     await apify_client.close()
     await hh_client.close()
     await ai_client.close()
+    await finance_client.close()
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
@@ -118,28 +130,24 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
 async def _activate_pending_memberships(user_email: str, user_id: str, access_token: str) -> None:
     """Activate any pending invites that match this user's email."""
     try:
-        await supabase.rest_update_raw(
-            f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
-            access_token=access_token,
-            patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
-            returning="minimal",
-        )
+        svc = settings.SUPABASE_SERVICE_KEY
+        if svc:
+            await supabase.rest_update_service(
+                f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
+                service_key=svc,
+                patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
+            )
+        else:
+            await supabase.rest_update_raw(
+                f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
+                access_token=access_token,
+                patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
+                returning="minimal",
+            )
+        logger.info("Activated memberships for %s", user_email)
     except Exception as e:
         logger.warning("Could not activate memberships for %s: %s", user_email, e)
 
-
-async def _get_member_companies(user_id: str, access_token: str) -> list[dict]:
-    """Return companies this user is a member of (not owner)."""
-    try:
-        return await supabase.rest_select(
-            table="company_members",
-            access_token=access_token,
-            select="id,company_id,role,status,companies(id,name,ceo_email)",
-            query_params={"user_id": f"eq.{user_id}", "status": "eq.active"},
-        )
-    except Exception as e:
-        logger.warning("Could not fetch member companies: %s", e)
-        return []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -193,9 +201,10 @@ async def register_submit(
     req: Request,
     email: str = Form(...),
     password: str = Form(...),
+    full_name: str = Form(""),
 ):
     try:
-        auth = await supabase.auth_sign_up(email=email, password=password)
+        auth = await supabase.auth_sign_up(email=email, password=password, full_name=full_name.strip())
         # If email confirmations disabled, Supabase may return tokens immediately.
         access_token = auth.get("access_token")
         refresh_token = auth.get("refresh_token")
@@ -211,18 +220,80 @@ async def register_submit(
             {"message": "Пользователь создан. Если включено подтверждение email, зайдите по ссылке из письма.", "error": None, "app_name": settings.APP_NAME},
         )
     except Exception as e:
+        err = _friendly_error(e, "register")
+        if err == "exists":
+            return templates.TemplateResponse(
+                req, "register.html",
+                {"message": None, "error": None, "email_exists": True, "prefill_email": email, "app_name": settings.APP_NAME},
+                status_code=400,
+            )
         return templates.TemplateResponse(
             req, "register.html",
-            {"message": None, "error": _friendly_error(e, "register"), "app_name": settings.APP_NAME},
+            {"message": None, "error": err, "email_exists": False, "app_name": settings.APP_NAME},
             status_code=400,
         )
 
 
 @app.get("/logout")
-async def logout(req: Request):
+async def logout(_req: Request):
     resp = RedirectResponse(url="/login", status_code=302)
     _clear_tokens(resp)
     return resp
+
+
+@app.get("/auth/google")
+async def auth_google(req: Request):
+    verifier, challenge = _pkce_pair()
+    callback_url = str(req.base_url).rstrip("/") + "/auth/callback"
+    oauth_url = (
+        f"{settings.SUPABASE_URL}/auth/v1/authorize"
+        f"?provider=google"
+        f"&redirect_to={callback_url}"
+        f"&code_challenge={challenge}"
+        f"&code_challenge_method=S256"
+    )
+    resp = RedirectResponse(url=oauth_url, status_code=302)
+    resp.set_cookie("pkce_verifier", verifier, httponly=True,
+                    secure=settings.SESSION_COOKIE_SECURE, samesite="lax", max_age=300)
+    return resp
+
+
+@app.get("/auth/callback")
+async def auth_callback(req: Request, code: str | None = None, error: str | None = None):
+    if error or not code:
+        return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
+
+    verifier = req.cookies.get("pkce_verifier")
+    if not verifier:
+        return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
+
+    try:
+        url = f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=pkce"
+        r = await supabase._http.post(
+            url,
+            headers=supabase._headers(),
+            json={"auth_code": code, "code_verifier": verifier},
+        )
+        r.raise_for_status()
+        auth = r.json()
+        access_token = auth.get("access_token")
+        refresh_token = auth.get("refresh_token")
+        if not access_token or not refresh_token:
+            raise RuntimeError("No tokens from Google OAuth")
+
+        user_obj = auth.get("user", {})
+        user_email = user_obj.get("email", "")
+        user_id = user_obj.get("id", "")
+        if user_email and user_id:
+            await _activate_pending_memberships(user_email, user_id, access_token)
+
+        resp = RedirectResponse(url="/dashboard", status_code=302)
+        _set_tokens(resp, access_token, refresh_token)
+        resp.delete_cookie("pkce_verifier")
+        return resp
+    except Exception as e:
+        logger.error("Google OAuth callback failed: %s", e)
+        return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -238,24 +309,21 @@ async def dashboard(req: Request):
     effective_token = new_access or access_token
 
     try:
-        companies, member_rows = await asyncio.gather(
-            supabase.rest_select(
-                table="companies",
-                access_token=effective_token,
-                select="id,name,ceo_email,created_at",
-                order_by="created_at.desc",
-            ),
-            _get_member_companies(user.get("id", ""), effective_token),
+        member_rows = await supabase.rest_select(
+            table="company_members",
+            access_token=effective_token,
+            select="id,role,status,company_id,companies(id,name,ceo_email,created_at)",
+            order_by="joined_at.desc",
+            query_params={"user_id": f"eq.{user.get('id')}", "status": "eq.active"},
         )
     except Exception as e:
         if "401" in str(e) or "403" in str(e):
             resp = RedirectResponse(url="/login", status_code=302)
             _clear_tokens(resp)
             return resp
-        raise
+        member_rows = []
 
     ctx = {
-        "companies": companies,
         "member_rows": member_rows,
         "user_id": user.get("id"),
         "app_name": settings.APP_NAME,
@@ -289,6 +357,11 @@ async def companies_create(
     return RedirectResponse(url=f"/companies/{company['id']}", status_code=302)
 
 
+@app.get("/signal", response_class=HTMLResponse)
+async def signal_page(req: Request):
+    return templates.TemplateResponse(req, "signal.html", {})
+
+
 @app.get("/companies/{company_id}", response_class=HTMLResponse)
 async def company_detail(req: Request, company_id: str):
     user = await get_current_user(req)
@@ -313,6 +386,14 @@ async def company_detail(req: Request, company_id: str):
 
     async def _safe_members():
         try:
+            svc = settings.SUPABASE_SERVICE_KEY
+            if svc:
+                return await supabase.rest_select_service(
+                    table="company_members",
+                    service_key=svc,
+                    select="id,invited_email,role,status,joined_at",
+                    query_params={"company_id": f"eq.{company_id}"},
+                )
             return await supabase.rest_select(
                 table="company_members",
                 access_token=effective_token,
@@ -324,7 +405,19 @@ async def company_detail(req: Request, company_id: str):
             logger.warning("Could not fetch members: %s", e)
             return []
 
-    company_rows, employees, risk_runs, emails_rows, members = await asyncio.gather(
+    async def _get_user_role():
+        try:
+            rows = await supabase.rest_select(
+                table="company_members",
+                access_token=effective_token,
+                select="role",
+                query_params={"company_id": f"eq.{company_id}", "user_id": f"eq.{user.get('id')}"},
+            )
+            return rows[0]["role"] if rows else "member"
+        except Exception:
+            return "member"
+
+    company_rows, employees, risk_runs, emails_rows, members, user_role = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -347,18 +440,20 @@ async def company_detail(req: Request, company_id: str):
         ),
         _safe_emails(),
         _safe_members(),
+        _get_user_role(),
     )
     company = company_rows[0] if company_rows else None
 
     if not company:
         return RedirectResponse(url="/dashboard", status_code=302)
 
-    company_news = await news_client.fetch_news(company["name"])
+    company_news, finance_data = await asyncio.gather(
+        news_client.fetch_news(company["name"]),
+        finance_client.fetch_market_data(company["name"]) if settings.FINANCE_ENABLED else asyncio.sleep(0, result={"found": False}),
+    )
 
     msg = req.query_params.get("msg")
     error = req.query_params.get("error")
-
-    is_owner = company.get("owner_user_id") == user.get("id") if "owner_user_id" in company else True
 
     return templates.TemplateResponse(
         req, "company_detail.html",
@@ -369,10 +464,59 @@ async def company_detail(req: Request, company_id: str):
             "company_news": company_news,
             "emails": emails_rows,
             "members": members,
-            "is_owner": is_owner,
+            "user_role": user_role,
+            "is_admin": user_role == "admin",
+            "finance": finance_data,
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
+        },
+    )
+
+
+@app.get("/companies/{company_id}/market", response_class=HTMLResponse)
+async def market_analysis_page(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="id,name,ceo_email",
+        query_params={"id": f"eq.{company_id}"},
+    )
+    company = company_rows[0] if company_rows else None
+    if not company:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    market_data, company_news = await asyncio.gather(
+        finance_client.fetch_full_market_data(company["name"], twelve_key=settings.TWELVE_DATA_API_KEY),
+        news_client.fetch_news(company["name"]),
+    )
+
+    ai_analysis = None
+    if settings.ANTHROPIC_API_KEY:
+        ai_analysis = await ai_client.analyze_market_position(
+            company_name=company["name"],
+            stock=market_data.get("stock"),
+            market_index=market_data.get("market_index"),
+            top_stocks=market_data.get("top_stocks", []),
+            news=company_news,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+
+    return templates.TemplateResponse(
+        req, "market.html",
+        {
+            "app_name": settings.APP_NAME,
+            "company": company,
+            "finance": market_data,
+            "ai_analysis": ai_analysis,
+            "company_news": company_news,
         },
     )
 
@@ -400,21 +544,54 @@ async def members_invite(
             query_params={"id": f"eq.{company_id}"},
         )
         company_name = company_rows[0]["name"] if company_rows else ""
+        logger.info("Inviting %s to company '%s' (role=%s)", email_clean, company_name, role_clean)
 
-        await supabase.rest_insert(
-            table="company_members",
-            access_token=access_token,
-            row={"company_id": company_id, "invited_email": email_clean, "role": role_clean},
-            returning="minimal",
-        )
+        invite_token = secrets.token_urlsafe(32)
+        try:
+            await supabase.rest_insert(
+                table="company_members",
+                access_token=access_token,
+                row={
+                    "company_id": company_id,
+                    "invited_email": email_clean,
+                    "role": role_clean,
+                    "owner_user_id": user.get("id"),
+                    "invite_token": invite_token,
+                },
+            )
+            logger.info("Member row created for %s", email_clean)
+        except Exception as insert_err:
+            if "409" in str(insert_err):
+                logger.info("Member %s already exists, updating invite_token", email_clean)
+                # Update existing row with fresh token
+                try:
+                    svc = settings.SUPABASE_SERVICE_KEY
+                    if svc:
+                        await supabase.rest_update_service(
+                            f"rest/v1/company_members?company_id=eq.{company_id}&invited_email=eq.{email_clean}",
+                            service_key=svc,
+                            patch={"invite_token": invite_token},
+                        )
+                    else:
+                        await supabase.rest_update_raw(
+                            f"rest/v1/company_members?company_id=eq.{company_id}&invited_email=eq.{email_clean}",
+                            access_token=access_token,
+                            patch={"invite_token": invite_token},
+                            returning="minimal",
+                        )
+                    logger.info("invite_token updated for %s", email_clean)
+                except Exception as upd_err:
+                    logger.error("Failed to update invite_token: %s", upd_err)
+            else:
+                raise
 
         # Send invite email via n8n if webhook is configured
         if settings.N8N_INVITE_WEBHOOK_URL:
+            logger.info("Sending invite webhook to %s", settings.N8N_INVITE_WEBHOOK_URL)
             _role_labels = {
                 "media": "InfoField & Media", "hr": "Human Resources",
                 "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
             }
-            # Determine app base URL from request
             base_url = str(req.base_url).rstrip("/")
             try:
                 await supabase.webhook_post(
@@ -425,16 +602,59 @@ async def members_invite(
                         "company_name": company_name,
                         "role": role_clean,
                         "role_label": _role_labels.get(role_clean or "", ""),
-                        "register_url": f"{base_url}/register",
+                        "join_url": f"{base_url}/join/{invite_token}",
                         "invited_by_user_id": user.get("id"),
                     },
                 )
+                logger.info("Invite webhook sent OK")
             except Exception as e:
-                logger.warning("Invite webhook failed: %s", e)
+                logger.error("Invite webhook failed: %s", e)
+        else:
+            logger.warning("N8N_INVITE_WEBHOOK_URL not set, skipping email")
 
     except Exception as e:
-        logger.warning("Invite failed: %s", e)
+        logger.error("Invite failed: %s", e)
     return RedirectResponse(url=f"/companies/{company_id}?msg=invited", status_code=302)
+
+
+@app.get("/join/{token}", response_class=HTMLResponse)
+async def join_page(req: Request, token: str):
+    service_key = settings.SUPABASE_SERVICE_KEY
+    try:
+        if service_key:
+            rows = await supabase.rest_select_service(
+                table="company_members",
+                service_key=service_key,
+                select="id,invited_email,role,status,company_id,invite_token,companies(name)",
+                query_params={"invite_token": f"eq.{token}"},
+            )
+        else:
+            rows = []
+    except Exception as e:
+        logger.warning("join_page token lookup failed: %s", e)
+        rows = []
+
+    if not rows:
+        return templates.TemplateResponse(req, "join.html", {
+            "invalid": True, "app_name": settings.APP_NAME,
+            "company_name": "", "role_label": "", "invited_email": "", "token": token,
+        })
+
+    m = rows[0]
+    _role_labels = {
+        "media": "InfoField & Media", "hr": "Human Resources",
+        "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
+    }
+    role = m.get("role") or ""
+    company_obj = m.get("companies") or {}
+    return templates.TemplateResponse(req, "join.html", {
+        "invalid": False,
+        "token": token,
+        "company_name": company_obj.get("name", ""),
+        "role_label": _role_labels.get(role, ""),
+        "invited_email": m.get("invited_email", ""),
+        "app_name": settings.APP_NAME,
+    })
 
 
 @app.post("/members/{member_id}/remove")
@@ -513,9 +733,14 @@ async def risks_run(
     company_name = company_rows[0]["name"] if company_rows else ""
 
     # 2) Параллельно тянем все источники данных
-    threads_posts, news, vacancies, regulatory_news, market_news, emails_rows = await asyncio.gather(
-        apify_client.fetch_threads_posts(company_name=company_name, token=settings.APIFY_TOKEN),
+    (
+        social_data, news, yandex_news, vacancies,
+        regulatory_news, market_news, emails_rows,
+        finance_data,
+    ) = await asyncio.gather(
+        apify_client.fetch_all_social(company_name=company_name, token=settings.APIFY_TOKEN, limit=30),
         news_client.fetch_news(company_name, limit=12),
+        news_client.fetch_yandex_news(company_name, limit=8),
         hh_client.fetch_vacancies(company_name, limit=10),
         news_client.fetch_regulatory_news(company_name, limit=6),
         news_client.fetch_market_news(company_name, limit=6),
@@ -526,7 +751,11 @@ async def risks_run(
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         ),
+        finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else {"found": False},
     )
+
+    # Разбиваем social по платформам
+    threads_posts = social_data.get("threads", [])
 
     # Сортируем emails по типу должности; неклассифицированные попадают во все категории
     def _emails_by_type(emails: list[dict], keywords: list[str]) -> list[dict]:
@@ -552,9 +781,11 @@ async def risks_run(
     gr_emails = gr_emails + other_emails
 
     logger.info(
-        "Risk analysis for '%s': news=%d, threads=%d, vacancies=%d, emails_total=%d (hr=%d, pr=%d, gr=%d)",
-        company_name, len(news), len(threads_posts), len(vacancies),
-        len(emails_rows), len(hr_emails), len(pr_emails), len(gr_emails),
+        "Risk analysis for '%s': news=%d, yandex=%d, threads=%d, ig=%d, tt=%d, yt=%d, vacancies=%d, finance_found=%s, emails=%d",
+        company_name, len(news), len(yandex_news), len(threads_posts),
+        len(social_data.get("instagram", [])), len(social_data.get("tiktok", [])),
+        len(social_data.get("youtube", [])),
+        len(vacancies), finance_data.get("found"), len(emails_rows),
     )
 
     # 3) AI-анализ
@@ -562,10 +793,18 @@ async def risks_run(
         company_name=company_name,
         employees=employees,
         news=news,
+        yandex_news=yandex_news,
         threads_posts=threads_posts,
+        social={
+            "instagram": social_data.get("instagram", []),
+            "tiktok":    social_data.get("tiktok", []),
+            "youtube":   social_data.get("youtube", []),
+        },
+        reviews=[],
         vacancies=vacancies,
         regulatory_news=regulatory_news,
         market_news=market_news,
+        finance=finance_data,
         hr_emails=hr_emails,
         pr_emails=pr_emails,
         gr_emails=gr_emails,

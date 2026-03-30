@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Приглашение — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="auth-page">
+  <div class="auth-box">
+
+    <div class="auth-logo">
+      <div class="auth-logo-text">{{ app_name }}</div>
+      <div class="auth-logo-sub">AI-анализ рисков для бизнеса</div>
+    </div>
+
+    {% if invalid %}
+      <div class="alert alert-error">
+        <span class="alert-icon">✕</span>
+        <div>Ссылка недействительна или уже была использована.</div>
+      </div>
+      <div style="text-align:center;margin-top:16px">
+        <a href="/login" class="btn btn-primary">Войти в аккаунт</a>
+      </div>
+
+    {% else %}
+      <div class="card" style="padding:28px;text-align:center">
+        <div style="font-size:36px;margin-bottom:16px">🏢</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">Вас пригласили в</div>
+        <div style="font-size:22px;font-weight:800;color:var(--accent);margin-bottom:6px">{{ company_name }}</div>
+        {% if role_label %}
+          <div style="margin-bottom:20px">
+            <span style="font-size:13px;padding:4px 12px;border-radius:999px;background:rgba(79,143,255,0.12);color:var(--accent)">
+              {{ role_label }}
+            </span>
+          </div>
+        {% else %}
+          <div style="margin-bottom:20px"></div>
+        {% endif %}
+
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:24px;line-height:1.6">
+          Войдите или зарегистрируйтесь с email<br>
+          <strong style="color:var(--text)">{{ invited_email }}</strong>
+        </div>
+
+        <a href="/login?invite={{ token }}" class="btn btn-primary btn-full" style="margin-bottom:10px">
+          Войти в аккаунт
+        </a>
+        <a href="/register?invite={{ token }}" class="btn btn-secondary btn-full">
+          Создать аккаунт
+        </a>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

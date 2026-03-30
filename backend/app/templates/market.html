@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% block title %}Investment Market Analysis — {{ company.name }} — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="sidebar-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="sidebar-logo-icon">⚡</div>
+        <div>
+          <div class="sidebar-logo-text">{{ app_name }}</div>
+          <div class="sidebar-logo-sub">Risk Intelligence</div>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-item">
+        <span class="sidebar-item-icon">⊞</span> Command Center
+      </a>
+      <a href="/companies/{{ company.id }}" class="sidebar-item">
+        <span class="sidebar-item-icon">◎</span> Risk Intelligence
+      </a>
+      <a href="/companies/{{ company.id }}/market" class="sidebar-item active">
+        <span class="sidebar-item-icon">📈</span> Market Analysis
+      </a>
+      <div class="sidebar-section-label">Система</div>
+      <a href="/logout" class="sidebar-item">
+        <span class="sidebar-item-icon">⚙</span> Выйти
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <div class="sidebar-content">
+
+    <!-- Topbar -->
+    <div class="sidebar-topbar">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Investment Market Analysis</div>
+        <div style="font-size:11px;color:var(--text-muted)">{{ company.name }} · биржевые данные и конкуренты</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        {% set idx = finance.market_index %}
+        {% if idx %}
+          {% set idx_val = idx.get('currentvalue') or idx.get('lastvalue') %}
+          {% set idx_chg = idx.get('lasttoprevprice') %}
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:#f5f3ef;border:1px solid var(--border)">
+            <span style="font-size:11px;color:var(--text-muted);font-weight:600">IMOEX</span>
+            <span style="font-size:13px;font-weight:700">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</span>
+            {% if idx_chg is not none %}
+              <span style="font-size:12px;font-weight:700;{% if idx_chg > 0 %}color:#16a34a{% elif idx_chg < 0 %}color:#d44040{% endif %}">
+                {% if idx_chg > 0 %}▲{% elif idx_chg < 0 %}▼{% endif %}{{ "%.2f"|format(idx_chg|abs) }}%
+              </span>
+            {% endif %}
+          </div>
+        {% endif %}
+        <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор компании</a>
+      </div>
+    </div>
+
+    <div class="sidebar-wrap">
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+      <style>
+        /* Cards shadow */
+        .card, .metric-card, .mkt-card {
+          box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+        }
+
+        /* ── Header ── */
+        .mkt-header { margin-bottom: 28px; }
+        .mkt-title { font-size: 24px; font-weight: 800; margin: 0 0 4px; }
+        .mkt-sub { font-size: 13px; color: var(--text-muted); }
+
+        /* ── Top metrics row ── */
+        .mkt-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+        @media (max-width: 900px) { .mkt-metrics { grid-template-columns: repeat(2,1fr); } }
+        .mkt-card {
+          background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+          padding: 18px 20px;
+        }
+        .mkt-card-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+        .mkt-card-value { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+        .mkt-card-sub { font-size: 12px; color: var(--text-muted); }
+        .mkt-card-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+        .badge-bull { background: rgba(22,163,74,0.1); color:#16a34a; border:1px solid rgba(22,163,74,0.25); }
+        .badge-bear { background: rgba(212,64,64,0.1); color:#d44040; border:1px solid rgba(212,64,64,0.25); }
+        .badge-neutral { background: rgba(113,113,122,0.1); color:#71717a; border:1px solid rgba(113,113,122,0.2); }
+
+        /* ── Two-column layout ── */
+        .mkt-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        @media (max-width: 800px) { .mkt-two-col { grid-template-columns: 1fr; } }
+
+        /* ── Section header ── */
+        .sec-hdr { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+        .sec-hdr-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+        .sec-hdr-title { font-size:13px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; }
+
+        /* ── AI analysis blocks ── */
+        .ai-block { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:20px; }
+        .ai-block-title { font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+        .ai-text { font-size:14px; line-height:1.7; color:var(--text); }
+
+        /* ── Risk/opportunity items ── */
+        .risk-item-mkt {
+          display:flex; align-items:flex-start; gap:12px;
+          padding:12px 0; border-bottom:1px solid var(--border);
+        }
+        .risk-item-mkt:last-child { border-bottom:none; padding-bottom:0; }
+        .risk-sev { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+        .sev-high { background:#d44040; }
+        .sev-medium { background:#d97706; }
+        .sev-low { background:#16a34a; }
+        .risk-item-title { font-size:13px; font-weight:600; margin-bottom:2px; }
+        .risk-item-desc { font-size:12px; color:var(--text-muted); line-height:1.5; }
+
+        .opp-item {
+          display:flex; align-items:flex-start; gap:10px;
+          padding:10px 0; border-bottom:1px solid var(--border);
+        }
+        .opp-item:last-child { border-bottom:none; }
+
+        /* ── Stocks table ── */
+        .stocks-table { width:100%; border-collapse:collapse; }
+        .stocks-table th {
+          font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;
+          letter-spacing:.07em; padding:8px 12px; text-align:left;
+          border-bottom:2px solid var(--border); white-space:nowrap;
+        }
+        .stocks-table td { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+        .stocks-table tr:last-child td { border-bottom:none; }
+        .stocks-table tr:hover td { background:#f8f6f2; }
+        .ticker-cell { font-family:monospace; font-weight:700; font-size:13px; }
+        .chg-positive { color:#16a34a; font-weight:700; }
+        .chg-negative { color:#d44040; font-weight:700; }
+        .vol-bar { height:4px; border-radius:2px; background:#d44040; margin-top:3px; }
+
+        /* ── Summary card ── */
+        .summary-card {
+          background: linear-gradient(135deg, rgba(212,64,64,0.06), rgba(232,115,74,0.04));
+          border: 1px solid rgba(212,64,64,0.18);
+          border-left: 3px solid #d44040;
+          border-radius: var(--radius); padding: 18px 20px; margin-bottom: 24px;
+        }
+        .summary-label { font-size:10px; font-weight:700; color:#d44040; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; }
+        .summary-text { font-size:14px; line-height:1.7; }
+      </style>
+
+      <!-- Header -->
+      <div class="mkt-header">
+        <h1 class="mkt-title">📈 Investment Market Analysis</h1>
+        <div class="mkt-sub">Анализ рыночной позиции · конкуренты · биржевые данные · {{ company.name }}</div>
+      </div>
+
+      {% set stock = finance.stock if finance and finance.found else none %}
+      {% set ai = ai_analysis %}
+      {% set top = finance.top_stocks if finance else [] %}
+
+      <!-- Top metrics -->
+      <div class="mkt-metrics">
+
+        <!-- Company stock -->
+        <div class="mkt-card">
+          <div class="mkt-card-label">📌 Компания на бирже</div>
+          {% if stock %}
+            <div class="mkt-card-value" style="font-size:20px;margin-bottom:6px">{{ stock.get('ticker') }}</div>
+            {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font-size:22px;font-weight:800">{{ stock.get('last') or '—' }}</span>
+              {% if chg is not none %}
+                <span style="font-size:13px;font-weight:700;{% if chg > 0 %}color:#16a34a{% elif chg < 0 %}color:#d44040{% endif %}">
+                  {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
+                </span>
+              {% endif %}
+            </div>
+            <div class="mkt-card-sub mt-4">{{ stock.get('source') }} · {{ stock.get('name', '')[:28] }}</div>
+          {% else %}
+            <div style="font-size:22px;font-weight:800;color:var(--text-muted)">—</div>
+            <div class="mkt-card-sub">Не торгуется публично</div>
+          {% endif %}
+        </div>
+
+        <!-- MOEX Index -->
+        {% set idx = finance.market_index if finance else none %}
+        <div class="mkt-card">
+          <div class="mkt-card-label">🏦 Индекс МосБиржи</div>
+          {% if idx %}
+            {% set idx_val = idx.get('currentvalue') or idx.get('lastvalue') %}
+            {% set idx_chg = idx.get('lasttoprevprice') %}
+            <div class="mkt-card-value">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</div>
+            {% if idx_chg is not none %}
+              <div style="font-size:13px;font-weight:700;{% if idx_chg > 0 %}color:#16a34a{% elif idx_chg < 0 %}color:#d44040{% endif %}">
+                {% if idx_chg > 0 %}▲ +{% elif idx_chg < 0 %}▼ {% endif %}{{ "%.2f"|format(idx_chg) }}%
+              </div>
+            {% endif %}
+            <div class="mkt-card-sub">IMOEX · Московская биржа</div>
+          {% else %}
+            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
+            <div class="mkt-card-sub">Данные недоступны</div>
+          {% endif %}
+        </div>
+
+        <!-- AI risk score -->
+        <div class="mkt-card">
+          <div class="mkt-card-label">⚠️ Рыночный риск</div>
+          {% if ai %}
+            {% set rs = ai.risk_score | int %}
+            <div class="mkt-card-value" style="{% if rs < 35 %}color:#16a34a{% elif rs < 65 %}color:#d97706{% else %}color:#d44040{% endif %}">{{ rs }}</div>
+            <div>
+              <span class="mkt-card-badge {% if rs < 35 %}badge-bull{% elif rs < 65 %}badge-neutral{% else %}badge-bear{% endif %}">
+                {% if rs < 35 %}Low Risk{% elif rs < 65 %}Moderate{% else %}High Risk{% endif %}
+              </span>
+            </div>
+            <div class="mkt-card-sub mt-4">На основе AI анализа</div>
+          {% else %}
+            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
+            <div class="mkt-card-sub">AI анализ недоступен</div>
+          {% endif %}
+        </div>
+
+        <!-- Trend -->
+        <div class="mkt-card">
+          <div class="mkt-card-label">📊 Тренд рынка</div>
+          {% if ai %}
+            {% set trend = ai.trend | default('neutral') %}
+            <div class="mkt-card-value" style="font-size:36px;{% if trend == 'bullish' %}color:#16a34a{% elif trend == 'bearish' %}color:#d44040{% else %}color:#d97706{% endif %}">
+              {% if trend == 'bullish' %}↗{% elif trend == 'bearish' %}↘{% else %}→{% endif %}
+            </div>
+            <span class="mkt-card-badge {% if trend == 'bullish' %}badge-bull{% elif trend == 'bearish' %}badge-bear{% else %}badge-neutral{% endif %}">
+              {% if trend == 'bullish' %}Bullish{% elif trend == 'bearish' %}Bearish{% else %}Neutral{% endif %}
+            </span>
+          {% else %}
+            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
+          {% endif %}
+        </div>
+
+      </div>
+
+      <!-- AI Summary -->
+      {% if ai and ai.summary %}
+      <div class="summary-card">
+        <div class="summary-label">🤖 AI Вывод для руководства</div>
+        <div class="summary-text">{{ ai.summary }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Two col: Market Position + Competitive Analysis -->
+      {% if ai %}
+      <div class="mkt-two-col">
+        <div class="ai-block">
+          <div class="ai-block-title"><span>🌍</span> Позиция на рынке</div>
+          <div class="ai-text">{{ ai.market_position }}</div>
+        </div>
+        <div class="ai-block">
+          <div class="ai-block-title"><span>⚔️</span> Анализ конкурентов</div>
+          <div class="ai-text">{{ ai.competitive_analysis }}</div>
+        </div>
+      </div>
+
+      <!-- Risks + Opportunities -->
+      <div class="mkt-two-col">
+        <div class="ai-block">
+          <div class="ai-block-title"><span>⚠️</span> Рыночные риски</div>
+          {% for r in ai.market_risks %}
+            <div class="risk-item-mkt">
+              <div class="risk-sev sev-{{ r.severity | default('medium') }}"></div>
+              <div>
+                <div class="risk-item-title">{{ r.title }}</div>
+                <div class="risk-item-desc">{{ r.description }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="ai-block">
+          <div class="ai-block-title"><span>🚀</span> Возможности роста</div>
+          {% for o in ai.market_opportunities %}
+            <div class="opp-item">
+              <span style="color:#16a34a;font-size:16px;flex-shrink:0;margin-top:1px">✦</span>
+              <div>
+                <div class="risk-item-title">{{ o.title }}</div>
+                <div class="risk-item-desc">{{ o.description }}</div>
+              </div>
+            </div>
+          {% else %}
+            <div style="color:var(--text-muted);font-size:13px">Данных недостаточно</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Market leaders / competitors table -->
+      {% if top %}
+      <div class="ai-block" style="margin-bottom:24px">
+        <div class="sec-hdr">
+          <div class="sec-hdr-dot" style="background:#d44040"></div>
+          <div class="sec-hdr-title">Топ акций рынка (MOEX TQBR) — конкурентный контекст</div>
+          <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">по объёму торгов</span>
+        </div>
+        {% set max_vol = top | map(attribute='volume_rub') | select | max %}
+        <div style="overflow-x:auto">
+          <table class="stocks-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Тикер</th>
+                <th>Компания</th>
+                <th>Цена</th>
+                <th>Изменение</th>
+                <th>Объём торгов</th>
+                <th>Активность</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in top %}
+                {% set chg = s.get('change') %}
+                {% set vol = s.get('volume_rub') or 0 %}
+                {% set vol_pct = ((vol / max_vol) * 100) | int if max_vol and max_vol > 0 else 0 %}
+                <tr>
+                  <td style="color:var(--text-muted);font-size:12px">{{ loop.index }}</td>
+                  <td><span class="ticker-cell">{{ s.ticker }}</span></td>
+                  <td style="color:var(--text-muted)">{{ s.get('name','')[:24] }}</td>
+                  <td style="font-weight:600">{{ s.get('last') or '—' }}</td>
+                  <td>
+                    {% if chg is not none %}
+                      <span class="{% if chg > 0 %}chg-positive{% elif chg < 0 %}chg-negative{% endif %}">
+                        {% if chg > 0 %}▲ +{% elif chg < 0 %}▼ {% endif %}{{ "%.2f"|format(chg) }}%
+                      </span>
+                    {% else %}
+                      <span style="color:var(--text-muted)">—</span>
+                    {% endif %}
+                  </td>
+                  <td style="color:var(--text-muted);font-size:12px">{{ "{:,.0f}".format(vol) }} ₽</td>
+                  <td style="width:80px">
+                    <div style="height:4px;border-radius:2px;background:#e8e4dd">
+                      <div class="vol-bar" style="width:{{ vol_pct }}%"></div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Chart: price changes bar -->
+      {% if top %}
+      <div class="ai-block" style="margin-bottom:24px">
+        <div class="sec-hdr">
+          <div class="sec-hdr-dot" style="background:#2563eb"></div>
+          <div class="sec-hdr-title">Изменение цены — топ акции (%)</div>
+        </div>
+        <div style="position:relative;height:220px">
+          <canvas id="peersChart"></canvas>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- News column -->
+      <div class="ai-block">
+        <div class="sec-hdr">
+          <div class="sec-hdr-dot" style="background:#d97706"></div>
+          <div class="sec-hdr-title">Новости по компании и рынку</div>
+        </div>
+        {% if company_news %}
+          {% for n in company_news %}
+            <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+              <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:500;line-height:1.4;display:block;color:var(--text)">{{ n.title }}</a>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                {% if n.source %}{{ n.source }}{% endif %}
+                {% if n.source and n.pub_date %} · {% endif %}
+                {% if n.pub_date %}{{ n.pub_date }}{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div style="color:var(--text-muted);font-size:13px;padding:16px 0;text-align:center">Новости не найдены</div>
+        {% endif %}
+      </div>
+
+    </div><!-- /sidebar-wrap -->
+  </div><!-- /sidebar-content -->
+</div><!-- /sidebar-layout -->
+
+<script>
+{% if finance and finance.top_stocks %}
+const peersData = {{ finance.top_stocks | tojson | safe }};
+const labels = peersData.map(s => s.ticker);
+const changes = peersData.map(s => s.change !== null ? parseFloat(s.change.toFixed(2)) : 0);
+const colors = changes.map(v => v > 0 ? 'rgba(22,163,74,0.75)' : v < 0 ? 'rgba(212,64,64,0.75)' : 'rgba(113,113,122,0.5)');
+const borders = changes.map(v => v > 0 ? '#16a34a' : v < 0 ? '#d44040' : '#71717a');
+
+const ctx = document.getElementById('peersChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Изменение %',
+        data: changes,
+        backgroundColor: colors,
+        borderColor: borders,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.raw > 0 ? '+' : ''}${ctx.raw}%`
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          ticks: { color: '#a1a1aa', font: { size: 11 }, callback: v => `${v > 0 ? '+' : ''}${v}%` },
+          border: { display: false }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#71717a', font: { size: 11, weight: '600' } },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+{% endif %}
+</script>
+{% endblock %}

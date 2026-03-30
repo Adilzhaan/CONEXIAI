@@ -5,20 +5,23 @@
 <nav class="topbar">
   <span class="topbar-brand">{{ app_name }}</span>
   <div class="topbar-nav">
-    <span class="small muted" style="font-size:13px;">{{ user_id }}</span>
     <a href="/logout" class="btn btn-ghost btn-sm">Выйти</a>
   </div>
 </nav>
 {% endblock %}
 
 {% block content %}
+  {% set admin_rows = member_rows | selectattr('role', 'eq', 'admin') | list %}
+  {% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
+
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px;">
     <div>
-      <h1 style="margin:0; font-size: 22px; font-weight: 700;">Компании</h1>
+      <h1 style="margin:0; font-size: 22px; font-weight: 700;">Мои компании</h1>
       <div class="small muted mt-4">Управляйте компаниями и запускайте AI-анализ рисков</div>
     </div>
   </div>
 
+  <!-- Create company (always visible) -->
   <div class="card">
     <div class="card-title">Добавить компанию</div>
     <form method="post" action="/companies/create" id="company-form">
@@ -40,42 +43,14 @@
     </form>
   </div>
 
-  <div class="card">
-    <div class="card-title">
-      Список компаний
-      {% if companies %}
-        <span class="badge" style="margin-left:8px; font-weight:400;">{{ companies|length }}</span>
-      {% endif %}
-    </div>
-
-    {% if companies|length == 0 %}
-      <div style="text-align:center; padding: 32px 0; color: var(--text-muted);">
-        <div style="font-size:36px; margin-bottom:12px;">🏢</div>
-        <div style="font-weight:500;">Нет компаний</div>
-        <div class="small mt-4">Добавьте первую компанию выше</div>
-      </div>
-    {% else %}
-      {% for c in companies %}
-        <div class="company-row">
-          <div>
-            <div style="font-weight: 600;">{{ c.name }}</div>
-            <div class="small muted mt-4">{{ c.ceo_email }}</div>
-          </div>
-          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">
-            Открыть →
-          </a>
-        </div>
-      {% endfor %}
-    {% endif %}
-  </div>
-
-{% if member_rows %}
+  <!-- Companies where user is admin -->
+  {% if admin_rows %}
   <div class="card" style="margin-top:16px">
     <div class="card-title">
-      Компании, в которых я участник
-      <span class="badge" style="margin-left:8px;font-weight:400;">{{ member_rows|length }}</span>
+      Мои компании
+      <span class="badge" style="margin-left:8px;font-weight:400;">{{ admin_rows|length }}</span>
     </div>
-    {% for m in member_rows %}
+    {% for m in admin_rows %}
       {% set c = m.companies %}
       {% if c %}
         <div class="company-row">
@@ -83,8 +58,42 @@
             <div style="font-weight:600;">{{ c.name }}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
               <div class="small muted">{{ c.ceo_email }}</div>
-              {% if m.role %}
-                {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+              <span class="badge badge-blue" style="font-size:10px">Admin</span>
+            </div>
+          </div>
+          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">Открыть →</a>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="margin-top:16px">
+    <div style="text-align:center; padding: 32px 0; color: var(--text-muted);">
+      <div style="font-size:36px; margin-bottom:12px;">🏢</div>
+      <div style="font-weight:500;">Нет компаний</div>
+      <div class="small mt-4">Добавьте первую компанию выше</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Companies where user is member -->
+  {% if member_only_rows %}
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">
+      Участник в компаниях
+      <span class="badge" style="margin-left:8px;font-weight:400;">{{ member_only_rows|length }}</span>
+    </div>
+    {% for m in member_only_rows %}
+      {% set c = m.companies %}
+      {% if c %}
+        {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+        <div class="company-row">
+          <div>
+            <div style="font-weight:600;">{{ c.name }}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <div class="small muted">{{ c.ceo_email }}</div>
+              <span class="badge" style="font-size:10px;background:rgba(0,0,0,0.06)">Member</span>
+              {% if m.role and m.role != 'member' %}
                 <span class="badge badge-blue" style="font-size:10px">{{ role_labels.get(m.role, m.role) }}</span>
               {% endif %}
             </div>
@@ -94,7 +103,7 @@
       {% endif %}
     {% endfor %}
   </div>
-{% endif %}
+  {% endif %}
 
 <script>
 document.getElementById('company-form').addEventListener('submit', function() {

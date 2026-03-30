@@ -13,20 +13,53 @@ class SupabaseClient:
     async def close(self) -> None:
         await self._http.aclose()
 
-    def _headers(self, access_token: str | None = None) -> dict[str, str]:
+    def _headers(self, access_token: str | None = None, *, service_key: str | None = None) -> dict[str, str]:
+        key = service_key or self._anon_key
         headers = {
-            "apikey": self._anon_key,
+            "apikey": key,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        if access_token:
+        if service_key:
+            headers["Authorization"] = f"Bearer {service_key}"
+        elif access_token:
             headers["Authorization"] = f"Bearer {access_token}"
         return headers
 
-    async def auth_sign_up(self, email: str, password: str) -> dict[str, Any]:
-        # https://supabase.com/docs/reference/auth-api/sign-up
+    async def rest_update_service(
+        self,
+        path_with_query: str,
+        service_key: str,
+        patch: dict[str, Any],
+    ) -> None:
+        """PATCH bypassing RLS using service role key."""
+        url = f"{self._base}/{path_with_query.lstrip('/')}"
+        headers = self._headers(service_key=service_key)
+        headers["Prefer"] = "return=minimal"
+        r = await self._http.patch(url, headers=headers, json=patch)
+        r.raise_for_status()
+
+    async def rest_select_service(
+        self,
+        table: str,
+        service_key: str,
+        select: str = "*",
+        query_params: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """SELECT bypassing RLS using service role key."""
+        url = f"{self._base}/rest/v1/{table}"
+        params: dict[str, Any] = {"select": select}
+        if query_params:
+            params.update(query_params)
+        r = await self._http.get(url, headers=self._headers(service_key=service_key), params=params)
+        r.raise_for_status()
+        return r.json()
+
+    async def auth_sign_up(self, email: str, password: str, full_name: str = "") -> dict[str, Any]:
         url = f"{self._base}/auth/v1/signup"
-        payload = {"email": email, "password": password}
+        payload: dict[str, Any] = {"email": email, "password": password}
+        if full_name:
+            payload["data"] = {"full_name": full_name}
         r = await self._http.post(url, headers=self._headers(), json=payload)
         r.raise_for_status()
         return r.json()
@@ -95,9 +128,11 @@ class SupabaseClient:
         headers["Prefer"] = f"return={returning}"
         r = await self._http.post(url, headers=headers, json=[row])
         r.raise_for_status()
+        if not r.content or returning == "minimal":
+            return {}
         data = r.json()
         if not data:
-            raise RuntimeError("Supabase insert returned empty response.")
+            return {}
         return data[0]
 
     async def rest_insert_many(

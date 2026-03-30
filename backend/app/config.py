@@ -15,6 +15,8 @@ class Settings:
     # Supabase
     SUPABASE_URL: str = _get("SUPABASE_URL")
     SUPABASE_ANON_KEY: str = _get("SUPABASE_ANON_KEY")
+    # Service role key — bypasses RLS, used for public invite lookup
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 
     # n8n
     N8N_FIND_RISKS_WEBHOOK_URL: str = _get("N8N_FIND_RISKS_WEBHOOK_URL")
@@ -29,6 +31,8 @@ class Settings:
 
     # Apify
     APIFY_TOKEN: str = os.getenv("APIFY_TOKEN", "")
+    TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+    FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
 
     # Anthropic
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
