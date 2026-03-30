@@ -273,7 +273,7 @@ async def auth_callback(req: Request, code: str | None = None, error: str | None
         r = await supabase._http.post(
             url,
             headers=supabase._headers(),
-            json={"code": code, "code_verifier": verifier},
+            json={"auth_code": code, "code_verifier": verifier},
         )
         r.raise_for_status()
         auth = r.json()
