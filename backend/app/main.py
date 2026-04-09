@@ -179,6 +179,11 @@ async def _activate_pending_memberships(user_email: str, user_id: str, access_to
 
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(req: Request):
     user = await get_current_user(req)
