@@ -339,9 +339,37 @@
       background: rgba(245,243,239,0);
       z-index: 9998;
       pointer-events: none;
-      transition: background 0.2s;
+      transition: background 0.25s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    #page-overlay.dimming { background: rgba(245,243,239,0.55); }
+    #page-overlay.dimming { background: rgba(245,243,239,0.72); }
+
+    /* ── Nav spinner (shown inside overlay) ── */
+    #nav-spinner {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+      transform: scale(0.88);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    #nav-spinner.visible { opacity: 1; transform: scale(1); }
+    .nav-spinner-ring {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(212,64,64,0.15);
+      border-top-color: #d44040;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    .nav-spinner-logo {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+      background: linear-gradient(135deg, #d44040, #e8734a);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
     /* ── Link/button loading cursor ── */
     body.navigating * { cursor: wait !important; }
@@ -395,7 +423,12 @@
 
   <!-- Progress bar + overlay -->
   <div id="nprogress-bar"></div>
-  <div id="page-overlay"></div>
+  <div id="page-overlay">
+    <div id="nav-spinner">
+      <div class="nav-spinner-ring"></div>
+      <div class="nav-spinner-logo">CONEXIAI</div>
+    </div>
+  </div>
 
   {% block body %}
     {% block topbar %}{% endblock %}
@@ -451,6 +484,19 @@
       if (e.persisted) { startProgress(); setTimeout(finishProgress, 100); }
     });
 
+    const spinner = document.getElementById('nav-spinner');
+    let spinnerTimer = null;
+
+    function showSpinner() {
+      overlay.classList.add('dimming');
+      document.body.classList.add('navigating');
+      // Show spinner after small delay so instant navigations don't flash
+      spinnerTimer = setTimeout(() => {
+        spinner.style.display = 'flex';
+        requestAnimationFrame(() => spinner.classList.add('visible'));
+      }, 120);
+    }
+
     // ── On click: show overlay + cursor, bar will show on new page ──
     document.addEventListener('click', function(e) {
       const link = e.target.closest('a[href]');
@@ -459,14 +505,12 @@
       if (!href || href.startsWith('#') || href.startsWith('http') ||
           href.startsWith('mailto') || href.startsWith('javascript') ||
           link.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      overlay.classList.add('dimming');
-      document.body.classList.add('navigating');
+      showSpinner();
     });
 
     document.addEventListener('submit', function(e) {
       if (e.target.dataset.noProgress) return;
-      overlay.classList.add('dimming');
-      document.body.classList.add('navigating');
+      showSpinner();
     });
   })();
   </script>
