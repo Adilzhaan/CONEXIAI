@@ -573,6 +573,66 @@ async def _refresh_market_cache(company_id: str, company_name: str) -> dict:
     return {"finance": market_data, "ai_analysis": ai_analysis, "news": company_news}
 
 
+@app.get("/companies/{company_id}/social")
+async def company_social(req: Request, company_id: str):
+    """Fetch social media posts for a company (async, called from frontend)."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+
+    access_token, _ = _get_tokens(req)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="name",
+        query_params={"id": f"eq.{company_id}"},
+    )
+    if not company_rows:
+        return {"error": "not found"}
+
+    company_name = company_rows[0]["name"]
+
+    if not settings.APIFY_TOKEN:
+        return {"posts": [], "message": "Apify не настроен"}
+
+    try:
+        social_data = await apify_client.fetch_all_social(
+            company_name=company_name,
+            token=settings.APIFY_TOKEN,
+            limit=10,
+        )
+    except Exception as e:
+        return {"posts": [], "message": str(e)}
+
+    posts = []
+    platform_map = {
+        "threads":   ("Threads",   "🧵"),
+        "instagram": ("Instagram", "📸"),
+        "tiktok":    ("TikTok",    "🎵"),
+        "youtube":   ("YouTube",   "▶️"),
+        "twitter":   ("Twitter/X", "🐦"),
+        "facebook":  ("Facebook",  "👤"),
+    }
+    for platform, (label, icon) in platform_map.items():
+        for p in social_data.get(platform, []):
+            text = (p.get("captionText") or p.get("text") or p.get("title") or "").strip()
+            url  = (p.get("postUrl") or p.get("url") or "").strip()
+            author = (p.get("username") or p.get("author") or "").strip()
+            if text or url:
+                posts.append({
+                    "platform": platform,
+                    "label":    label,
+                    "icon":     icon,
+                    "author":   author,
+                    "text":     text[:300],
+                    "url":      url,
+                })
+
+    return {"posts": posts}
+
+
 @app.get("/companies/{company_id}/market", response_class=HTMLResponse)
 async def market_analysis_page(req: Request, company_id: str):
     user = await get_current_user(req)

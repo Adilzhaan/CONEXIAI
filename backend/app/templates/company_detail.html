@@ -537,6 +537,20 @@
         </div>
         {% endif %}
 
+        <!-- Social Media -->
+        <div style="margin-top:20px">
+          <div class="panel-hdr" style="margin-bottom:10px">
+            <div class="panel-hdr-title">Соцсети</div>
+            <span id="social-status" style="font-size:11px;color:var(--text-muted)">Загружаем…</span>
+          </div>
+          <div id="social-feed" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04);min-height:48px">
+            <div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px">
+              <span style="display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>
+              Сканируем соцсети…
+            </div>
+          </div>
+        </div>
+
       </div>{# end overview #}
 
       <!-- ══ TEAM TAB ══ -->
@@ -1051,5 +1065,47 @@ if (completed.length > 0) {
     });
   }
 }
+
+// ── Social feed ──
+(async function loadSocial() {
+  const feed   = document.getElementById('social-feed');
+  const status = document.getElementById('social-status');
+  if (!feed) return;
+  try {
+    const r = await fetch(`/companies/{{ company.id }}/social`);
+    const data = await r.json();
+    const posts = data.posts || [];
+
+    if (!posts.length) {
+      feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">${data.message || 'Упоминаний в соцсетях не найдено'}</div>`;
+      if (status) status.textContent = '0 постов';
+      return;
+    }
+
+    const colorMap = {
+      threads:   '#a78bfa', instagram: '#e1306c',
+      tiktok:    '#010101', youtube:   '#ff0000',
+      twitter:   '#1d9bf0', facebook:  '#1877f2',
+    };
+
+    feed.innerHTML = posts.map(p => {
+      const color = colorMap[p.platform] || '#6b7a94';
+      const link = p.url ? `<a href="${p.url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap;flex-shrink:0">↗ открыть</a>` : '';
+      const author = p.author ? `<span style="font-weight:600;color:var(--text)">@${p.author}</span> · ` : '';
+      return `<div class="news-item" style="display:flex;align-items:flex-start;gap:10px">
+        <span style="flex-shrink:0;width:52px;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;text-align:center;background:${color}18;color:${color};border:1px solid ${color}33">${p.icon} ${p.label}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;line-height:1.45;color:var(--text)">${author}${p.text || '—'}</div>
+        </div>
+        ${link}
+      </div>`;
+    }).join('');
+
+    if (status) status.textContent = `${posts.length} постов`;
+  } catch(e) {
+    if (feed) feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">Ошибка загрузки</div>`;
+    if (status) status.textContent = '';
+  }
+})();
 </script>
 {% endblock %}
