@@ -197,12 +197,13 @@ async def check_and_run(
     # 3. Full analysis (same logic as risks_run)
     try:
         t_gather = datetime.now(timezone.utc)
-        logger.info("[monitor] → Fetching social, Yandex, vacancies, regulatory, market, finance for '%s'…", company_name)
+        logger.info("[monitor] → Fetching Yandex, vacancies, regulatory, market, finance for '%s'…", company_name)
+        _empty_social = {"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}
         (
             social_data, yandex_news, vacancies,
             regulatory_news, market_news, finance_data,
         ) = await asyncio.gather(
-            apify_client.fetch_all_social(company_name=company_name, token=settings.APIFY_TOKEN, limit=10),
+            asyncio.sleep(0, result=_empty_social),
             news_client.fetch_yandex_news(company_name, limit=8),
             hh_client.fetch_vacancies(company_name, limit=10),
             news_client.fetch_regulatory_news(company_name, limit=6),

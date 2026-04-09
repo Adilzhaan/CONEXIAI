@@ -985,7 +985,7 @@ async def risks_run(
         regulatory_news, market_news, gr_news, emails_rows,
         finance_data,
     ) = await asyncio.gather(
-        apify_client.fetch_all_social(company_name=company_name, token=settings.APIFY_TOKEN, limit=30),
+        asyncio.sleep(0, result={"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}),
         news_client.fetch_news(company_name, limit=12),
         news_client.fetch_yandex_news(company_name, limit=8),
         hh_client.fetch_vacancies(company_name, limit=10),
