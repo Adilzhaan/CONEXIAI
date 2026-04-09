@@ -541,13 +541,10 @@
         <div style="margin-top:20px">
           <div class="panel-hdr" style="margin-bottom:10px">
             <div class="panel-hdr-title">Соцсети</div>
-            <span id="social-status" style="font-size:11px;color:var(--text-muted)">Загружаем…</span>
+            <button id="social-refresh-btn" onclick="loadSocial()" class="btn btn-secondary btn-sm">🔍 Сканировать</button>
           </div>
           <div id="social-feed" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04);min-height:48px">
-            <div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px">
-              <span style="display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>
-              Сканируем соцсети…
-            </div>
+            <div style="padding:14px 0;color:var(--text-muted);font-size:13px">Нажмите «Сканировать» чтобы загрузить посты из соцсетей</div>
           </div>
         </div>
 
@@ -1067,10 +1064,14 @@ if (completed.length > 0) {
 }
 
 // ── Social feed ──
-(async function loadSocial() {
-  const feed   = document.getElementById('social-feed');
-  const status = document.getElementById('social-status');
+async function loadSocial() {
+  const feed = document.getElementById('social-feed');
+  const btn  = document.getElementById('social-refresh-btn');
   if (!feed) return;
+
+  feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>Сканируем соцсети…</div>`;
+  if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
+
   try {
     const r = await fetch(`/companies/{{ company.id }}/social`);
     const data = await r.json();
@@ -1078,7 +1079,7 @@ if (completed.length > 0) {
 
     if (!posts.length) {
       feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">${data.message || 'Упоминаний в соцсетях не найдено'}</div>`;
-      if (status) status.textContent = '0 постов';
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 Сканировать'; }
       return;
     }
 
@@ -1101,11 +1102,11 @@ if (completed.length > 0) {
       </div>`;
     }).join('');
 
-    if (status) status.textContent = `${posts.length} постов`;
+    if (btn) { btn.disabled = false; btn.textContent = `🔄 Обновить (${posts.length})`; }
   } catch(e) {
-    if (feed) feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">Ошибка загрузки</div>`;
-    if (status) status.textContent = '';
+    feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">Ошибка загрузки</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Сканировать'; }
   }
-})();
+}
 </script>
 {% endblock %}
