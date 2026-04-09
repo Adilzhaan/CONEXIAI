@@ -4,6 +4,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
+from . import gr_sources as gr_client
 
 _http = httpx.AsyncClient(timeout=8, follow_redirects=True)
 
@@ -95,16 +96,59 @@ async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, 
     return await _fetch_yahoo(company_name, limit)
 
 
+async def _fetch_gdelt(query: str, limit: int) -> list[dict[str, Any]]:
+    """GDELT Doc 2.0 API — global news database, free, no key required."""
+    try:
+        from urllib.parse import quote as _quote
+        url = (
+            f"https://api.gdeltproject.org/api/v2/doc/doc"
+            f"?query={_quote(query)}&mode=artlist&maxrecords={limit}"
+            f"&format=json&sort=DateDesc"
+        )
+        r = await _http.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        articles = r.json().get("articles") or []
+        items: list[dict[str, Any]] = []
+        for a in articles[:limit]:
+            title = (a.get("title") or "").strip()
+            url_  = (a.get("url")   or "").strip()
+            if not title or not url_:
+                continue
+            seendateraw = a.get("seendate") or ""
+            pub_date = ""
+            if seendateraw:
+                try:
+                    from datetime import datetime
+                    pub_date = datetime.strptime(seendateraw[:8], "%Y%m%d").strftime("%d.%m.%Y")
+                except Exception:
+                    pass
+            items.append({
+                "title":    title,
+                "link":     url_,
+                "pub_date": pub_date,
+                "source":   a.get("domain") or "GDELT",
+            })
+        return items
+    except Exception:
+        return []
+
+
+async def fetch_gdelt_news(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
+    return await _fetch_gdelt(company_name, limit)
+
+
 async def fetch_news(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
-    """Google News + Yahoo News combined, deduplicated by title."""
+    """Google News + Yahoo News + GDELT + KZ/Global media, deduplicated by title."""
     import asyncio
-    google, yahoo = await asyncio.gather(
+    google, yahoo, gdelt, media = await asyncio.gather(
         _fetch_by_query(company_name, limit),
         _fetch_yahoo(company_name, limit),
+        _fetch_gdelt(company_name, limit),
+        gr_client.fetch_gr_news(company_name, categories=["media_kz", "media_global"], relevance_filter=True),
     )
     seen: set[str] = set()
     combined: list[dict[str, Any]] = []
-    for item in google + yahoo:
+    for item in google + yahoo + gdelt + media:
         key = item["title"].lower()[:60]
         if key not in seen:
             seen.add(key)

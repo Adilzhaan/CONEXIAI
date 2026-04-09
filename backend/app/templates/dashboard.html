@@ -1,115 +1,300 @@
 {% extends "base.html" %}
-{% block title %}Дэшборд — {{ app_name }}{% endblock %}
+{% block title %}Command Center — {{ app_name }}{% endblock %}
 
-{% block topbar %}
-<nav class="topbar">
-  <span class="topbar-brand">{{ app_name }}</span>
-  <div class="topbar-nav">
-    <a href="/logout" class="btn btn-ghost btn-sm">Выйти</a>
-  </div>
-</nav>
-{% endblock %}
+{% block body %}
+{% set admin_rows = member_rows | selectattr('role', 'eq', 'admin') | list %}
+{% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
+{% set total = admin_rows|length + member_only_rows|length %}
 
-{% block content %}
-  {% set admin_rows = member_rows | selectattr('role', 'eq', 'admin') | list %}
-  {% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
+<div class="sidebar-layout">
 
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px;">
-    <div>
-      <h1 style="margin:0; font-size: 22px; font-weight: 700;">Мои компании</h1>
-      <div class="small muted mt-4">Управляйте компаниями и запускайте AI-анализ рисков</div>
-    </div>
-  </div>
-
-  <!-- Create company (always visible) -->
-  <div class="card">
-    <div class="card-title">Добавить компанию</div>
-    <form method="post" action="/companies/create" id="company-form">
-      <div class="row">
-        <div class="field" style="margin-bottom:0;">
-          <label for="name">Название компании</label>
-          <input id="name" name="name" type="text" placeholder="ТОО «Пример»" required />
-        </div>
-        <div class="field" style="margin-bottom:0;">
-          <label for="ceo_email">Email CEO</label>
-          <input id="ceo_email" name="ceo_email" type="email" placeholder="ceo@company.com" required />
-        </div>
-        <div style="display:flex; align-items:flex-end; min-width:auto; flex:0;">
-          <button type="submit" class="btn btn-primary" id="add-btn" style="white-space:nowrap;">
-            + Добавить
-          </button>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="sidebar-logo-icon">⚡</div>
+        <div>
+          <div class="sidebar-logo-text">{{ app_name }}</div>
+          <div class="sidebar-logo-sub">Risk Intelligence</div>
         </div>
       </div>
-    </form>
-  </div>
-
-  <!-- Companies where user is admin -->
-  {% if admin_rows %}
-  <div class="card" style="margin-top:16px">
-    <div class="card-title">
-      Мои компании
-      <span class="badge" style="margin-left:8px;font-weight:400;">{{ admin_rows|length }}</span>
     </div>
-    {% for m in admin_rows %}
-      {% set c = m.companies %}
-      {% if c %}
-        <div class="company-row">
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-item active">
+        <span class="sidebar-item-icon">⊞</span> Command Center
+      </a>
+      <div class="sidebar-section-label">Система</div>
+      <a href="/logout" class="sidebar-item">
+        <span class="sidebar-item-icon">⚙</span> Выйти
+      </a>
+    </nav>
+  </aside>
+
+  <div class="sidebar-content">
+
+    <!-- Topbar -->
+    <div class="sidebar-topbar">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Command Center</div>
+        <div style="font-size:11px;color:var(--text-muted)">Управление компаниями</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="toggleAddForm()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Добавить компанию
+      </button>
+    </div>
+
+    <div class="sidebar-wrap">
+      <style>
+        /* Stats row */
+        .dash-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+        @media(max-width:700px){ .dash-stats{grid-template-columns:1fr 1fr;} }
+        .stat-card {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:16px 20px; display:flex; align-items:center; gap:14px;
+        }
+        .stat-icon {
+          width:40px; height:40px; border-radius:10px; display:flex;
+          align-items:center; justify-content:center; font-size:18px; flex-shrink:0;
+        }
+        .stat-val { font-size:26px; font-weight:800; line-height:1; }
+        .stat-lbl { font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+
+        /* Add company form */
+        .add-form-wrap {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          overflow:hidden; margin-bottom:24px;
+          max-height:0; opacity:0;
+          transition: max-height 0.35s cubic-bezier(0.23,1,0.32,1), opacity 0.25s ease, margin 0.35s;
+        }
+        .add-form-wrap.open { max-height:200px; opacity:1; }
+
+        /* Company cards grid */
+        .companies-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+
+        .co-card {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          overflow:hidden; transition:box-shadow 0.2s, transform 0.2s;
+          display:flex; flex-direction:column;
+        }
+        .co-card:hover { box-shadow:0 6px 24px rgba(0,0,0,0.09); transform:translateY(-2px); }
+
+        .co-card-header {
+          padding:18px 18px 14px;
+          display:flex; align-items:flex-start; gap:12px;
+        }
+        .co-avatar {
+          width:42px; height:42px; border-radius:10px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:18px; font-weight:700; flex-shrink:0;
+          color:#fff;
+        }
+        .co-name { font-size:14px; font-weight:700; line-height:1.3; margin-bottom:3px; }
+        .co-email { font-size:11px; color:var(--text-muted); }
+
+        .co-card-body {
+          padding:0 18px 14px;
+          display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+        }
+        .co-badge {
+          display:inline-flex; align-items:center; gap:4px;
+          padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600;
+        }
+        .co-badge-admin { background:rgba(212,64,64,0.08); color:#d44040; border:1px solid rgba(212,64,64,0.2); }
+        .co-badge-member { background:rgba(113,113,122,0.08); color:#71717a; border:1px solid rgba(113,113,122,0.2); }
+        .co-badge-role { background:rgba(37,99,235,0.08); color:#2563eb; border:1px solid rgba(37,99,235,0.2); }
+
+        .co-card-footer {
+          margin-top:auto; padding:12px 18px;
+          border-top:1px solid var(--border);
+          display:flex; align-items:center; justify-content:space-between;
+          background:#fafaf8;
+        }
+        .co-open-btn {
+          display:inline-flex; align-items:center; gap:5px;
+          font-size:13px; font-weight:600; color:var(--accent);
+          text-decoration:none; padding:6px 12px; border-radius:7px;
+          background:rgba(212,64,64,0.06); border:1px solid rgba(212,64,64,0.15);
+          transition:background 0.15s;
+        }
+        .co-open-btn:hover { background:rgba(212,64,64,0.12); text-decoration:none; }
+
+        /* Section header */
+        .sec-hdr {
+          display:flex; align-items:center; gap:8px; margin-bottom:14px;
+        }
+        .sec-hdr-title { font-size:13px; font-weight:700; }
+        .sec-hdr-count {
+          padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600;
+          background:var(--border); color:var(--text-muted);
+        }
+
+        /* Empty state */
+        .empty-state {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:48px 24px; text-align:center;
+        }
+        .empty-icon { font-size:40px; margin-bottom:12px; }
+        .empty-title { font-size:15px; font-weight:600; margin-bottom:6px; }
+        .empty-sub { font-size:13px; color:var(--text-muted); }
+      </style>
+
+      <!-- Stats row -->
+      <div class="dash-stats">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(212,64,64,0.1)">🏢</div>
           <div>
-            <div style="font-weight:600;">{{ c.name }}</div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-              <div class="small muted">{{ c.ceo_email }}</div>
-              <span class="badge badge-blue" style="font-size:10px">Admin</span>
+            <div class="stat-val">{{ total }}</div>
+            <div class="stat-lbl">Компаний</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(37,99,235,0.1)">👑</div>
+          <div>
+            <div class="stat-val">{{ admin_rows|length }}</div>
+            <div class="stat-lbl">Администратор</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(22,163,74,0.1)">👤</div>
+          <div>
+            <div class="stat-val">{{ member_only_rows|length }}</div>
+            <div class="stat-lbl">Участник</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add company form (hidden by default) -->
+      <div class="add-form-wrap" id="addFormWrap">
+        <div style="padding:18px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+          <div style="font-size:13px;font-weight:700">Новая компания</div>
+          <button onclick="toggleAddForm()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:0">×</button>
+        </div>
+        <form method="post" action="/companies/create" id="company-form" style="padding:16px 20px">
+          <div class="row" style="align-items:flex-end">
+            <div class="field" style="margin-bottom:0">
+              <label for="name">Название компании</label>
+              <input id="name" name="name" type="text" placeholder="ТОО «Пример»" required />
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for="ceo_email">Email CEO</label>
+              <input id="ceo_email" name="ceo_email" type="email" placeholder="ceo@company.com" required />
+            </div>
+            <div style="flex:0">
+              <button type="submit" class="btn btn-primary" id="add-btn" style="white-space:nowrap">
+                Создать →
+              </button>
             </div>
           </div>
-          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">Открыть →</a>
-        </div>
-      {% endif %}
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="card" style="margin-top:16px">
-    <div style="text-align:center; padding: 32px 0; color: var(--text-muted);">
-      <div style="font-size:36px; margin-bottom:12px;">🏢</div>
-      <div style="font-weight:500;">Нет компаний</div>
-      <div class="small mt-4">Добавьте первую компанию выше</div>
-    </div>
-  </div>
-  {% endif %}
+        </form>
+      </div>
 
-  <!-- Companies where user is member -->
-  {% if member_only_rows %}
-  <div class="card" style="margin-top:16px">
-    <div class="card-title">
-      Участник в компаниях
-      <span class="badge" style="margin-left:8px;font-weight:400;">{{ member_only_rows|length }}</span>
-    </div>
-    {% for m in member_only_rows %}
-      {% set c = m.companies %}
-      {% if c %}
+      <!-- Admin companies -->
+      {% if admin_rows %}
+      <div style="margin-bottom:24px">
+        <div class="sec-hdr">
+          <div class="sec-hdr-title">Мои компании</div>
+          <div class="sec-hdr-count">{{ admin_rows|length }}</div>
+        </div>
+        <div class="companies-grid">
+          {% for m in admin_rows %}
+            {% set c = m.companies %}
+            {% if c %}
+              {% set colors = ['#d44040','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d'] %}
+              {% set color = colors[loop.index0 % colors|length] %}
+              {% set initial = c.name[0] | upper if c.name else '?' %}
+              <div class="co-card">
+                <div class="co-card-header">
+                  <div class="co-avatar" style="background:{{ color }}">{{ initial }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div class="co-name">{{ c.name }}</div>
+                    <div class="co-email">{{ c.ceo_email }}</div>
+                  </div>
+                </div>
+                <div class="co-card-body">
+                  <span class="co-badge co-badge-admin">👑 Admin</span>
+                </div>
+                <div class="co-card-footer">
+                  <div style="font-size:11px;color:var(--text-muted)">Risk Intelligence</div>
+                  <a href="/companies/{{ c.id }}" class="co-open-btn">
+                    Открыть
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </a>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="margin-bottom:24px">
+        <div class="empty-icon">🏢</div>
+        <div class="empty-title">Нет компаний</div>
+        <div class="empty-sub">Нажмите «Добавить компанию» чтобы начать</div>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddForm()" style="margin-top:14px">+ Добавить</button>
+      </div>
+      {% endif %}
+
+      <!-- Member companies -->
+      {% if member_only_rows %}
+      <div>
+        <div class="sec-hdr">
+          <div class="sec-hdr-title">Участник в компаниях</div>
+          <div class="sec-hdr-count">{{ member_only_rows|length }}</div>
+        </div>
         {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
-        <div class="company-row">
-          <div>
-            <div style="font-weight:600;">{{ c.name }}</div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-              <div class="small muted">{{ c.ceo_email }}</div>
-              <span class="badge" style="font-size:10px;background:rgba(0,0,0,0.06)">Member</span>
-              {% if m.role and m.role != 'member' %}
-                <span class="badge badge-blue" style="font-size:10px">{{ role_labels.get(m.role, m.role) }}</span>
-              {% endif %}
-            </div>
-          </div>
-          <a href="/companies/{{ c.id }}" class="btn btn-secondary btn-sm">Открыть →</a>
+        <div class="companies-grid">
+          {% for m in member_only_rows %}
+            {% set c = m.companies %}
+            {% if c %}
+              {% set colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
+              {% set color = colors[loop.index0 % colors|length] %}
+              {% set initial = c.name[0] | upper if c.name else '?' %}
+              <div class="co-card">
+                <div class="co-card-header">
+                  <div class="co-avatar" style="background:{{ color }}">{{ initial }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div class="co-name">{{ c.name }}</div>
+                    <div class="co-email">{{ c.ceo_email }}</div>
+                  </div>
+                </div>
+                <div class="co-card-body">
+                  <span class="co-badge co-badge-member">👤 Member</span>
+                  {% if m.role and m.role != 'member' %}
+                    <span class="co-badge co-badge-role">{{ role_labels.get(m.role, m.role) }}</span>
+                  {% endif %}
+                </div>
+                <div class="co-card-footer">
+                  <div style="font-size:11px;color:var(--text-muted)">Risk Intelligence</div>
+                  <a href="/companies/{{ c.id }}" class="co-open-btn">
+                    Открыть
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </a>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
         </div>
+      </div>
       {% endif %}
-    {% endfor %}
+
+    </div>
   </div>
-  {% endif %}
+</div>
 
 <script>
+function toggleAddForm() {
+  const wrap = document.getElementById('addFormWrap');
+  wrap.classList.toggle('open');
+  if (wrap.classList.contains('open')) {
+    setTimeout(() => document.getElementById('name').focus(), 200);
+  }
+}
+
 document.getElementById('company-form').addEventListener('submit', function() {
-  var btn = document.getElementById('add-btn');
+  const btn = document.getElementById('add-btn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
+  btn.innerHTML = '<span class="spinner"></span> Создаю...';
 });
 </script>
 {% endblock %}

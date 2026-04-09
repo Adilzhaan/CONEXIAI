@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}Competitive Intelligence — {{ company.name }} — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="sidebar-layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="sidebar-logo-icon">⚡</div>
+        <div>
+          <div class="sidebar-logo-text">{{ app_name }}</div>
+          <div class="sidebar-logo-sub">Risk Intelligence</div>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-item"><span class="sidebar-item-icon">⊞</span> Command Center</a>
+      <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
+      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon">📈</span> Market Analysis</a>
+      <a href="/companies/{{ company.id }}/ci" class="sidebar-item active"><span class="sidebar-item-icon">🔍</span> CI Monitor</a>
+      <div class="sidebar-section-label">Система</div>
+      <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
+    </nav>
+  </aside>
+
+  <div class="sidebar-content">
+
+    <div class="sidebar-topbar">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Competitive Intelligence</div>
+        <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
+          {{ company.name }}
+          {% if updated_at %}
+            <span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">✓ {{ updated_at[:10] }}</span>
+          {% elif loading %}
+            <span id="loading-badge" style="background:#fef9c3;color:#a16207;border:1px solid #fde68a;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">⏳ загружается...</span>
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        {% if competitors %}
+          <button onclick="triggerRefresh()" id="refresh-btn" class="btn btn-secondary btn-sm">↻ Обновить</button>
+        {% endif %}
+        <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
+      </div>
+    </div>
+
+    <div class="sidebar-wrap">
+      <style>
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .skeleton{background:linear-gradient(90deg,#ede9e2 25%,#f5f3ef 50%,#ede9e2 75%);background-size:400px 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
+
+        .ci-grid { display:grid; grid-template-columns:280px 1fr; gap:20px; }
+        @media(max-width:900px){.ci-grid{grid-template-columns:1fr;}}
+
+        .ci-panel { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+        .ci-panel-hdr { padding:14px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; display:flex; align-items:center; justify-content:space-between; }
+
+        /* Competitor list */
+        .comp-row { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--border); }
+        .comp-row:last-child { border-bottom:none; }
+        .comp-avatar { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#d44040,#e8734a); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0; }
+        .comp-info { flex:1; min-width:0; }
+        .comp-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .comp-site { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .comp-del { width:24px; height:24px; border-radius:6px; border:none; background:transparent; cursor:pointer; color:var(--text-muted); font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .comp-del:hover { background:#fee2e2; color:#d44040; }
+
+        /* Add form */
+        .add-form { padding:12px 16px; }
+        .add-form input { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; margin-bottom:6px; outline:none; }
+        .add-form input:focus { border-color:#d44040; }
+        .add-form button { width:100%; padding:8px; background:#d44040; color:#fff; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+        .add-form button:hover { background:#b83030; }
+
+        /* Summary banner */
+        .ci-summary { background:linear-gradient(135deg,rgba(212,64,64,0.06),rgba(232,115,74,0.04)); border:1px solid rgba(212,64,64,0.18); border-left:3px solid #d44040; border-radius:var(--radius); padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+        .threat-badge { padding:3px 12px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+        .threat-high { background:rgba(212,64,64,0.12); color:#d44040; border:1px solid rgba(212,64,64,0.3); }
+        .threat-medium { background:rgba(217,119,6,0.12); color:#d97706; border:1px solid rgba(217,119,6,0.3); }
+        .threat-low { background:rgba(22,163,74,0.12); color:#16a34a; border:1px solid rgba(22,163,74,0.3); }
+
+        /* Competitor cards */
+        .ci-comp-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 1px 6px rgba(0,0,0,0.06); margin-bottom:14px; }
+        .ci-comp-hdr { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+        .activity-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+        .act-growing { background:#16a34a; }
+        .act-stable { background:#d97706; }
+        .act-declining { background:#71717a; }
+        .ci-comp-body { padding:14px 16px; }
+        .news-item { padding:7px 0; border-bottom:1px solid var(--border); }
+        .news-item:last-child { border-bottom:none; padding-bottom:0; }
+
+        /* Lists */
+        .ci-list { display:flex; flex-direction:column; gap:8px; }
+        .ci-list-item { display:flex; align-items:flex-start; gap:10px; font-size:13px; }
+        .ci-list-dot { width:6px; height:6px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+
+        /* Three col */
+        .ci-three { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:16px; }
+        @media(max-width:800px){.ci-three{grid-template-columns:1fr;}}
+        .ci-block { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+        .ci-block-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; }
+      </style>
+
+      <div class="ci-grid">
+
+        <!-- Left: competitors list + add form -->
+        <div>
+          <div class="ci-panel" style="margin-bottom:16px">
+            <div class="ci-panel-hdr">
+              Конкуренты
+              <span style="font-size:11px;color:var(--text-muted)">{{ competitors|length }}/5</span>
+            </div>
+
+            {% if competitors %}
+              {% for c in competitors %}
+                <div class="comp-row">
+                  <div class="comp-avatar">{{ c.name[0].upper() }}</div>
+                  <div class="comp-info">
+                    <div class="comp-name">{{ c.name }}</div>
+                    {% if c.website %}
+                      <div class="comp-site">{{ c.website }}</div>
+                    {% endif %}
+                  </div>
+                  <form method="post" action="/companies/{{ company.id }}/ci/competitors/{{ c.id }}/delete" style="margin:0">
+                    <button type="submit" class="comp-del" title="Удалить">×</button>
+                  </form>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div style="padding:20px 16px;text-align:center;color:var(--text-muted);font-size:13px">
+                Добавьте конкурентов ниже
+              </div>
+            {% endif %}
+          </div>
+
+          {% if competitors|length < 5 %}
+          <div class="ci-panel">
+            <div class="ci-panel-hdr">Добавить конкурента</div>
+            <form method="post" action="/companies/{{ company.id }}/ci/competitors/add" class="add-form">
+              <input type="text" name="name" placeholder="Название компании" required maxlength="100">
+              <input type="text" name="website" placeholder="Сайт (необязательно)" maxlength="200">
+              <button type="submit">+ Добавить</button>
+            </form>
+          </div>
+          {% else %}
+          <div style="text-align:center;font-size:11px;color:var(--text-muted);padding:8px">Максимум 5 конкурентов</div>
+          {% endif %}
+        </div>
+
+        <!-- Right: analysis -->
+        <div>
+
+          {% if not competitors %}
+          <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+            <div style="font-size:40px;margin-bottom:12px">🔍</div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:6px">Добавьте конкурентов</div>
+            <div style="font-size:13px">До 5 компаний. Система будет автоматически<br>мониторить их новости и анализировать угрозы.</div>
+          </div>
+
+          {% elif loading %}
+          <div id="skeleton-view">
+            <div class="skeleton" style="height:52px;margin-bottom:16px;border-radius:var(--radius)"></div>
+            <div class="ci-three">
+              <div class="skeleton" style="height:120px"></div>
+              <div class="skeleton" style="height:120px"></div>
+              <div class="skeleton" style="height:120px"></div>
+            </div>
+            <div class="skeleton" style="height:180px;margin-bottom:14px"></div>
+            <div class="skeleton" style="height:180px"></div>
+            <div style="text-align:center;margin-top:24px;color:var(--text-muted);font-size:13px">
+              <div style="font-size:22px;margin-bottom:8px">⏳</div>
+              Анализируем конкурентов...<br>
+              <span style="font-size:11px">Обычно 20–40 секунд</span>
+            </div>
+          </div>
+
+          {% elif report %}
+          {% set ai = report.ai %}
+
+          <!-- Summary -->
+          {% if ai and ai.summary %}
+          <div class="ci-summary">
+            <span style="font-size:20px;flex-shrink:0">🤖</span>
+            <div style="flex:1;font-size:13px;font-weight:500">{{ ai.summary }}</div>
+            {% if ai.threat_level %}
+              <span class="threat-badge threat-{{ ai.threat_level }}">
+                {% if ai.threat_level == 'high' %}⚠ Высокая угроза
+                {% elif ai.threat_level == 'medium' %}~ Средняя
+                {% else %}✓ Низкая{% endif %}
+              </span>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <!-- Risks / Opportunities / Recommendations -->
+          {% if ai %}
+          <div class="ci-three">
+            <div class="ci-block">
+              <div class="ci-block-title">⚠️ Риски</div>
+              <div class="ci-list">
+                {% for r in ai.risks %}
+                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#d44040"></div><span>{{ r }}</span></div>
+                {% else %}<div style="font-size:12px;color:var(--text-muted)">—</div>{% endfor %}
+              </div>
+            </div>
+            <div class="ci-block">
+              <div class="ci-block-title">🚀 Возможности</div>
+              <div class="ci-list">
+                {% for o in ai.opportunities %}
+                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#16a34a"></div><span>{{ o }}</span></div>
+                {% else %}<div style="font-size:12px;color:var(--text-muted)">—</div>{% endfor %}
+              </div>
+            </div>
+            <div class="ci-block">
+              <div class="ci-block-title">📌 Рекомендации</div>
+              <div class="ci-list">
+                {% for rec in ai.recommendations %}
+                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#2563eb"></div><span>{{ rec }}</span></div>
+                {% else %}<div style="font-size:12px;color:var(--text-muted)">—</div>{% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Per-competitor cards -->
+          {% for c in report.competitors_data %}
+            {% set ai_comp = (ai.competitors or []) | selectattr("name", "equalto", c.name) | first | default(none) %}
+            <div class="ci-comp-card">
+              <div class="ci-comp-hdr">
+                <div class="comp-avatar" style="width:36px;height:36px;font-size:14px">{{ c.name[0].upper() }}</div>
+                <div style="flex:1">
+                  <div style="font-size:14px;font-weight:700">{{ c.name }}</div>
+                  {% if ai_comp %}
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+                      <div class="activity-dot act-{{ ai_comp.activity | default('stable') }}"></div>
+                      <span style="font-size:11px;color:var(--text-muted)">
+                        {% if ai_comp.activity == 'growing' %}Растёт
+                        {% elif ai_comp.activity == 'declining' %}Снижается
+                        {% else %}Стабильно{% endif %}
+                      </span>
+                      {% if ai_comp.threat %}
+                        <span class="threat-badge threat-{{ ai_comp.threat }}" style="font-size:10px;padding:1px 8px">
+                          {{ ai_comp.threat }}
+                        </span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">{{ c.news_count }} новостей</div>
+              </div>
+              <div class="ci-comp-body">
+                {% if ai_comp and ai_comp.key_move %}
+                  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#a16207">
+                    🔑 {{ ai_comp.key_move }}
+                  </div>
+                {% endif %}
+                {% if ai_comp and ai_comp.impact %}
+                  <div style="font-size:13px;color:var(--text);margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+                    {{ ai_comp.impact }}
+                  </div>
+                {% endif %}
+                {% for n in c.news[:5] %}
+                  <div class="news-item">
+                    <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:12px;font-weight:500;color:var(--text);line-height:1.4;display:block">{{ n.title }}</a>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ n.source }}{% if n.pub_date %} · {{ n.pub_date }}{% endif %}</div>
+                  </div>
+                {% endfor %}
+                {% if not c.news %}
+                  <div style="font-size:12px;color:var(--text-muted)">Новостей не найдено</div>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+
+          {% else %}
+          <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+            <div style="font-size:40px;margin-bottom:12px">📊</div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:6px">Данных пока нет</div>
+            <button onclick="triggerRefresh()" class="btn btn-primary" style="margin-top:12px">Запустить анализ</button>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const COMPANY_ID = '{{ company.id }}';
+const IS_LOADING = {{ 'true' if loading else 'false' }};
+
+async function triggerRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) { btn.textContent = '↻ Обновляю...'; btn.disabled = true; }
+  try {
+    await fetch(`/companies/${COMPANY_ID}/ci/refresh`, { method: 'POST' });
+    setTimeout(() => pollForData(25), 3000);
+  } catch(e) {
+    if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
+  }
+}
+
+async function pollForData(attempts) {
+  if (attempts <= 0) {
+    const btn = document.getElementById('refresh-btn');
+    if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
+    return;
+  }
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/ci/data`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.status === 'ready') { window.location.reload(); return; }
+    }
+  } catch(e) {}
+  setTimeout(() => pollForData(attempts - 1), 4000);
+}
+
+if (IS_LOADING) pollForData(25);
+</script>
+{% endblock %}

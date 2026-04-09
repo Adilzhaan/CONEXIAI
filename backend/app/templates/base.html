@@ -313,6 +313,47 @@
       animation: spin 0.7s linear infinite;
     }
 
+    /* ── Page transition progress bar ── */
+    #nprogress-bar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #d44040, #e8734a, #f59e0b, #e8734a, #d44040);
+      background-size: 300% 100%;
+      z-index: 99999;
+      width: 0%;
+      opacity: 1;
+      animation: progress-shimmer 1.5s linear infinite;
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(212,64,64,0.6);
+    }
+    @keyframes progress-shimmer {
+      0%   { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+
+    /* ── Page transition overlay ── */
+    #page-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(245,243,239,0);
+      z-index: 9998;
+      pointer-events: none;
+      transition: background 0.2s;
+    }
+    #page-overlay.dimming { background: rgba(245,243,239,0.55); }
+
+    /* ── Link/button loading cursor ── */
+    body.navigating * { cursor: wait !important; }
+
+    /* ── Page enter animation ── */
+    @keyframes page-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .sidebar-wrap { animation: page-in 0.35s cubic-bezier(0.23,1,0.32,1) both; }
+    .wrap { animation: page-in 0.35s cubic-bezier(0.23,1,0.32,1) both; }
+
     /* Employee card */
     .emp-card {
       padding: 14px;
@@ -351,12 +392,85 @@
   </style>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+
+  <!-- Progress bar + overlay -->
+  <div id="nprogress-bar"></div>
+  <div id="page-overlay"></div>
+
   {% block body %}
     {% block topbar %}{% endblock %}
     <div class="wrap">
       {% block content %}{% endblock %}
     </div>
   {% endblock %}
+
+  <script>
+  (function() {
+    const bar     = document.getElementById('nprogress-bar');
+    const overlay = document.getElementById('page-overlay');
+    let timer = null;
+    let width = 0;
+
+    function startProgress() {
+      if (timer) clearInterval(timer);
+      width = 20;
+      bar.style.transition = 'none';
+      bar.style.width = '20%';
+
+      // Force reflow so transition applies
+      bar.getBoundingClientRect();
+
+      timer = setInterval(() => {
+        if (width < 65)      width += 15;
+        else if (width < 85) width += 5;
+        else if (width < 93) width += 1;
+        bar.style.transition = 'width 0.5s ease';
+        bar.style.width = width + '%';
+      }, 400);
+    }
+
+    function finishProgress() {
+      if (timer) { clearInterval(timer); timer = null; }
+      bar.style.transition = 'width 0.2s ease';
+      bar.style.width = '100%';
+      setTimeout(() => {
+        bar.style.transition = 'opacity 0.3s ease';
+        bar.style.opacity = '0';
+        setTimeout(() => {
+          bar.style.transition = 'none';
+          bar.style.width = '0%';
+          bar.style.opacity = '1';
+        }, 350);
+      }, 200);
+    }
+
+    // ── Start bar immediately on this page load ──
+    startProgress();
+    window.addEventListener('load', finishProgress);
+    window.addEventListener('pageshow', function(e) {
+      if (e.persisted) { startProgress(); setTimeout(finishProgress, 100); }
+    });
+
+    // ── On click: show overlay + cursor, bar will show on new page ──
+    document.addEventListener('click', function(e) {
+      const link = e.target.closest('a[href]');
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('http') ||
+          href.startsWith('mailto') || href.startsWith('javascript') ||
+          link.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      overlay.classList.add('dimming');
+      document.body.classList.add('navigating');
+    });
+
+    document.addEventListener('submit', function(e) {
+      if (e.target.dataset.noProgress) return;
+      overlay.classList.add('dimming');
+      document.body.classList.add('navigating');
+    });
+  })();
+  </script>
+
 </body>
 
 </html>

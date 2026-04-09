@@ -12,6 +12,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from .config import settings
 from .supabase import supabase
 from . import news as news_client
@@ -19,6 +21,9 @@ from . import apify as apify_client
 from . import hh as hh_client
 from . import ai as ai_client
 from . import finance as finance_client
+from . import monitor as monitor_client
+from . import ci as ci_client
+from . import gr_sources as gr_client
 from .pdf import generate_report
 
 logger = logging.getLogger("conexiai")
@@ -51,13 +56,36 @@ def _pkce_pair() -> tuple[str, str]:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    scheduler = AsyncIOScheduler()
+    if settings.MONITORING_ENABLED:
+        scheduler.add_job(
+            lambda: asyncio.ensure_future(monitor_client.run_monitoring_cycle(
+                supabase=supabase,
+                news_client=news_client,
+                ai_client=ai_client,
+                apify_client=apify_client,
+                hh_client=hh_client,
+                finance_client=finance_client,
+                settings=settings,
+                ci_client=ci_client,
+            )),
+            trigger="interval",
+            hours=settings.MONITORING_INTERVAL_HOURS,
+            id="smart_monitor",
+            replace_existing=True,
+        )
+        logger.info("Smart monitor scheduler started (every %dh)", settings.MONITORING_INTERVAL_HOURS)
+    scheduler.start()
     yield
+    scheduler.shutdown(wait=False)
     await supabase.close()
     await news_client.close()
     await apify_client.close()
     await hh_client.close()
     await ai_client.close()
     await finance_client.close()
+    await ci_client.close()
+    await gr_client.close()
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
@@ -419,7 +447,21 @@ async def company_detail(req: Request, company_id: str):
         except Exception:
             return "member"
 
-    company_rows, employees, risk_runs, emails_rows, members, user_role = await asyncio.gather(
+    async def _get_monitor_snapshot():
+        if not settings.SUPABASE_SERVICE_KEY:
+            return None
+        try:
+            rows = await supabase.rest_select_service(
+                table="monitoring_snapshots",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                select="last_checked_at,last_run_at,last_score",
+                query_params={"company_id": f"eq.{company_id}"},
+            )
+            return rows[0] if rows else None
+        except Exception:
+            return None
+
+    company_rows, employees, risk_runs, emails_rows, members, user_role, monitor_snapshot = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -443,6 +485,7 @@ async def company_detail(req: Request, company_id: str):
         _safe_emails(),
         _safe_members(),
         _get_user_role(),
+        _get_monitor_snapshot(),
     )
     company = company_rows[0] if company_rows else None
 
@@ -469,11 +512,60 @@ async def company_detail(req: Request, company_id: str):
             "user_role": user_role,
             "is_admin": user_role == "admin",
             "finance": finance_data,
+            "monitor_snapshot": monitor_snapshot,
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
         },
     )
+
+
+async def _get_market_cache(company_id: str) -> dict | None:
+    try:
+        rows = await supabase.rest_select_service(
+            table="market_cache",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            query_params={"company_id": f"eq.{company_id}"},
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+async def _refresh_market_cache(company_id: str, company_name: str) -> dict:
+    """Fetch fresh market data + AI, save to cache, return result."""
+    market_data, company_news = await asyncio.gather(
+        finance_client.fetch_full_market_data(company_name, twelve_key=settings.TWELVE_DATA_API_KEY),
+        news_client.fetch_news(company_name),
+    )
+    ai_analysis = None
+    if settings.ANTHROPIC_API_KEY:
+        ai_analysis = await ai_client.analyze_market_position(
+            company_name=company_name,
+            stock=market_data.get("stock"),
+            market_index=market_data.get("market_index"),
+            top_stocks=market_data.get("top_stocks", []),
+            news=company_news,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            from datetime import datetime, timezone
+            await supabase.rest_upsert_service(
+                table="market_cache",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                rows=[{
+                    "company_id": company_id,
+                    "finance": market_data,
+                    "ai_analysis": ai_analysis,
+                    "news": company_news,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }],
+                on_conflict="company_id",
+            )
+        except Exception as e:
+            logger.warning("Failed to save market cache: %s", e)
+    return {"finance": market_data, "ai_analysis": ai_analysis, "news": company_news}
 
 
 @app.get("/companies/{company_id}/market", response_class=HTMLResponse)
@@ -495,32 +587,79 @@ async def market_analysis_page(req: Request, company_id: str):
     if not company:
         return RedirectResponse(url="/dashboard", status_code=302)
 
-    market_data, company_news = await asyncio.gather(
-        finance_client.fetch_full_market_data(company["name"], twelve_key=settings.TWELVE_DATA_API_KEY),
-        news_client.fetch_news(company["name"]),
-    )
-
-    ai_analysis = None
-    if settings.ANTHROPIC_API_KEY:
-        ai_analysis = await ai_client.analyze_market_position(
-            company_name=company["name"],
-            stock=market_data.get("stock"),
-            market_index=market_data.get("market_index"),
-            top_stocks=market_data.get("top_stocks", []),
-            news=company_news,
-            api_key=settings.ANTHROPIC_API_KEY,
-        )
-
-    return templates.TemplateResponse(
-        req, "market.html",
-        {
+    # Load from cache instantly — no blocking
+    cache = await _get_market_cache(company_id)
+    if cache:
+        return templates.TemplateResponse(req, "market.html", {
             "app_name": settings.APP_NAME,
             "company": company,
-            "finance": market_data,
-            "ai_analysis": ai_analysis,
-            "company_news": company_news,
-        },
+            "finance": cache.get("finance") or {},
+            "ai_analysis": cache.get("ai_analysis"),
+            "company_news": cache.get("news") or [],
+            "cache_updated_at": cache.get("updated_at"),
+            "loading": False,
+        })
+
+    # No cache yet — show skeleton, JS will poll for data
+    return templates.TemplateResponse(req, "market.html", {
+        "app_name": settings.APP_NAME,
+        "company": company,
+        "finance": {},
+        "ai_analysis": None,
+        "company_news": [],
+        "cache_updated_at": None,
+        "loading": True,
+    })
+
+
+@app.get("/companies/{company_id}/market/data")
+async def market_data_api(req: Request, company_id: str):
+    """JSON endpoint — fetches fresh market data and saves to cache."""
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="id,name",
+        query_params={"id": f"eq.{company_id}"},
     )
+    if not company_rows:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    company_name = company_rows[0]["name"]
+    result = await _refresh_market_cache(company_id, company_name)
+    return JSONResponse({"status": "ready", **result})
+
+
+@app.post("/companies/{company_id}/market/refresh")
+async def market_refresh(req: Request, company_id: str):
+    """Trigger background cache refresh, return immediately."""
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="id,name",
+        query_params={"id": f"eq.{company_id}"},
+    )
+    if not company_rows:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    company_name = company_rows[0]["name"]
+    asyncio.ensure_future(_refresh_market_cache(company_id, company_name))
+    return JSONResponse({"status": "refreshing"})
 
 
 @app.post("/members/invite")
@@ -691,9 +830,11 @@ async def employees_create(
     if not user or not access_token:
         return RedirectResponse(url="/login", status_code=302)
 
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
     employee = await supabase.rest_insert(
         table="employees",
-        access_token=access_token,
+        access_token=effective_token,
         row={
             "company_id": company_id,
             "full_name": full_name,
@@ -703,6 +844,45 @@ async def employees_create(
         },
     )
     return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
+
+
+@app.get("/monitor/status")
+async def monitor_status():
+    """Returns last check/analysis times from monitoring_snapshots for all companies."""
+    if not settings.SUPABASE_SERVICE_KEY:
+        return {"error": "SUPABASE_SERVICE_KEY not configured"}
+    try:
+        snapshots = await supabase.rest_select_service(
+            table="monitoring_snapshots",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            select="company_id,last_checked_at,last_run_at,last_score",
+            order_by="last_checked_at.desc",
+        )
+        companies = await supabase.rest_select_service(
+            table="companies",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            select="id,name",
+        )
+        name_map = {c["id"]: c["name"] for c in companies}
+        result = []
+        for s in snapshots:
+            cid = s.get("company_id")
+            result.append({
+                "company_id": cid,
+                "company_name": name_map.get(cid, "unknown"),
+                "last_checked_at": s.get("last_checked_at"),
+                "last_run_at": s.get("last_run_at"),
+                "last_score": s.get("last_score"),
+            })
+        from datetime import datetime, timezone
+        return {
+            "server_time": datetime.now(timezone.utc).isoformat(),
+            "monitoring_enabled": settings.MONITORING_ENABLED,
+            "interval_hours": settings.MONITORING_INTERVAL_HOURS,
+            "companies": result,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.post("/risks/run")
@@ -737,7 +917,7 @@ async def risks_run(
     # 2) Параллельно тянем все источники данных
     (
         social_data, news, yandex_news, vacancies,
-        regulatory_news, market_news, emails_rows,
+        regulatory_news, market_news, gr_news, emails_rows,
         finance_data,
     ) = await asyncio.gather(
         apify_client.fetch_all_social(company_name=company_name, token=settings.APIFY_TOKEN, limit=30),
@@ -746,6 +926,7 @@ async def risks_run(
         hh_client.fetch_vacancies(company_name, limit=10),
         news_client.fetch_regulatory_news(company_name, limit=6),
         news_client.fetch_market_news(company_name, limit=6),
+        gr_client.fetch_gr_news_all(company_name, limit=20),
         supabase.rest_select(
             table="emails",
             access_token=effective_token,
@@ -753,7 +934,7 @@ async def risks_run(
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         ),
-        finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else {"found": False},
+        finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else asyncio.sleep(0, result={"found": False}),
     )
 
     # Разбиваем social по платформам
@@ -804,7 +985,7 @@ async def risks_run(
         },
         reviews=[],
         vacancies=vacancies,
-        regulatory_news=regulatory_news,
+        regulatory_news=regulatory_news + gr_news,
         market_news=market_news,
         finance=finance_data,
         hr_emails=hr_emails,
@@ -1059,5 +1240,172 @@ async def company_report_pdf(req: Request, company_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Competitive Intelligence ──────────────────────────────────────────────────
+
+async def _get_ci_report(company_id: str) -> dict | None:
+    try:
+        rows = await supabase.rest_select_service(
+            table="ci_reports",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            query_params={"company_id": f"eq.{company_id}"},
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+async def _run_ci_and_save(company_id: str, company_name: str, competitors: list[dict]) -> dict:
+    from datetime import datetime, timezone
+    result = await ci_client.run_ci(company_name, competitors, settings.ANTHROPIC_API_KEY)
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            await supabase.rest_upsert_service(
+                table="ci_reports",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                rows=[{
+                    "company_id": company_id,
+                    "report": result,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }],
+                on_conflict="company_id",
+            )
+        except Exception as e:
+            logger.warning("Failed to save CI report: %s", e)
+    return result
+
+
+@app.get("/companies/{company_id}/ci", response_class=HTMLResponse)
+async def ci_page(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id,name", query_params={"id": f"eq.{company_id}"},
+    )
+    company = company_rows[0] if company_rows else None
+    if not company:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    competitors = await supabase.rest_select(
+        table="competitors", access_token=effective_token,
+        select="id,name,website", order_by="created_at.asc",
+        query_params={"company_id": f"eq.{company_id}"},
+    )
+
+    cached = await _get_ci_report(company_id)
+    report = cached.get("report") if cached else None
+    updated_at = cached.get("updated_at") if cached else None
+
+    return templates.TemplateResponse(req, "ci.html", {
+        "app_name": settings.APP_NAME,
+        "company": company,
+        "competitors": competitors,
+        "report": report,
+        "updated_at": updated_at,
+        "loading": not cached and len(competitors) > 0,
+    })
+
+
+@app.post("/companies/{company_id}/ci/competitors/add")
+async def ci_add_competitor(
+    req: Request,
+    company_id: str,
+    name: str = Form(...),
+    website: str = Form(""),
+):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    # Max 5 competitors
+    existing = await supabase.rest_select(
+        table="competitors", access_token=effective_token,
+        select="id", query_params={"company_id": f"eq.{company_id}"},
+    )
+    if len(existing) >= 5:
+        return RedirectResponse(url=f"/companies/{company_id}/ci?error=max5", status_code=302)
+
+    await supabase.rest_insert(
+        table="competitors", access_token=effective_token,
+        row={"company_id": company_id, "name": name.strip(), "website": website.strip()},
+    )
+    return RedirectResponse(url=f"/companies/{company_id}/ci", status_code=302)
+
+
+@app.post("/companies/{company_id}/ci/competitors/{competitor_id}/delete")
+async def ci_delete_competitor(req: Request, company_id: str, competitor_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+    await supabase.rest_delete(
+        table="competitors", access_token=effective_token,
+        query_params={"id": f"eq.{competitor_id}", "company_id": f"eq.{company_id}"},
+    )
+    return RedirectResponse(url=f"/companies/{company_id}/ci", status_code=302)
+
+
+@app.post("/companies/{company_id}/ci/refresh")
+async def ci_refresh(req: Request, company_id: str):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id,name", query_params={"id": f"eq.{company_id}"},
+    )
+    if not company_rows:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    competitors = await supabase.rest_select(
+        table="competitors", access_token=effective_token,
+        select="id,name,website", query_params={"company_id": f"eq.{company_id}"},
+    )
+
+    asyncio.ensure_future(_run_ci_and_save(company_id, company_rows[0]["name"], competitors))
+    return JSONResponse({"status": "refreshing"})
+
+
+@app.get("/companies/{company_id}/ci/data")
+async def ci_data(req: Request, company_id: str):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id,name", query_params={"id": f"eq.{company_id}"},
+    )
+    if not company_rows:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    competitors = await supabase.rest_select(
+        table="competitors", access_token=effective_token,
+        select="id,name,website", query_params={"company_id": f"eq.{company_id}"},
+    )
+
+    result = await _run_ci_and_save(company_id, company_rows[0]["name"], competitors)
+    return JSONResponse({"status": "ready", "report": result})
 
 

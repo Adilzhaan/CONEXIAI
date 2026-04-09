@@ -2,9 +2,14 @@
 {% block title %}{{ company.name }} — {{ app_name }}{% endblock %}
 
 {% block body %}
+{% set latest = risk_runs[0] if risk_runs else none %}
+{% set cats = latest.categories if latest and latest.categories else none %}
+{% set prev = risk_runs[1] if risk_runs|length > 1 else none %}
+{% set stock = finance.stock if finance and finance.found else none %}
+
 <div class="sidebar-layout">
 
-  <!-- ── Sidebar ── -->
+  <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
@@ -15,7 +20,6 @@
         </div>
       </div>
     </div>
-
     <nav class="sidebar-nav">
       <a href="/dashboard" class="sidebar-item">
         <span class="sidebar-item-icon">⊞</span> Command Center
@@ -23,37 +27,55 @@
       <a href="/companies/{{ company.id }}" class="sidebar-item active">
         <span class="sidebar-item-icon">◎</span> Risk Intelligence
       </a>
-      <a href="/companies/{{ company.id }}/category/gr" class="sidebar-item">
-        <span class="sidebar-item-icon">△</span> Кризисный центр
-      </a>
       <a href="/companies/{{ company.id }}/market" class="sidebar-item">
         <span class="sidebar-item-icon">📈</span> Market Analysis
       </a>
-
-      <div class="sidebar-section-label">Система</div>
-      <a href="#settings" class="sidebar-item">
-        <span class="sidebar-item-icon">🚀</span> Настройка компании
+      <a href="/companies/{{ company.id }}/ci" class="sidebar-item">
+        <span class="sidebar-item-icon">🔍</span> CI Monitor
       </a>
+      <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item">
         <span class="sidebar-item-icon">⚙</span> Выйти
       </a>
     </nav>
   </aside>
 
-  <!-- ── Main content ── -->
+  <!-- Main -->
   <div class="sidebar-content">
 
     <!-- Topbar -->
     <div class="sidebar-topbar">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">{{ company.name }}</div>
-        <div style="font-size:11px;color:var(--text-muted)">CEO: {{ company.ceo_email }}</div>
-      </div>
       <div style="display:flex;align-items:center;gap:12px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)">
-          <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block"></span>
-          Live
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#d44040,#e8734a);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
+          {{ company.name[0] | upper }}
         </div>
+        <div>
+          <div style="font-size:14px;font-weight:700">{{ company.name }}</div>
+          <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px">
+            {{ company.ceo_email }}
+            <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+            <span>Live</span>
+            {% if monitor_snapshot %}
+              <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
+              <span title="Последняя проверка новостей">
+                🔄 Проверено:
+                <span style="color:var(--text)">{{ monitor_snapshot.last_checked_at[:16] | replace('T',' ') if monitor_snapshot.last_checked_at else '—' }}</span>
+              </span>
+              {% if monitor_snapshot.last_run_at %}
+                <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
+                <span title="Последний автоматический анализ рисков">
+                  ⚡ Анализ:
+                  <span style="color:var(--text)">{{ monitor_snapshot.last_run_at[:16] | replace('T',' ') }}</span>
+                </span>
+              {% endif %}
+            {% else %}
+              <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
+              <span style="color:var(--text-dim)">Мониторинг ещё не запускался</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
         <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-secondary btn-sm">⬇ PDF</a>
         {% if is_admin %}
         <form method="post" action="/risks/run" id="risk-form" style="margin:0">
@@ -64,613 +86,737 @@
       </div>
     </div>
 
-    <div class="sidebar-wrap">
+    <div class="sidebar-wrap" style="padding:0">
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
       <style>
-        /* Cards get a real shadow */
-        .card, .metric-card, .chart-card, .finance-card {
-          box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+        /* ── Tabs ── */
+        .cd-tabs {
+          display:flex; gap:0; border-bottom:1px solid var(--border);
+          background:#fff; padding:0 32px; position:sticky; top:56px; z-index:9;
         }
-        .analysis-loading { background: rgba(245,243,239,0.92); }
+        .cd-tab {
+          padding:14px 18px; font-size:13px; font-weight:600; color:var(--text-muted);
+          cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+          transition:color 0.15s, border-color 0.15s; white-space:nowrap;
+          display:flex; align-items:center; gap:6px; user-select:none;
+          background:none; border-top:none; border-left:none; border-right:none;
+          font-family:inherit;
+        }
+        .cd-tab:hover { color:var(--text); }
+        .cd-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+        .cd-tab-badge {
+          display:inline-flex; align-items:center; justify-content:center;
+          min-width:18px; height:18px; border-radius:9px; font-size:10px; font-weight:700;
+          background:rgba(212,64,64,0.1); color:var(--accent); padding:0 5px;
+        }
 
-/* ── Loading overlay ── */
+        /* ── Tab panels ── */
+        .cd-panel { display:none; padding:28px 32px; }
+        .cd-panel.active { display:block; animation: fadePanel 0.2s ease; }
+        @keyframes fadePanel { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+        /* ── Loading overlay ── */
         .analysis-loading {
-          display: none; position: fixed; inset: 0;
-          background: rgba(11,18,32,0.88); backdrop-filter: blur(4px);
-          z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+          display:none; position:fixed; inset:0;
+          background:rgba(11,18,32,0.9); backdrop-filter:blur(4px);
+          z-index:999; flex-direction:column; align-items:center; justify-content:center; gap:20px;
         }
-        .analysis-loading.active { display: flex; }
-        .loading-spinner {
-          width: 48px; height: 48px; border: 4px solid rgba(79,143,255,0.2);
-          border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
-        }
-        .loading-step { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-muted); transition: color 0.3s; }
-        .loading-step.active { color: var(--text); }
-        .loading-step.done { color: #4ade80; }
-        .step-icon { width: 20px; text-align: center; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+        .analysis-loading.active { display:flex; }
+        .loading-spinner { width:44px;height:44px;border:3px solid rgba(212,64,64,0.2);border-top-color:#d44040;border-radius:50%;animation:spin 0.8s linear infinite; }
+        .loading-step { display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,0.4);transition:color 0.3s; }
+        .loading-step.active { color:#fff; }
+        .loading-step.done { color:#4ade80; }
 
-        /* ── Page header ── */
-        .cc-header { margin-bottom: 24px; }
-        .cc-title { font-size: 22px; font-weight: 800; margin: 0 0 2px; }
-        .cc-sub { font-size: 13px; color: var(--text-muted); }
+        /* ── Score hero ── */
+        .score-hero {
+          display:flex; align-items:center; gap:24px;
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:24px 28px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.06);
+        }
+        .score-circle {
+          width:88px; height:88px; border-radius:50%; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center; flex-direction:column;
+          border:4px solid; position:relative;
+        }
+        .score-num { font-size:28px; font-weight:800; line-height:1; }
+        .score-max { font-size:10px; color:var(--text-muted); font-weight:600; }
+        .score-info { flex:1; }
+        .score-label { font-size:20px; font-weight:800; margin-bottom:4px; }
+        .score-meta { font-size:12px; color:var(--text-muted); margin-bottom:12px; }
+        .score-bar-track { height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+        .score-bar-fill { height:100%; border-radius:3px; transition:width 0.8s cubic-bezier(0.23,1,0.32,1); }
+        .score-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
-        /* ── Top metrics ── */
-        .metrics-row {
-          display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;
+        /* ── Stat chips ── */
+        .stat-chips { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+        @media(max-width:700px){.stat-chips{grid-template-columns:1fr 1fr;}}
+        .stat-chip {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
         }
-        @media (max-width: 640px) { .metrics-row { grid-template-columns: 1fr; } }
-        .metric-card {
-          background: var(--surface); border: 1px solid var(--border);
-          border-radius: var(--radius); padding: 20px 22px;
-        }
-        .metric-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
-        .metric-value { font-size: 40px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
-        .metric-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-        .metric-badge-yellow { background: rgba(251,191,36,0.15); color: #fbbf24; }
-        .metric-badge-green  { background: rgba(74,222,128,0.15);  color: #4ade80; }
-        .metric-badge-red    { background: rgba(248,113,113,0.15); color: #f87171; }
-        .metric-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-        .metric-delta { font-size: 14px; font-weight: 700; }
-        .delta-up   { color: #f87171; }
-        .delta-down { color: #4ade80; }
-        .delta-flat { color: var(--text-muted); }
+        .chip-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:6px; }
+        .chip-val { font-size:24px; font-weight:800; line-height:1; margin-bottom:3px; }
+        .chip-sub { font-size:11px; color:var(--text-muted); }
 
-        /* ── Finance card ── */
-        .finance-card {
-          background: var(--surface); border: 1px solid var(--border);
-          border-radius: var(--radius); padding: 16px 20px;
-          display: flex; align-items: center; justify-content: space-between;
-          flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+        /* ── Category grid ── */
+        .cat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+        @media(max-width:700px){.cat-grid{grid-template-columns:1fr;}}
+        .cat-card {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:16px 18px; text-decoration:none; color:inherit;
+          transition:box-shadow 0.2s, transform 0.15s;
+          display:flex; align-items:center; gap:14px;
+          position:relative; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.04);
         }
-
-        /* ── Category rows ── */
-        .section-header {
-          display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+        .cat-card::before {
+          content:''; position:absolute; left:0;top:0;bottom:0; width:3px;
+          background:var(--cc, var(--accent));
         }
-        .section-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; }
-        .cat-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-        .cat-row {
-          display: flex; align-items: center; gap: 14px;
-          background: var(--surface); border: 1px solid var(--border);
-          border-radius: var(--radius); padding: 14px 18px;
-          text-decoration: none; color: inherit;
-          transition: background 0.15s, border-color 0.15s;
-          position: relative; overflow: hidden;
+        .cat-card:hover { box-shadow:0 4px 18px rgba(0,0,0,0.1); transform:translateY(-1px); text-decoration:none; }
+        .cat-icon-wrap {
+          width:40px; height:40px; border-radius:10px; display:flex; align-items:center;
+          justify-content:center; font-size:18px; flex-shrink:0;
+          background:var(--cc-bg, rgba(0,0,0,0.04));
         }
-        .cat-row::before {
-          content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-          width: 3px; background: var(--cat-color, var(--accent));
-          border-radius: 3px 0 0 3px;
-        }
-        .cat-row:hover { background: var(--surface-hover); border-color: rgba(255,255,255,0.15); text-decoration: none; }
-        .cat-row-icon { font-size: 20px; flex-shrink: 0; }
-        .cat-row-body { flex: 1; min-width: 0; }
-        .cat-row-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-        .cat-row-name { font-size: 14px; font-weight: 600; }
-        .cat-row-trend {
-          font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
-          background: rgba(0,0,0,0.05);
-        }
-        .trend-up { color: #f87171; }
-        .trend-down { color: #4ade80; }
-        .trend-flat { color: var(--text-muted); }
-        .cat-row-desc { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .cat-row-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-        .cat-row-score { font-size: 24px; font-weight: 800; color: var(--cat-color, var(--text)); line-height: 1; }
-        .cat-row-bar { width: 60px; }
-        .cat-bar-track { height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; overflow: hidden; }
-        .cat-bar-fill { height: 100%; border-radius: 2px; background: var(--cat-color, var(--accent)); transition: width 0.6s ease; }
-        .cat-row-arrow { font-size: 14px; color: var(--text-muted); }
+        .cat-body { flex:1; min-width:0; }
+        .cat-name { font-size:13px; font-weight:700; margin-bottom:3px; display:flex; align-items:center; gap:6px; }
+        .cat-trend { font-size:10px; font-weight:700; padding:1px 6px; border-radius:99px; }
+        .cat-desc { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cat-score-wrap { text-align:right; flex-shrink:0; }
+        .cat-score { font-size:22px; font-weight:800; line-height:1; color:var(--cc,var(--text)); }
+        .cat-bar { width:50px; height:3px; background:var(--border); border-radius:2px; margin-top:4px; overflow:hidden; }
+        .cat-bar-fill { height:100%; background:var(--cc,var(--accent)); border-radius:2px; }
 
         /* ── Advice ── */
-        .advice-card {
-          background: rgba(79,143,255,0.06); border: 1px solid rgba(79,143,255,0.2);
-          border-left: 3px solid var(--accent); border-radius: var(--radius);
-          padding: 14px 18px; margin-bottom: 20px; font-size: 14px; line-height: 1.6;
+        .advice-box {
+          background:rgba(212,64,64,0.04); border:1px solid rgba(212,64,64,0.15);
+          border-left:3px solid var(--accent); border-radius:var(--radius);
+          padding:14px 18px; margin-bottom:16px;
         }
-        .advice-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+        .advice-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:6px; }
+        .advice-text { font-size:13px; line-height:1.6; color:var(--text); }
 
-        /* ── Charts ── */
-        .charts-row { display: grid; grid-template-columns: 180px 1fr; gap: 12px; margin-bottom: 16px; align-items: start; }
-        @media (max-width: 660px) { .charts-row { grid-template-columns: 1fr; } }
-        .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-width: 0; }
-        .chart-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; }
-        .gauge-wrap { position: relative; width: 140px; height: 76px; margin: 0 auto 6px; }
-        .gauge-val { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 28px; font-weight: 800; line-height: 1; }
-        .gauge-sub { text-align: center; font-size: 12px; color: var(--text-muted); }
+        /* ── Charts row ── */
+        .charts-row { display:grid; grid-template-columns:160px 1fr; gap:12px; margin-bottom:16px; }
+        @media(max-width:660px){.charts-row{grid-template-columns:1fr;}}
+        .chart-box { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+        .chart-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:12px; }
+        .gauge-wrap { position:relative; width:120px; height:66px; margin:0 auto 4px; }
+        .gauge-val { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); font-size:24px; font-weight:800; white-space:nowrap; }
 
-        /* ── Tabs (two-panel layout) ── */
-        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+        /* ── Finance strip ── */
+        .finance-strip {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:14px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+          margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+
+        /* ── News list ── */
+        .news-item { padding:10px 0; border-bottom:1px solid var(--border); }
+        .news-item:last-child { border-bottom:none; }
+        .news-title { font-size:13px; font-weight:500; line-height:1.4; color:var(--text); display:block; margin-bottom:3px; }
+        .news-title:hover { color:var(--accent); }
+        .news-meta { font-size:11px; color:var(--text-muted); }
+
+        /* ── Team cards ── */
+        .team-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; margin-bottom:16px; }
+        .team-card {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:16px; display:flex; align-items:flex-start; gap:12px;
+          box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+        .team-avatar {
+          width:38px; height:38px; border-radius:9px; display:flex; align-items:center;
+          justify-content:center; font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
+        }
+        .team-name { font-size:13px; font-weight:600; margin-bottom:3px; }
+        .team-meta { font-size:11px; color:var(--text-muted); }
+        .team-role-badge {
+          display:inline-block; margin-top:5px; padding:2px 8px; border-radius:99px;
+          font-size:10px; font-weight:700; background:rgba(0,0,0,0.05); color:var(--text-muted);
+        }
+
+        /* ── Signal feed ── */
+        .signal-item {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+        .signal-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .signal-text { font-size:13px; line-height:1.6; color:var(--text); }
+
+        /* ── History ── */
+        .hist-item {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:16px 18px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+        .hist-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+
+        /* ── Panel section hdr ── */
+        .panel-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+        .panel-hdr-title { font-size:13px; font-weight:700; color:var(--text); }
+
+        /* ── Inline form ── */
+        .inline-form {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          padding:18px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+        .inline-form-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:14px; }
+
+        /* ── Empty ── */
+        .empty-box { text-align:center; padding:40px 20px; color:var(--text-muted); }
+        .empty-box-icon { font-size:36px; margin-bottom:10px; }
+        .empty-box-title { font-size:14px; font-weight:600; margin-bottom:4px; color:var(--text); }
+        .empty-box-sub { font-size:12px; }
+
+        /* color utils */
+        .c-green { color:#16a34a; } .c-yellow { color:#d97706; } .c-red { color:#d44040; }
+        .bg-green { background:rgba(22,163,74,0.08); border-color:rgba(22,163,74,0.25); }
+        .bg-yellow { background:rgba(217,119,6,0.08); border-color:rgba(217,119,6,0.25); }
+        .bg-red { background:rgba(212,64,64,0.08); border-color:rgba(212,64,64,0.25); }
       </style>
 
       <!-- Loading overlay -->
       <div class="analysis-loading" id="loading-overlay">
         <div class="loading-spinner"></div>
-        <div style="text-align:center">
+        <div style="text-align:center;color:#fff">
           <div style="font-size:16px;font-weight:600;margin-bottom:20px">Анализируем компанию…</div>
           <div style="display:flex;flex-direction:column;gap:10px">
-            <div class="loading-step active" id="step-0"><span class="step-icon">📰</span> Получаем новости…</div>
-            <div class="loading-step" id="step-1"><span class="step-icon">🧵</span> Сканируем Threads…</div>
-            <div class="loading-step" id="step-2"><span class="step-icon">💼</span> Вакансии HH.ru…</div>
-            <div class="loading-step" id="step-3"><span class="step-icon">⚖️</span> Регуляторные сигналы…</div>
-            <div class="loading-step" id="step-4"><span class="step-icon">📊</span> Рыночная аналитика…</div>
-            <div class="loading-step" id="step-5"><span class="step-icon">🤖</span> Claude AI анализирует…</div>
+            <div class="loading-step active" id="step-0"><span style="width:20px">📰</span> Получаем новости…</div>
+            <div class="loading-step" id="step-1"><span style="width:20px">🧵</span> Сканируем Threads…</div>
+            <div class="loading-step" id="step-2"><span style="width:20px">💼</span> Вакансии HH.ru…</div>
+            <div class="loading-step" id="step-3"><span style="width:20px">⚖️</span> Регуляторные сигналы…</div>
+            <div class="loading-step" id="step-4"><span style="width:20px">📊</span> Рыночная аналитика…</div>
+            <div class="loading-step" id="step-5"><span style="width:20px">🤖</span> Claude AI анализирует…</div>
           </div>
         </div>
       </div>
 
-      <!-- Notifications -->
-      {% if msg == 'sent' %}<div class="alert alert-success" style="margin-bottom:16px"><span class="alert-icon">✓</span> Сообщение отправлено CEO.</div>{% endif %}
-      {% if msg == 'email_added' %}<div class="alert alert-success" style="margin-bottom:16px"><span class="alert-icon">✓</span> Сигнал добавлен.</div>{% endif %}
-      {% if msg == 'invited' %}<div class="alert alert-success" style="margin-bottom:16px"><span class="alert-icon">✓</span> Приглашение отправлено.</div>{% endif %}
-      {% if error == 'webhook_failed' %}<div class="alert alert-error" style="margin-bottom:16px"><span class="alert-icon">✕</span> Ошибка отправки вебхука.</div>{% endif %}
+      <!-- Alerts -->
+      {% if msg == 'sent' %}<div class="alert alert-success" style="margin:16px 32px 0"><span class="alert-icon">✓</span> Отправлено CEO.</div>{% endif %}
+      {% if msg == 'email_added' %}<div class="alert alert-success" style="margin:16px 32px 0"><span class="alert-icon">✓</span> Сигнал добавлен.</div>{% endif %}
+      {% if msg == 'invited' %}<div class="alert alert-success" style="margin:16px 32px 0"><span class="alert-icon">✓</span> Приглашение отправлено.</div>{% endif %}
+      {% if error == 'webhook_failed' %}<div class="alert alert-error" style="margin:16px 32px 0"><span class="alert-icon">✕</span> Ошибка вебхука.</div>{% endif %}
 
-      {% set latest = risk_runs[0] if risk_runs else none %}
-      {% set cats = latest.categories if latest and latest.categories else none %}
-      {% set prev = risk_runs[1] if risk_runs|length > 1 else none %}
-
-      <!-- Page header -->
-      <div class="cc-header">
-        <h1 class="cc-title">Corporate Risk Command Center</h1>
-        <div class="cc-sub">Executive overview · Real-time monitoring · {{ company.name }}</div>
+      <!-- Tab nav -->
+      <div class="cd-tabs">
+        <button class="cd-tab active" onclick="showTab('overview', this)">
+          ◎ Обзор
+        </button>
+        <button class="cd-tab" onclick="showTab('team', this)">
+          👥 Команда
+          {% if members %}<span class="cd-tab-badge">{{ members|length }}</span>{% endif %}
+        </button>
+        <button class="cd-tab" onclick="showTab('signals', this)">
+          📩 Сигналы
+          {% if emails %}<span class="cd-tab-badge">{{ emails|length }}</span>{% endif %}
+        </button>
+        <button class="cd-tab" onclick="showTab('history', this)">
+          📋 История
+          {% if risk_runs %}<span class="cd-tab-badge">{{ risk_runs|length }}</span>{% endif %}
+        </button>
       </div>
 
-      <!-- Top metrics -->
-      <div class="metrics-row">
-        <div class="metric-card">
-          <div class="metric-label">Overall Risk Level</div>
-          {% if latest and latest.score is not none %}
-            {% set s = latest.score | int %}
-            <div class="metric-value {% if s < 35 %}stat-green{% elif s < 65 %}stat-yellow{% else %}stat-red{% endif %}">{{ s }}</div>
-            <div><span class="metric-badge {% if s < 35 %}metric-badge-green{% elif s < 65 %}metric-badge-yellow{% else %}metric-badge-red{% endif %}">
-              {% if s < 35 %}Low Risk{% elif s < 65 %}Moderate Risk{% else %}High Risk{% endif %}
-            </span></div>
-          {% else %}
-            <div class="metric-value" style="color:var(--text-muted);font-size:28px">—</div>
-            <div class="metric-sub">Запустите анализ</div>
-          {% endif %}
-        </div>
+      <!-- ══ OVERVIEW TAB ══ -->
+      <div class="cd-panel active" id="tab-overview">
 
-        <div class="metric-card">
-          <div class="metric-label">Risk Velocity</div>
-          {% if latest and prev and latest.score is not none and prev.score is not none %}
-            {% set delta = (latest.score | int) - (prev.score | int) %}
-            {% if delta > 0 %}
-              <div class="metric-value delta-up" style="font-size:36px">↑</div>
-              <div class="metric-delta delta-up">+{{ delta }} пунктов</div>
-            {% elif delta < 0 %}
-              <div class="metric-value delta-down" style="font-size:36px">↓</div>
-              <div class="metric-delta delta-down">Decreasing</div>
-            {% else %}
-              <div class="metric-value delta-flat" style="font-size:36px">→</div>
-              <div class="metric-delta delta-flat">Stable</div>
-            {% endif %}
-            <div class="metric-sub">{{ delta > 0 and '+' or '' }}{{ delta }} · vs предыдущий анализ</div>
-          {% else %}
-            <div class="metric-value" style="color:var(--text-muted);font-size:28px">—</div>
-            <div class="metric-sub">Нужно 2+ анализа</div>
-          {% endif %}
-        </div>
+        {% if latest and latest.score is not none %}
+          {% set s = latest.score | int %}
+          {% set sclass = 'c-green' if s < 35 else ('c-yellow' if s < 65 else 'c-red') %}
+          {% set sborder = '#16a34a' if s < 35 else ('#d97706' if s < 65 else '#d44040') %}
+          {% set slabel = 'Low Risk' if s < 35 else ('Moderate Risk' if s < 65 else 'High Risk') %}
 
-        <div class="metric-card">
-          <div class="metric-label">Crisis Probability</div>
-          {% if latest and latest.score is not none %}
-            {% set s = latest.score | int %}
-            {% set crisis = (s * 0.8 + 5) | int %}
-            <div class="metric-value {% if crisis < 30 %}stat-green{% elif crisis < 60 %}stat-yellow{% else %}stat-red{% endif %}">{{ crisis }}%</div>
-            <div class="metric-sub">Next 30 days · Based on signal analysis</div>
-          {% else %}
-            <div class="metric-value" style="color:var(--text-muted);font-size:28px">—</div>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Finance indicator -->
-      {% set stock = finance.stock if finance and finance.found else none %}
-      <div class="finance-card">
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-            <div class="metric-label" style="margin:0">📈 Investment Market Indicator</div>
-            <a href="/companies/{{ company.id }}/market" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 12px">Полный анализ →</a>
-          </div>
-          {% if stock %}
-            <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px">
-              <span style="font-size:20px;font-weight:800">{{ stock.get('ticker') }}</span>
-              <span style="font-size:12px;color:var(--text-muted)">{{ stock.get('name') }} · {{ stock.get('source') }}</span>
+          <!-- Score hero -->
+          <div class="score-hero">
+            <div class="score-circle {{ sclass }}" style="border-color:{{ sborder }}">
+              <div class="score-num {{ sclass }}">{{ s }}</div>
+              <div class="score-max">/ 100</div>
             </div>
-          {% else %}
-            <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Компания не торгуется публично или данные недоступны</div>
-          {% endif %}
-        </div>
-        {% if stock %}
-        <div style="display:flex;gap:24px;flex-wrap:wrap">
-          <div style="text-align:center">
-            <div class="metric-label">Цена</div>
-            <div style="font-size:18px;font-weight:700">{{ stock.get('last') or '—' }}</div>
-          </div>
-          {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
-          {% if chg is not none and chg != '' %}
-          <div style="text-align:center">
-            <div class="metric-label">Изменение</div>
-            <div style="font-size:18px;font-weight:700;{% if chg > 0 %}color:#4ade80{% elif chg < 0 %}color:#f87171{% endif %}">
-              {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-            </div>
-          </div>
-          {% endif %}
-          {% set vol = stock.get('voltoday') %}
-          {% if vol %}
-          <div style="text-align:center">
-            <div class="metric-label">Объём</div>
-            <div style="font-size:18px;font-weight:700">{{ "{:,.0f}".format(vol) }}</div>
-          </div>
-          {% endif %}
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Company Risk Overview -->
-      {% set cat_meta = [
-        ("media", "📰", "InfoField & Media",  "#93bbff"),
-        ("hr",    "👥", "Human Resources",    "#4ade80"),
-        ("gr",    "⚖️", "Gov. Relations",     "#f87171"),
-        ("pr",    "🌐", "PR Environment",     "#c4b5fd"),
-        ("market","📊", "Market & Industry",  "#fbbf24"),
-      ] %}
-
-      <div class="section-header">
-        <div style="width:18px;height:18px;border-radius:4px;background:linear-gradient(135deg,#4f8fff,#a78bfa);flex-shrink:0"></div>
-        <div class="section-title">Company Risk Overview</div>
-      </div>
-
-      {% if cats %}
-      <div class="cat-rows">
-        {% for key, icon, label, color in cat_meta %}
-          {% set score = cats[key].score if cats and cats[key] else none %}
-          {% set risks = cats[key].risks if cats and cats[key] else [] %}
-          {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
-          {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
-          {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
-          <a class="cat-row" href="/companies/{{ company.id }}/category/{{ key }}" style="--cat-color: {{ color }}">
-            <span class="cat-row-icon">{{ icon }}</span>
-            <div class="cat-row-body">
-              <div class="cat-row-top">
-                <span class="cat-row-name">{{ label }}</span>
-                {% if trend is not none %}
-                  <span class="cat-row-trend {% if trend > 0 %}trend-up{% elif trend < 0 %}trend-down{% else %}trend-flat{% endif %}">
-                    {% if trend > 0 %}↗ +{{ trend }}{% elif trend < 0 %}↘ {{ trend }}{% else %}— 0{% endif %}
-                  </span>
-                {% endif %}
+            <div class="score-info">
+              <div class="score-label {{ sclass }}">{{ slabel }}</div>
+              {% if latest.created_at %}
+                <div class="score-meta">Обновлено: {{ latest.created_at[:10] }}</div>
+              {% endif %}
+              <div class="score-bar-track" style="margin-bottom:12px">
+                <div class="score-bar-fill" style="width:{{ s }}%;background:{{ sborder }}"></div>
               </div>
-              {% if desc %}
-                <div class="cat-row-desc">{{ desc[:120] }}{% if desc|length > 120 %}…{% endif %}</div>
+              <div class="score-actions">
+                <a href="/companies/{{ company.id }}/market" class="btn btn-secondary btn-sm">📈 Market Analysis</a>
+                <a href="/companies/{{ company.id }}/ci" class="btn btn-secondary btn-sm">🔍 CI Monitor</a>
+                <a href="/companies/{{ company.id }}/category/gr" class="btn btn-secondary btn-sm">⚖️ Crisis Center</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stat chips -->
+          <div class="stat-chips">
+            <div class="stat-chip">
+              <div class="chip-lbl">Risk Velocity</div>
+              {% if prev and prev.score is not none %}
+                {% set delta = (latest.score | int) - (prev.score | int) %}
+                <div class="chip-val {% if delta > 0 %}c-red{% elif delta < 0 %}c-green{% else %}c-yellow{% endif %}">
+                  {% if delta > 0 %}↑ +{{ delta }}{% elif delta < 0 %}↓ {{ delta }}{% else %}→ 0{% endif %}
+                </div>
+                <div class="chip-sub">vs предыдущий анализ</div>
+              {% else %}
+                <div class="chip-val" style="font-size:18px;color:var(--text-muted)">—</div>
+                <div class="chip-sub">Нужно 2+ запуска</div>
               {% endif %}
             </div>
-            <div class="cat-row-right">
-              <div>
-                <div class="cat-row-score">{{ score if score is not none else '—' }}</div>
-                <div class="cat-row-bar">
-                  <div class="cat-bar-track">
-                    <div class="cat-bar-fill" style="width:{{ score ~ '%' if score is not none else '0%' }}"></div>
-                  </div>
+            <div class="stat-chip">
+              <div class="chip-lbl">Анализов</div>
+              <div class="chip-val">{{ risk_runs | length }}</div>
+              <div class="chip-sub">запусков всего</div>
+            </div>
+            <div class="stat-chip">
+              <div class="chip-lbl">Crisis Probability</div>
+              {% set crisis = (s * 0.8 + 5) | int %}
+              <div class="chip-val {% if crisis < 30 %}c-green{% elif crisis < 60 %}c-yellow{% else %}c-red{% endif %}">{{ crisis }}%</div>
+              <div class="chip-sub">следующие 30 дней</div>
+            </div>
+          </div>
+
+        {% else %}
+          <!-- No analysis yet -->
+          <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px">
+            <div class="empty-box-icon">🔍</div>
+            <div class="empty-box-title">Анализ не запускался</div>
+            <div class="empty-box-sub">Нажмите «Запустить анализ» чтобы получить оценку рисков</div>
+          </div>
+        {% endif %}
+
+        <!-- Finance strip -->
+        <div class="finance-strip">
+          <div style="display:flex;align-items:center;gap:8px;flex:1">
+            <span style="font-size:16px">📈</span>
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:2px">Market Indicator</div>
+              {% if stock %}
+                <div style="font-size:14px;font-weight:700">{{ stock.get('ticker') }} · {{ stock.get('last') }}
+                  {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
+                  {% if chg is not none %}
+                    <span style="{% if chg > 0 %}color:#16a34a{% elif chg < 0 %}color:#d44040{% endif %}">
+                      {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
+                    </span>
+                  {% endif %}
                 </div>
-              </div>
-              <span class="cat-row-arrow">›</span>
+              {% else %}
+                <div style="font-size:13px;color:var(--text-muted)">Не торгуется публично</div>
+              {% endif %}
             </div>
-          </a>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="card" style="text-align:center;padding:40px;color:var(--text-muted);margin-bottom:20px">
-        <div style="font-size:36px;margin-bottom:12px">🔍</div>
-        <div style="font-weight:600;margin-bottom:6px">Анализ не запускался</div>
-        <div class="small">Нажмите «Запустить анализ» чтобы получить оценку по 5 категориям риска</div>
-      </div>
-      {% endif %}
-
-      <!-- Advice -->
-      {% if latest and latest.advice %}
-      <div class="advice-card">
-        <div class="advice-label">🤖 AI Recommendation</div>
-        {{ latest.advice }}
-      </div>
-      {% endif %}
-
-      <!-- Charts -->
-      {% if risk_runs | selectattr("score", "ne", none) | list %}
-        {% set completed = risk_runs | selectattr("score", "ne", none) | list %}
-        <div class="section-title" style="margin-bottom:12px">История анализов</div>
-        <div class="charts-row" style="margin-bottom:16px">
-          <div class="chart-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <div class="chart-label" style="text-align:center">Risk Score</div>
-            <div class="gauge-wrap"><canvas id="gaugeChart"></canvas>
-              <div class="gauge-val {% if latest.score|int < 35 %}stat-green{% elif latest.score|int < 65 %}stat-yellow{% else %}stat-red{% endif %}">{{ latest.score | int }}</div>
-            </div>
-            <div class="gauge-sub">{% set s = latest.score | int %}{% if s < 35 %}Low Risk{% elif s < 65 %}Moderate Risk{% else %}High Risk{% endif %}</div>
           </div>
-          <div class="chart-card">
-            <div class="chart-label">Динамика риска</div>
-            <div style="position:relative;height:160px"><canvas id="historyChart"></canvas></div>
-          </div>
+          <a href="/companies/{{ company.id }}/market" class="btn btn-primary btn-sm">Полный анализ →</a>
         </div>
-        {% if latest and cats %}
-        <div class="chart-card" style="margin-bottom:20px">
-          <div class="chart-label">Разбивка по категориям</div>
-          <div style="position:relative;height:240px"><canvas id="radarChart"></canvas></div>
+
+        <!-- Category grid -->
+        {% set cat_meta = [
+          ("media", "📰", "InfoField & Media",  "#93bbff", "rgba(147,187,255,0.12)"),
+          ("hr",    "👥", "Human Resources",    "#16a34a", "rgba(22,163,74,0.1)"),
+          ("gr",    "⚖️",  "Gov. Relations",     "#d44040", "rgba(212,64,64,0.1)"),
+          ("pr",    "🌐", "PR Environment",     "#7c3aed", "rgba(124,58,237,0.1)"),
+          ("market","📊", "Market & Industry",  "#d97706", "rgba(217,119,6,0.1)"),
+        ] %}
+
+        {% if cats %}
+        <div style="margin-bottom:8px">
+          <div class="panel-hdr">
+            <div class="panel-hdr-title">Risk Categories</div>
+          </div>
+          <div class="cat-grid">
+            {% for key, icon, label, color, bg in cat_meta %}
+              {% set score = cats[key].score if cats and cats[key] else none %}
+              {% set risks = cats[key].risks if cats and cats[key] else [] %}
+              {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
+              {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
+              {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
+              <a class="cat-card" href="/companies/{{ company.id }}/category/{{ key }}" style="--cc:{{ color }};--cc-bg:{{ bg }}">
+                <div class="cat-icon-wrap">{{ icon }}</div>
+                <div class="cat-body">
+                  <div class="cat-name">
+                    {{ label }}
+                    {% if trend is not none %}
+                      <span class="cat-trend" style="{% if trend > 0 %}background:rgba(212,64,64,0.1);color:#d44040{% elif trend < 0 %}background:rgba(22,163,74,0.1);color:#16a34a{% else %}background:rgba(0,0,0,0.05);color:var(--text-muted){% endif %}">
+                        {% if trend > 0 %}↗ +{{ trend }}{% elif trend < 0 %}↘ {{ trend }}{% else %}—{% endif %}
+                      </span>
+                    {% endif %}
+                  </div>
+                  {% if desc %}
+                    <div class="cat-desc">{{ desc[:80] }}{% if desc|length > 80 %}…{% endif %}</div>
+                  {% endif %}
+                </div>
+                <div class="cat-score-wrap">
+                  <div class="cat-score">{{ score if score is not none else '—' }}</div>
+                  {% if score is not none %}
+                    <div class="cat-bar"><div class="cat-bar-fill" style="width:{{ score }}%"></div></div>
+                  {% endif %}
+                </div>
+              </a>
+            {% endfor %}
+          </div>
         </div>
         {% endif %}
-      {% endif %}
 
-      <!-- Two-column: News + Signals -->
-      <div class="two-col">
+        <!-- AI Advice -->
+        {% if latest and latest.advice %}
+        <div class="advice-box">
+          <div class="advice-lbl">🤖 AI Recommendation</div>
+          <div class="advice-text">{{ latest.advice }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Charts -->
+        {% if risk_runs | selectattr("score", "ne", none) | list %}
+        {% set completed = risk_runs | selectattr("score", "ne", none) | list %}
+        {% set s = latest.score | int %}
+        {% set gc = '#16a34a' if s < 35 else ('#d97706' if s < 65 else '#d44040') %}
+        {% set glabel = 'Low Risk' if s < 35 else ('Moderate' if s < 65 else 'High Risk') %}
+
+        <div class="charts-row" style="margin-bottom:16px">
+
+          <!-- Gauge -->
+          <div class="chart-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px;gap:4px">
+            <div class="chart-lbl" style="text-align:center;margin-bottom:8px">Risk Score</div>
+            <!-- Multi-arc gauge -->
+            <div style="position:relative;width:150px;height:82px">
+              <canvas id="gaugeChart" width="150" height="82"></canvas>
+              <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center;line-height:1">
+                <div style="font-size:30px;font-weight:800;color:{{ gc }}">{{ s }}</div>
+              </div>
+            </div>
+            <div style="margin-top:6px;padding:3px 12px;border-radius:99px;font-size:11px;font-weight:700;
+              background:{{ 'rgba(22,163,74,0.1)' if s < 35 else ('rgba(217,119,6,0.1)' if s < 65 else 'rgba(212,64,64,0.1)') }};
+              color:{{ gc }}">{{ glabel }}</div>
+            <!-- Zone labels -->
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:2px;background:#16a34a;display:inline-block"></span>Low</div>
+              <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:2px;background:#d97706;display:inline-block"></span>Mid</div>
+              <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:2px;background:#d44040;display:inline-block"></span>High</div>
+            </div>
+          </div>
+
+          <!-- Line chart -->
+          <div class="chart-box">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div class="chart-lbl" style="margin:0">Динамика риска</div>
+              <div style="font-size:11px;color:var(--text-muted)">{{ completed|length }} запусков</div>
+            </div>
+            <div style="position:relative;height:170px"><canvas id="historyChart"></canvas></div>
+          </div>
+        </div>
+
+        {% if cats %}
+        <!-- Radar + Bar side by side -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+
+          <div class="chart-box">
+            <div class="chart-lbl">Radar — категории рисков</div>
+            <div style="position:relative;height:220px"><canvas id="radarChart"></canvas></div>
+          </div>
+
+          <div class="chart-box">
+            <div class="chart-lbl">Оценка по категориям</div>
+            <div style="position:relative;height:220px"><canvas id="barChart"></canvas></div>
+          </div>
+
+        </div>
+        {% endif %}
+        {% endif %}
 
         <!-- News -->
-        <div>
-          <div class="section-title" style="margin-bottom:10px">Последние новости</div>
-          <div class="card" style="margin-top:0">
-            {% if company_news %}
-              {% for n in company_news %}
-                <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-                  <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:500;line-height:1.4;display:block">{{ n.title }}</a>
-                  <div class="small muted mt-4">
-                    {% if n.source %}{{ n.source }}{% endif %}
-                    {% if n.source and n.pub_date %} · {% endif %}
-                    {% if n.pub_date %}{{ n.pub_date }}{% endif %}
-                  </div>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div style="text-align:center;padding:24px;color:var(--text-muted)">
-                <div style="font-size:28px;margin-bottom:8px">📰</div>
-                <div class="small">Новости не найдены</div>
-              </div>
-            {% endif %}
-          </div>
+        {% if company_news %}
+        <div class="panel-hdr" style="margin-bottom:10px">
+          <div class="panel-hdr-title">Последние новости</div>
         </div>
-
-        <!-- Signals -->
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div class="section-title">Сигналы от сотрудников</div>
-            <span id="emails-live-dot" style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block;transition:background 0.5s"></span>
-            <span style="font-size:11px;color:var(--text-muted)">Live</span>
-          </div>
-          <div class="card" style="margin-top:0">
-            <details>
-              <summary style="cursor:pointer;font-size:13px;font-weight:500;color:var(--accent);user-select:none">+ Добавить сигнал</summary>
-              <form method="post" action="/emails/add" style="margin-top:14px">
-                <input type="hidden" name="company_id" value="{{ company.id }}" />
-                <div class="row">
-                  <div class="field">
-                    <label>Email</label>
-                    <input name="from_email" type="email" placeholder="hr@company.com" />
-                  </div>
-                  <div class="field">
-                    <label>Должность / роль</label>
-                    <input name="position" type="text" placeholder="HR, PR, GR..." />
-                  </div>
-                </div>
-                <div class="field mt-8">
-                  <label>Текст</label>
-                  <textarea name="text" rows="3" required style="resize:vertical"></textarea>
-                </div>
-                <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm">Добавить</button></div>
-              </form>
-            </details>
-            <div id="emails-container" style="margin-top:{% if emails %}12{% else %}0{% endif %}px">
-              {% if emails %}
-                {% for em in emails %}
-                  <div class="email-row" data-id="{{ em.id }}" style="padding:10px 0;border-bottom:1px solid var(--border)">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                      {% if em.position %}
-                        {% set pos = em.position | lower %}
-                        {% if 'hr' in pos or 'кадр' in pos %}<span class="badge badge-green" style="font-size:10px">HR</span>
-                        {% elif 'pr' in pos or 'маркетинг' in pos %}<span class="badge badge-blue" style="font-size:10px">PR</span>
-                        {% elif 'gr' in pos or 'юрид' in pos or 'legal' in pos %}<span class="badge badge-red" style="font-size:10px">GR</span>
-                        {% else %}<span class="badge" style="font-size:10px">{{ em.position }}</span>{% endif %}
-                      {% endif %}
-                      {% if em.from_email %}<span class="small muted">{{ em.from_email }}</span>{% endif %}
-                      <span class="small muted">{{ em.created_at[:10] if em.created_at else '' }}</span>
-                    </div>
-                    <div class="small" style="color:var(--text);line-height:1.5">{{ em.text[:200] }}{% if em.text|length > 200 %}…{% endif %}</div>
-                  </div>
-                {% endfor %}
-              {% else %}
-                <div id="emails-empty" class="small muted mt-8">Сигналов пока нет…</div>
-              {% endif %}
+        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">
+          {% for n in company_news[:6] %}
+            <div class="news-item">
+              <a href="{{ n.link }}" target="_blank" rel="noopener" class="news-title">{{ n.title }}</a>
+              <div class="news-meta">{{ n.source or '' }}{% if n.source and n.pub_date %} · {% endif %}{{ n.pub_date or '' }}</div>
             </div>
-          </div>
-        </div>
-
-      </div><!-- /two-col -->
-
-      <!-- Team + Settings -->
-      <div id="settings" class="two-col" style="margin-top:4px">
-
-        <!-- Team members -->
-        {% if is_admin %}
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div class="section-title">Команда</div>
-            {% if members %}<span class="badge badge-blue" style="font-size:10px">{{ members|length }}</span>{% endif %}
-          </div>
-          <div class="card" style="margin-top:0">
-            {% if members %}
-              {% for m in members %}
-                <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-                  <div style="flex:1;min-width:0">
-                    <div style="font-size:13px;font-weight:500">{{ m.invited_email }}</div>
-                    <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-                      {% if m.role %}
-                        {% set role_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c4b5fd','market':'#fbbf24'} %}
-                        {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
-                        <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;background:rgba(0,0,0,0.05);color:{{ role_colors.get(m.role,'var(--text-muted)') }}">
-                          {{ role_labels.get(m.role, m.role) }}
-                        </span>
-                      {% endif %}
-                      {% if m.status == 'active' %}
-                        <span style="font-size:10px;color:#4ade80">● активен</span>
-                      {% else %}
-                        <span style="font-size:10px;color:var(--text-muted)">○ ожидает входа</span>
-                      {% endif %}
-                    </div>
-                  </div>
-                  <form method="post" action="/members/{{ m.id }}/remove" onsubmit="return confirm('Удалить {{ m.invited_email }}?')">
-                    <input type="hidden" name="company_id" value="{{ company.id }}" />
-                    <button type="submit" class="btn btn-ghost btn-sm" style="color:#f87171;font-size:12px;padding:4px 10px">✕</button>
-                  </form>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div class="small muted">Участников пока нет.</div>
-            {% endif %}
-            <details style="margin-top:14px">
-              <summary style="cursor:pointer;font-size:13px;font-weight:500;color:var(--accent);user-select:none">+ Пригласить участника</summary>
-              <form method="post" action="/members/invite" style="margin-top:12px">
-                <input type="hidden" name="company_id" value="{{ company.id }}" />
-                <div class="field">
-                  <label>Email</label>
-                  <input name="invited_email" type="email" placeholder="colleague@company.com" required />
-                </div>
-                <div class="field mt-8">
-                  <label>Сфера</label>
-                  <select name="role" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px">
-                    <option value="">— без ограничений —</option>
-                    <option value="media">📰 InfoField & Media</option>
-                    <option value="hr">👥 Human Resources</option>
-                    <option value="gr">⚖️ Gov. Relations</option>
-                    <option value="pr">🌐 PR Environment</option>
-                    <option value="market">📊 Market & Industry</option>
-                  </select>
-                </div>
-                <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm">Пригласить</button></div>
-              </form>
-            </details>
-          </div>
+          {% endfor %}
         </div>
         {% endif %}
 
-        <!-- Signal Contacts -->
-        <div>
-          <div class="section-title" style="margin-bottom:10px">Signal Contacts</div>
-          <div class="card" style="margin-top:0">
-            {% if employees %}
-              {% for e in employees %}
-                <div class="emp-card">
-                  <div>
-                    <div class="emp-name">{{ e.full_name }}</div>
-                    <div class="emp-meta">{{ e.position }}{% if e.position and e.department %} · {% endif %}{{ e.department }}</div>
-                    <div class="emp-meta"><a href="mailto:{{ e.email }}">{{ e.email }}</a></div>
-                  </div>
+      </div>{# end overview #}
+
+      <!-- ══ TEAM TAB ══ -->
+      <div class="cd-panel" id="tab-team">
+
+        <!-- Members -->
+        {% if is_admin %}
+        <div class="panel-hdr">
+          <div class="panel-hdr-title">Участники команды</div>
+          <span style="font-size:11px;color:var(--text-muted)">{{ members|length if members else 0 }} чел.</span>
+        </div>
+        {% if members %}
+        <div class="team-grid" style="margin-bottom:20px">
+          {% set avatarColors = ['#d44040','#2563eb','#16a34a','#7c3aed','#d97706','#0891b2','#be185d'] %}
+          {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+          {% set role_colors = {'media':'#2563eb','hr':'#16a34a','gr':'#d44040','pr':'#7c3aed','market':'#d97706'} %}
+          {% for m in members %}
+            {% set ac = avatarColors[loop.index0 % avatarColors|length] %}
+            <div class="team-card">
+              <div class="team-avatar" style="background:{{ ac }}">{{ m.invited_email[0] | upper }}</div>
+              <div style="flex:1;min-width:0">
+                <div class="team-name">{{ m.invited_email }}</div>
+                {% if m.role %}
+                  <div class="team-role-badge" style="color:{{ role_colors.get(m.role,'var(--text-muted)') }}">{{ role_labels.get(m.role, m.role) }}</div>
+                {% endif %}
+                <div class="team-meta" style="margin-top:5px">
+                  {% if m.status == 'active' %}<span style="color:#16a34a">● активен</span>{% else %}<span>○ ожидает</span>{% endif %}
                 </div>
-              {% endfor %}
-            {% else %}
-              <div class="small muted">Сотрудников пока нет.</div>
-            {% endif %}
-            {% if is_admin %}
-            <details style="margin-top:14px">
-              <summary style="cursor:pointer;font-size:13px;font-weight:500;color:var(--accent);user-select:none">+ Добавить сотрудника</summary>
-              <form method="post" action="/employees/create" style="margin-top:12px" id="emp-form">
+              </div>
+              <form method="post" action="/members/{{ m.id }}/remove" onsubmit="return confirm('Удалить?')" style="margin:0">
                 <input type="hidden" name="company_id" value="{{ company.id }}" />
-                <div class="row">
-                  <div class="field"><label>ФИО</label><input name="full_name" type="text" required /></div>
-                  <div class="field"><label>Email</label><input name="email" type="email" required /></div>
-                </div>
-                <div class="row mt-8">
-                  <div class="field"><label>Должность</label><input name="position" type="text" /></div>
-                  <div class="field"><label>Отдел</label><input name="department" type="text" /></div>
-                </div>
-                <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm" id="emp-btn">Добавить</button></div>
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:#d44040;padding:4px 8px">✕</button>
               </form>
-            </details>
-            {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px">
+          <div class="empty-box-icon">👥</div>
+          <div class="empty-box-title">Команда пуста</div>
+          <div class="empty-box-sub">Пригласите первого участника</div>
+        </div>
+        {% endif %}
+        {% endif %}{# end is_admin members #}
+
+        <!-- Invite form -->
+        {% if is_admin %}
+        <div class="inline-form" style="margin-bottom:24px">
+          <div class="inline-form-title">+ Пригласить участника</div>
+          <form method="post" action="/members/invite">
+            <input type="hidden" name="company_id" value="{{ company.id }}" />
+            <div class="row">
+              <div class="field">
+                <label>Email</label>
+                <input name="invited_email" type="email" placeholder="colleague@company.com" required />
+              </div>
+              <div class="field">
+                <label>Сфера доступа</label>
+                <select name="role" style="width:100%;padding:9px 12px;background:#fafaf8;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;font-family:inherit">
+                  <option value="">— без ограничений —</option>
+                  <option value="media">📰 InfoField & Media</option>
+                  <option value="hr">👥 Human Resources</option>
+                  <option value="gr">⚖️ Gov. Relations</option>
+                  <option value="pr">🌐 PR Environment</option>
+                  <option value="market">📊 Market & Industry</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm">Пригласить →</button></div>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Signal Contacts (employees) -->
+        <div class="panel-hdr">
+          <div class="panel-hdr-title">Signal Contacts</div>
+          <span style="font-size:11px;color:var(--text-muted)">{{ employees|length if employees else 0 }} сотрудников</span>
+        </div>
+        {% if employees %}
+        <div class="team-grid" style="margin-bottom:20px">
+          {% for e in employees %}
+            <div class="team-card">
+              <div class="team-avatar" style="background:#0891b2">{{ e.full_name[0] | upper if e.full_name else '?' }}</div>
+              <div style="flex:1;min-width:0">
+                <div class="team-name">{{ e.full_name }}</div>
+                <div class="team-meta">{{ e.position }}{% if e.position and e.department %} · {% endif %}{{ e.department }}</div>
+                <div class="team-meta"><a href="mailto:{{ e.email }}" style="color:var(--accent)">{{ e.email }}</a></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px">
+          <div class="empty-box-icon">📋</div>
+          <div class="empty-box-title">Контактов нет</div>
+          <div class="empty-box-sub">Добавьте сотрудников для сбора сигналов</div>
+        </div>
+        {% endif %}
+
+        {% if is_admin %}
+        <div class="inline-form">
+          <div class="inline-form-title">+ Добавить сотрудника</div>
+          <form method="post" action="/employees/create" id="emp-form">
+            <input type="hidden" name="company_id" value="{{ company.id }}" />
+            <div class="row">
+              <div class="field"><label>ФИО</label><input name="full_name" type="text" required /></div>
+              <div class="field"><label>Email</label><input name="email" type="email" required /></div>
+            </div>
+            <div class="row mt-8">
+              <div class="field"><label>Должность</label><input name="position" type="text" /></div>
+              <div class="field"><label>Отдел</label><input name="department" type="text" /></div>
+            </div>
+            <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm" id="emp-btn">Добавить →</button></div>
+          </form>
+        </div>
+        {% endif %}
+
+      </div>{# end team #}
+
+      <!-- ══ SIGNALS TAB ══ -->
+      <div class="cd-panel" id="tab-signals">
+
+        <div class="panel-hdr">
+          <div class="panel-hdr-title" style="display:flex;align-items:center;gap:8px">
+            Сигналы от сотрудников
+            <span id="emails-live-dot" style="width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;transition:background 0.5s"></span>
+            <span style="font-size:11px;color:var(--text-muted);font-weight:400">Live</span>
           </div>
         </div>
 
-      </div>
-
-      <!-- Run history -->
-      {% if risk_runs %}
-      <div class="section-title" style="margin:20px 0 10px">История запусков</div>
-      <div class="card">
-        {% for rr in risk_runs %}
-          <div class="risk-card">
-            <div class="risk-header">
-              <div>
-                {% if rr.status in ('done','completed') %}<span class="badge badge-green">✓ Завершён</span>
-                {% elif rr.status in ('queued','processing') %}<span class="badge badge-yellow">⏳ {{ rr.status }}</span>
-                {% elif rr.status == 'error' %}<span class="badge badge-red">✕ Ошибка</span>
-                {% else %}<span class="badge badge-blue">{{ rr.status }}</span>{% endif %}
-                {% if rr.score is not none %}
-                  {% set s = rr.score | int %}
-                  <span class="badge {% if s < 35 %}badge-green{% elif s < 65 %}badge-yellow{% else %}badge-red{% endif %}" style="margin-left:6px">Риск: {{ s }}/100</span>
-                {% endif %}
-              </div>
-              <div class="risk-id">{{ rr.created_at[:19].replace('T',' ') if rr.created_at else '—' }}</div>
+        <!-- Add signal form -->
+        <div class="inline-form" style="margin-bottom:20px">
+          <div class="inline-form-title">+ Добавить сигнал</div>
+          <form method="post" action="/emails/add">
+            <input type="hidden" name="company_id" value="{{ company.id }}" />
+            <div class="row">
+              <div class="field"><label>Email</label><input name="from_email" type="email" placeholder="hr@company.com" /></div>
+              <div class="field"><label>Должность</label><input name="position" type="text" placeholder="HR, PR, GR..." /></div>
             </div>
-            {% if rr.advice %}<div class="risk-advice">{{ rr.advice }}</div>{% endif %}
-            {% if is_admin %}
-            <details style="margin-top:12px">
-              <summary style="cursor:pointer;font-size:13px;color:var(--accent);user-select:none">✉ Отправить CEO</summary>
-              <form method="post" action="/ceo/send" style="margin-top:12px">
-                <input type="hidden" name="company_id" value="{{ company.id }}" />
-                <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
-                <div class="row">
-                  <div class="field"><label>Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
-                  <div class="field"><label>Комментарий</label><input name="message" type="text" /></div>
-                </div>
-                <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm">Отправить</button></div>
-              </form>
-            </details>
-            {% endif %}
-          </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+            <div class="field mt-8"><label>Сообщение</label><textarea name="text" rows="3" required style="resize:vertical"></textarea></div>
+            <div class="mt-8"><button type="submit" class="btn btn-primary btn-sm">Отправить сигнал →</button></div>
+          </form>
+        </div>
 
-    </div><!-- /sidebar-wrap -->
-  </div><!-- /sidebar-content -->
-</div><!-- /sidebar-layout -->
+        <!-- Signal feed -->
+        <div id="emails-container">
+          {% if emails %}
+            {% for em in emails %}
+              <div class="signal-item" data-id="{{ em.id }}">
+                <div class="signal-header">
+                  {% if em.position %}
+                    {% set pos = em.position | lower %}
+                    {% if 'hr' in pos or 'кадр' in pos %}<span class="badge badge-green" style="font-size:10px">HR</span>
+                    {% elif 'pr' in pos or 'маркетинг' in pos %}<span class="badge badge-blue" style="font-size:10px">PR</span>
+                    {% elif 'gr' in pos or 'юрид' in pos %}<span class="badge badge-red" style="font-size:10px">GR</span>
+                    {% else %}<span class="badge" style="font-size:10px">{{ em.position }}</span>{% endif %}
+                  {% endif %}
+                  {% if em.from_email %}<span style="font-size:12px;color:var(--text-muted)">{{ em.from_email }}</span>{% endif %}
+                  <span style="font-size:11px;color:var(--text-muted);margin-left:auto">{{ em.created_at[:10] if em.created_at else '' }}</span>
+                </div>
+                <div class="signal-text">{{ em.text[:300] }}{% if em.text|length > 300 %}…{% endif %}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty-box" id="emails-empty">
+              <div class="empty-box-icon">📩</div>
+              <div class="empty-box-title">Сигналов пока нет</div>
+              <div class="empty-box-sub">Здесь будут появляться сообщения от сотрудников</div>
+            </div>
+          {% endif %}
+        </div>
+
+      </div>{# end signals #}
+
+      <!-- ══ HISTORY TAB ══ -->
+      <div class="cd-panel" id="tab-history">
+
+        <div class="panel-hdr" style="margin-bottom:16px">
+          <div class="panel-hdr-title">История анализов</div>
+          <span style="font-size:11px;color:var(--text-muted)">{{ risk_runs|length }} запусков</span>
+        </div>
+
+        {% if risk_runs %}
+          {% for rr in risk_runs %}
+            <div class="hist-item">
+              <div class="hist-header">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  {% if rr.status in ('done','completed') %}<span class="badge badge-green" style="font-size:11px">✓ Завершён</span>
+                  {% elif rr.status in ('queued','processing') %}<span class="badge badge-yellow" style="font-size:11px">⏳ {{ rr.status }}</span>
+                  {% elif rr.status == 'error' %}<span class="badge badge-red" style="font-size:11px">✕ Ошибка</span>
+                  {% else %}<span class="badge" style="font-size:11px">{{ rr.status }}</span>{% endif %}
+
+                  {% if rr.score is not none %}
+                    {% set rs = rr.score | int %}
+                    <span class="badge {% if rs < 35 %}badge-green{% elif rs < 65 %}badge-yellow{% else %}badge-red{% endif %}" style="font-size:11px">
+                      Риск: {{ rs }}/100
+                    </span>
+                  {% endif %}
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);font-family:monospace">
+                  {{ rr.created_at[:19].replace('T',' ') if rr.created_at else '—' }}
+                </div>
+              </div>
+              {% if rr.advice %}
+                <div style="font-size:13px;line-height:1.6;color:var(--text);margin-bottom:10px">{{ rr.advice[:300] }}{% if rr.advice|length > 300 %}…{% endif %}</div>
+              {% endif %}
+              {% if is_admin %}
+              <details>
+                <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none">✉ Отправить CEO</summary>
+                <form method="post" action="/ceo/send" style="margin-top:12px">
+                  <input type="hidden" name="company_id" value="{{ company.id }}" />
+                  <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
+                  <div class="row">
+                    <div class="field"><label>Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
+                    <div class="field"><label>Комментарий</label><input name="message" type="text" /></div>
+                  </div>
+                  <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm">Отправить</button></div>
+                </form>
+              </details>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius)">
+            <div class="empty-box-icon">📋</div>
+            <div class="empty-box-title">История пуста</div>
+            <div class="empty-box-sub">Запустите первый анализ</div>
+          </div>
+        {% endif %}
+
+      </div>{# end history #}
+
+    </div>
+  </div>
+</div>
 
 <script>
+// ── Tabs ──
+function showTab(name, btn) {
+  document.querySelectorAll('.cd-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.cd-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Chart data ──
 const riskRuns = {{ risk_runs | tojson | safe }};
-const cats = {{ (latest.categories if latest and latest.categories else {}) | tojson | safe }};
-const completedRuns = riskRuns.filter(r => r.score !== null && r.score !== undefined);
+const cats     = {{ (latest.categories if latest and latest.categories else {}) | tojson | safe }};
+const completed = riskRuns.filter(r => r.score !== null && r.score !== undefined);
 
 const COMPANY_ID = '{{ company.id }}';
 let lastEmailIds = new Set({{ emails | map(attribute='id') | list | tojson | safe }});
 
+// ── Email polling ──
 function renderEmail(em) {
   const pos = (em.position || '').toLowerCase();
-  let badgeClass = 'badge', badgeText = em.position || '';
-  if (pos.includes('hr') || pos.includes('кадр')) { badgeClass = 'badge badge-green'; badgeText = 'HR'; }
-  else if (pos.includes('pr') || pos.includes('маркетинг')) { badgeClass = 'badge badge-blue'; badgeText = 'PR'; }
-  else if (pos.includes('gr') || pos.includes('юрид') || pos.includes('legal')) { badgeClass = 'badge badge-red'; badgeText = 'GR'; }
+  let badge = em.position ? `<span class="badge" style="font-size:10px">${em.position}</span>` : '';
+  if (pos.includes('hr') || pos.includes('кадр')) badge = '<span class="badge badge-green" style="font-size:10px">HR</span>';
+  else if (pos.includes('pr') || pos.includes('маркет')) badge = '<span class="badge badge-blue" style="font-size:10px">PR</span>';
+  else if (pos.includes('gr') || pos.includes('юрид')) badge = '<span class="badge badge-red" style="font-size:10px">GR</span>';
   const date = em.created_at ? em.created_at.slice(0,10) : '';
-  const text = em.text ? (em.text.length > 200 ? em.text.slice(0,200) + '…' : em.text) : '';
-  return `<div class="email-row" data-id="${em.id}" style="padding:10px 0;border-bottom:1px solid var(--border);animation:fadeIn 0.4s ease">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      ${badgeText ? `<span class="${badgeClass}" style="font-size:10px">${badgeText}</span>` : ''}
-      ${em.from_email ? `<span class="small muted">${em.from_email}</span>` : ''}
-      <span class="small muted">${date}</span>
-    </div>
-    <div class="small" style="color:var(--text);line-height:1.5">${text}</div>
+  const text = em.text ? (em.text.length > 300 ? em.text.slice(0,300)+'…' : em.text) : '';
+  return `<div class="signal-item" data-id="${em.id}" style="animation:fadePanel 0.4s ease">
+    <div class="signal-header">${badge}${em.from_email?`<span style="font-size:12px;color:var(--text-muted)">${em.from_email}</span>`:''}
+    <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${date}</span></div>
+    <div class="signal-text">${text}</div>
   </div>`;
 }
 
 async function pollEmails() {
   try {
-    const res = await fetch(`/api/companies/${COMPANY_ID}/emails`);
-    if (!res.ok) return;
-    const emails = await res.json();
-    const newEmails = emails.filter(e => !lastEmailIds.has(e.id));
-    if (newEmails.length > 0) {
-      const container = document.getElementById('emails-container');
+    const r = await fetch(`/api/companies/${COMPANY_ID}/emails`);
+    if (!r.ok) return;
+    const list = await r.json();
+    const fresh = list.filter(e => !lastEmailIds.has(e.id));
+    if (fresh.length > 0) {
+      const c = document.getElementById('emails-container');
       const empty = document.getElementById('emails-empty');
       if (empty) empty.remove();
-      newEmails.forEach(em => { lastEmailIds.add(em.id); container.insertAdjacentHTML('afterbegin', renderEmail(em)); });
+      fresh.forEach(em => { lastEmailIds.add(em.id); c.insertAdjacentHTML('afterbegin', renderEmail(em)); });
       const dot = document.getElementById('emails-live-dot');
       if (dot) { dot.style.background = '#fff'; setTimeout(() => dot.style.background = '#4ade80', 600); }
     }
@@ -678,20 +824,18 @@ async function pollEmails() {
 }
 setInterval(pollEmails, 5000);
 
+// ── Loading overlay ──
 {% if is_admin %}
 document.getElementById('risk-form').addEventListener('submit', function() {
-  var btn = document.getElementById('risk-btn');
+  const btn = document.getElementById('risk-btn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Анализируем…';
   document.getElementById('loading-overlay').classList.add('active');
-  const delays = [0, 4000, 8000, 12000, 16000, 20000];
-  delays.forEach(function(d, i) {
-    setTimeout(function() {
-      document.querySelectorAll('.loading-step').forEach(function(el, idx) {
-        if (idx < i) { el.className = 'loading-step done'; el.querySelector('.step-icon').textContent = '✓'; }
-        else if (idx === i) el.className = 'loading-step active';
-      });
-    }, d);
-  });
+  [0,4000,8000,12000,16000,20000].forEach((d,i) => setTimeout(() => {
+    document.querySelectorAll('.loading-step').forEach((el,idx) => {
+      if (idx < i) { el.classList.add('done'); el.classList.remove('active'); }
+      else if (idx === i) { el.classList.add('active'); el.classList.remove('done'); }
+    });
+  }, d));
 });
 {% endif %}
 
@@ -699,34 +843,211 @@ document.getElementById('emp-btn') && document.getElementById('emp-form').addEve
   document.getElementById('emp-btn').disabled = true;
 });
 
-if (completedRuns.length > 0) {
-  const latest = completedRuns[0];
-  const score = Math.round(latest.score);
-  const gaugeColor = score < 35 ? '#4ade80' : score < 65 ? '#fbbf24' : '#f87171';
+// ── Charts ──
+if (completed.length > 0) {
+  const latest  = completed[0];
+  const score   = Math.round(latest.score);
+  const gc      = score < 35 ? '#16a34a' : score < 65 ? '#d97706' : '#d44040';
+  const gcLight = score < 35 ? 'rgba(22,163,74,0.15)' : score < 65 ? 'rgba(217,119,6,0.15)' : 'rgba(212,64,64,0.15)';
 
-  const gaugeCtx = document.getElementById('gaugeChart');
-  if (gaugeCtx) new Chart(gaugeCtx, {
-    type: 'doughnut',
-    data: { datasets: [{ data: [score, 100-score, 100], backgroundColor: [gaugeColor, 'rgba(0,0,0,0.07)', 'transparent'], borderWidth: 0, circumference: 180, rotation: 270 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 900, easing: 'easeOutCubic' } }
-  });
-
-  const histCtx = document.getElementById('historyChart');
-  if (histCtx) {
-    const rev = [...completedRuns].reverse();
-    new Chart(histCtx, {
-      type: 'line',
-      data: { labels: rev.map(r => r.created_at ? r.created_at.slice(0,10) : '—'), datasets: [{ label: 'Риск', data: rev.map(r => Math.round(r.score)), borderColor: '#4f8fff', backgroundColor: 'rgba(79,143,255,0.08)', borderWidth: 2, fill: true, tension: 0.3, pointBackgroundColor: rev.map(r => r.score < 35 ? '#4ade80' : r.score < 65 ? '#fbbf24' : '#f87171'), pointRadius: 5 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#a1a1aa', font: { size: 11 }, stepSize: 25 }, border: { display: false } }, x: { grid: { display: false }, ticks: { color: '#a1a1aa', font: { size: 11 } }, border: { display: false } } } }
+  // ── Gauge — tri-color arc ──
+  const gCtx = document.getElementById('gaugeChart');
+  if (gCtx) {
+    // Low zone, mid zone, high zone, pointer fill, empty
+    const low  = Math.min(score, 35);
+    const mid  = Math.max(0, Math.min(score - 35, 30));
+    const high = Math.max(0, Math.min(score - 65, 35));
+    const rest = 100 - score;
+    new Chart(gCtx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [low, mid, high, rest, 100],
+          backgroundColor: [
+            '#16a34a', '#d97706', '#d44040',
+            'rgba(0,0,0,0.07)', 'transparent'
+          ],
+          borderWidth: 0,
+          circumference: 180,
+          rotation: 270,
+        }]
+      },
+      options: {
+        responsive: false,
+        cutout: '68%',
+        plugins: { legend:{display:false}, tooltip:{enabled:false} },
+        animation: { duration: 1100, easing: 'easeOutQuart' }
+      }
     });
   }
 
-  const radarCtx = document.getElementById('radarChart');
-  if (radarCtx && cats && Object.keys(cats).length) {
-    new Chart(radarCtx, {
+  // ── Line chart with gradient ──
+  const hCtx = document.getElementById('historyChart');
+  if (hCtx) {
+    const rev = [...completed].reverse();
+    const scores = rev.map(r => Math.round(r.score));
+    const labels = rev.map(r => {
+      if (!r.created_at) return '—';
+      const d = new Date(r.created_at);
+      return `${d.getDate()}.${String(d.getMonth()+1).padStart(2,'0')}`;
+    });
+
+    // gradient fill
+    const grad = hCtx.getContext('2d').createLinearGradient(0, 0, 0, 170);
+    grad.addColorStop(0, 'rgba(212,64,64,0.18)');
+    grad.addColorStop(1, 'rgba(212,64,64,0)');
+
+    new Chart(hCtx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: scores,
+          borderColor: '#d44040',
+          backgroundColor: grad,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: scores.map(s => s<35?'#16a34a':s<65?'#d97706':'#d44040'),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a2e',
+            titleColor: '#fff',
+            bodyColor: '#a1a1aa',
+            padding: 10,
+            cornerRadius: 8,
+            callbacks: { label: c => ` Риск: ${c.raw}/100` }
+          }
+        },
+        scales: {
+          y: {
+            min: 0, max: 100,
+            grid: { color: 'rgba(0,0,0,0.05)', drawTicks: false },
+            ticks: { color: '#a1a1aa', font:{size:10}, stepSize:25, padding:8,
+              callback: v => v === 0 ? '0' : v === 100 ? '100' : v },
+            border: { display: false }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#a1a1aa', font:{size:10}, maxRotation:0,
+              autoSkip: true, maxTicksLimit: 8 },
+            border: { display: false }
+          }
+        },
+        animation: { duration: 900, easing: 'easeOutQuart' }
+      }
+    });
+  }
+
+  // ── Radar ──
+  const rCtx = document.getElementById('radarChart');
+  if (rCtx && cats && Object.keys(cats).length) {
+    const catKeys   = ['media','hr','gr','pr','market'];
+    const catLabels = ['InfoField & Media','Human Resources','Gov. Relations','PR Environment','Market'];
+    const catColors = ['#93bbff','#16a34a','#d44040','#7c3aed','#d97706'];
+    const catScores = catKeys.map(k => cats[k] ? cats[k].score : 0);
+
+    new Chart(rCtx, {
       type: 'radar',
-      data: { labels: ['InfoField & Media','Human Resources','Gov. Relations','PR Environment','Market & Industry'], datasets: [{ label: 'Риск', data: ['media','hr','gr','pr','market'].map(k => cats[k] ? cats[k].score : 0), borderColor: '#4f8fff', backgroundColor: 'rgba(79,143,255,0.12)', borderWidth: 2, pointBackgroundColor: '#4f8fff', pointRadius: 4 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.07)' }, angleLines: { color: 'rgba(0,0,0,0.07)' }, ticks: { display: false }, pointLabels: { color: '#71717a', font: { size: 11 } } } } }
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catScores,
+          borderColor: '#d44040',
+          backgroundColor: 'rgba(212,64,64,0.08)',
+          borderWidth: 2,
+          pointBackgroundColor: catKeys.map((_,i) => catColors[i]),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a2e', titleColor:'#fff', bodyColor:'#a1a1aa',
+            padding:10, cornerRadius:8,
+            callbacks: { label: c => ` ${c.raw}/100` }
+          }
+        },
+        scales: {
+          r: {
+            min: 0, max: 100,
+            grid: { color: 'rgba(0,0,0,0.08)' },
+            angleLines: { color: 'rgba(0,0,0,0.08)' },
+            ticks: { display: false, stepSize: 25 },
+            pointLabels: {
+              color: '#52525b',
+              font: { size: 11, weight: '600' },
+              padding: 8,
+            }
+          }
+        },
+        animation: { duration: 1000, easing: 'easeOutQuart' }
+      }
+    });
+  }
+
+  // ── Bar chart — категории ──
+  const bCtx = document.getElementById('barChart');
+  if (bCtx && cats && Object.keys(cats).length) {
+    const catKeys   = ['media','hr','gr','pr','market'];
+    const catLabels = ['InfoField','HR','GR','PR','Market'];
+    const catColors = ['rgba(147,187,255,0.8)','rgba(22,163,74,0.8)','rgba(212,64,64,0.8)','rgba(124,58,237,0.8)','rgba(217,119,6,0.8)'];
+    const catBorders= ['#93bbff','#16a34a','#d44040','#7c3aed','#d97706'];
+    const catScores = catKeys.map(k => cats[k] ? cats[k].score : 0);
+
+    new Chart(bCtx, {
+      type: 'bar',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catScores,
+          backgroundColor: catColors,
+          borderColor: catBorders,
+          borderWidth: 1.5,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a2e', titleColor:'#fff', bodyColor:'#a1a1aa',
+            padding:10, cornerRadius:8,
+            callbacks: { label: c => ` ${c.raw}/100` }
+          }
+        },
+        scales: {
+          y: {
+            min: 0, max: 100,
+            grid: { color: 'rgba(0,0,0,0.05)', drawTicks: false },
+            ticks: { color:'#a1a1aa', font:{size:10}, stepSize:25, padding:8 },
+            border: { display: false }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color:'#52525b', font:{size:11, weight:'600'} },
+            border: { display: false }
+          }
+        },
+        animation: { duration: 900, easing: 'easeOutQuart' }
+      }
     });
   }
 }

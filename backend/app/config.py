@@ -37,6 +37,10 @@ class Settings:
     # Anthropic
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
+    # Monitoring
+    MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "true").lower() == "true"
+    MONITORING_INTERVAL_HOURS: int = int(os.getenv("MONITORING_INTERVAL_HOURS", "1"))
+
     # UI
     APP_NAME: str = os.getenv("APP_NAME", "CONEXIAI")
     SITE_URL: str = os.getenv("SITE_URL", "")

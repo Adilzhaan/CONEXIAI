@@ -150,6 +150,37 @@ class SupabaseClient:
         r.raise_for_status()
         return r.json()
 
+    async def rest_insert_service(
+        self,
+        table: str,
+        service_key: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        """INSERT using service role key (bypasses RLS), returns minimal."""
+        url = f"{self._base}/rest/v1/{table}"
+        headers = self._headers(service_key=service_key)
+        headers["Prefer"] = "return=minimal"
+        r = await self._http.post(url, headers=headers, json=rows)
+        r.raise_for_status()
+
+    async def rest_upsert_service(
+        self,
+        table: str,
+        service_key: str,
+        rows: list[dict[str, Any]],
+        on_conflict: str = "",
+    ) -> None:
+        """UPSERT using service role key (bypasses RLS), returns minimal."""
+        url = f"{self._base}/rest/v1/{table}"
+        headers = self._headers(service_key=service_key)
+        prefer = "return=minimal,resolution=merge-duplicates"
+        headers["Prefer"] = prefer
+        params = {}
+        if on_conflict:
+            params["on_conflict"] = on_conflict
+        r = await self._http.post(url, headers=headers, json=rows, params=params)
+        r.raise_for_status()
+
     async def rest_update_raw(
         self,
         path_with_query: str,
