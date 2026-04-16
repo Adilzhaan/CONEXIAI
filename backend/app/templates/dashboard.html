@@ -6,9 +6,24 @@
 {% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
 {% set total = admin_rows|length + member_only_rows|length %}
 
-<div class="sidebar-layout">
+{# Build risk overview across all companies #}
+{% set ns = namespace(high=0, medium=0, low=0, no_data=0) %}
+{% for m in admin_rows %}
+  {% set c = m.companies %}
+  {% if c %}
+    {% set risk = risk_map.get(c.id) %}
+    {% if risk and risk.score is not none %}
+      {% set s = risk.score | int %}
+      {% if s >= 65 %}{% set ns.high = ns.high + 1 %}
+      {% elif s >= 35 %}{% set ns.medium = ns.medium + 1 %}
+      {% else %}{% set ns.low = ns.low + 1 %}{% endif %}
+    {% else %}
+      {% set ns.no_data = ns.no_data + 1 %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
 
-  <!-- Sidebar -->
+<div class="sidebar-layout">
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
@@ -31,12 +46,10 @@
   </aside>
 
   <div class="sidebar-content">
-
-    <!-- Topbar -->
     <div class="sidebar-topbar">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">Command Center</div>
-        <div style="font-size:11px;color:var(--text-muted)">Управление компаниями</div>
+        <div style="font-size:11px;color:var(--text-muted)">{{ total }} компани{{ 'я' if total == 1 else ('и' if 2 <= total <= 4 else 'й') }} под наблюдением</div>
       </div>
       <button class="btn btn-primary btn-sm" onclick="toggleAddForm()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -46,127 +59,184 @@
 
     <div class="sidebar-wrap">
       <style>
-        /* Stats row */
-        .dash-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
-        @media(max-width:700px){ .dash-stats{grid-template-columns:1fr 1fr;} }
+        /* ── Stats row ── */
+        .dash-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
+        @media(max-width:800px){ .dash-stats{grid-template-columns:1fr 1fr;} }
         .stat-card {
           background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:16px 20px; display:flex; align-items:center; gap:14px;
+          padding:14px 18px; display:flex; align-items:center; gap:12px;
+          box-shadow:0 1px 4px rgba(0,0,0,0.04);
         }
-        .stat-icon {
-          width:40px; height:40px; border-radius:10px; display:flex;
-          align-items:center; justify-content:center; font-size:18px; flex-shrink:0;
-        }
-        .stat-val { font-size:26px; font-weight:800; line-height:1; }
-        .stat-lbl { font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+        .stat-icon { width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0; }
+        .stat-val { font-size:24px; font-weight:800; line-height:1; }
+        .stat-lbl { font-size:10px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
 
-        /* Add company form */
+        /* ── Alerts banner ── */
+        .alerts-banner {
+          background:#fff; border:1px solid rgba(212,64,64,0.2);
+          border-left:3px solid var(--accent); border-radius:var(--radius);
+          padding:14px 18px; margin-bottom:16px;
+          box-shadow:0 1px 4px rgba(0,0,0,0.04);
+        }
+        .alert-row {
+          display:flex; align-items:center; gap:10px;
+          padding:6px 0; border-bottom:1px solid var(--border);
+          font-size:12px;
+        }
+        .alert-row:last-child { border-bottom:none; }
+        .alert-dot { width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;animation:ceoPulse 1.8s ease-in-out infinite; }
+        @keyframes ceoPulse{0%,100%{box-shadow:0 0 0 0 rgba(212,64,64,0.4)}50%{box-shadow:0 0 0 4px rgba(212,64,64,0)}}
+
+        /* ── Add form ── */
         .add-form-wrap {
           background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          overflow:hidden; margin-bottom:24px;
+          overflow:hidden; margin-bottom:20px;
           max-height:0; opacity:0;
-          transition: max-height 0.35s cubic-bezier(0.23,1,0.32,1), opacity 0.25s ease, margin 0.35s;
+          transition:max-height 0.35s cubic-bezier(0.23,1,0.32,1),opacity 0.25s ease,margin 0.35s;
         }
         .add-form-wrap.open { max-height:200px; opacity:1; }
 
-        /* Company cards grid */
-        .companies-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+        /* ── Company cards ── */
+        .companies-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
 
         .co-card {
           background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          overflow:hidden; transition:box-shadow 0.2s, transform 0.2s;
-          display:flex; flex-direction:column;
+          overflow:hidden; transition:box-shadow 0.2s,transform 0.2s;
+          display:flex; flex-direction:column; position:relative;
+          box-shadow:0 1px 4px rgba(0,0,0,0.04);
         }
         .co-card:hover { box-shadow:0 6px 24px rgba(0,0,0,0.09); transform:translateY(-2px); }
+        .co-card-risk-bar { height:3px; width:100%; }
 
-        .co-card-header {
-          padding:18px 18px 14px;
-          display:flex; align-items:flex-start; gap:12px;
-        }
-        .co-avatar {
-          width:42px; height:42px; border-radius:10px;
-          display:flex; align-items:center; justify-content:center;
-          font-size:18px; font-weight:700; flex-shrink:0;
-          color:#fff;
-        }
-        .co-name { font-size:14px; font-weight:700; line-height:1.3; margin-bottom:3px; }
+        .co-card-header { padding:16px 18px 12px; display:flex; align-items:flex-start; gap:12px; }
+        .co-avatar { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex-shrink:0;color:#fff; }
+        .co-name { font-size:14px; font-weight:700; line-height:1.3; margin-bottom:2px; }
         .co-email { font-size:11px; color:var(--text-muted); }
 
-        .co-card-body {
-          padding:0 18px 14px;
-          display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+        .co-risk-row {
+          padding:0 18px 12px;
+          display:flex; align-items:center; gap:10px;
         }
-        .co-badge {
-          display:inline-flex; align-items:center; gap:4px;
-          padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600;
+        .co-score-badge {
+          display:flex; align-items:center; gap:5px;
+          padding:4px 10px; border-radius:8px;
+          font-size:13px; font-weight:800;
         }
-        .co-badge-admin { background:rgba(212,64,64,0.08); color:#d44040; border:1px solid rgba(212,64,64,0.2); }
-        .co-badge-member { background:rgba(113,113,122,0.08); color:#71717a; border:1px solid rgba(113,113,122,0.2); }
-        .co-badge-role { background:rgba(37,99,235,0.08); color:#2563eb; border:1px solid rgba(37,99,235,0.2); }
+        .co-trend { font-size:11px; font-weight:700; }
+        .co-top-cat {
+          flex:1; font-size:11px; color:var(--text-muted);
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .co-cat-chips { display:flex; gap:5px; padding:0 18px 14px; flex-wrap:wrap; }
+        .co-cat-chip {
+          font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px;
+          border:1px solid; white-space:nowrap;
+        }
 
         .co-card-footer {
-          margin-top:auto; padding:12px 18px;
+          margin-top:auto; padding:11px 18px;
           border-top:1px solid var(--border);
           display:flex; align-items:center; justify-content:space-between;
           background:#fafaf8;
         }
         .co-open-btn {
           display:inline-flex; align-items:center; gap:5px;
-          font-size:13px; font-weight:600; color:var(--accent);
-          text-decoration:none; padding:6px 12px; border-radius:7px;
+          font-size:12px; font-weight:600; color:var(--accent);
+          text-decoration:none; padding:5px 12px; border-radius:7px;
           background:rgba(212,64,64,0.06); border:1px solid rgba(212,64,64,0.15);
           transition:background 0.15s;
         }
         .co-open-btn:hover { background:rgba(212,64,64,0.12); text-decoration:none; }
 
-        /* Section header */
-        .sec-hdr {
-          display:flex; align-items:center; gap:8px; margin-bottom:14px;
-        }
-        .sec-hdr-title { font-size:13px; font-weight:700; }
-        .sec-hdr-count {
-          padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600;
-          background:var(--border); color:var(--text-muted);
+        .co-no-data {
+          padding:0 18px 14px;
+          font-size:11px; color:var(--text-muted);
+          display:flex; align-items:center; gap:6px;
         }
 
-        /* Empty state */
-        .empty-state {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:48px 24px; text-align:center;
-        }
-        .empty-icon { font-size:40px; margin-bottom:12px; }
-        .empty-title { font-size:15px; font-weight:600; margin-bottom:6px; }
-        .empty-sub { font-size:13px; color:var(--text-muted); }
+        /* ── Section header ── */
+        .sec-hdr { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
+        .sec-hdr-title { font-size:13px; font-weight:700; }
+        .sec-hdr-count { padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--border);color:var(--text-muted); }
+
+        /* ── Empty ── */
+        .empty-state { background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center; }
       </style>
 
       <!-- Stats row -->
       <div class="dash-stats">
         <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(212,64,64,0.1)">🏢</div>
+          <div class="stat-icon" style="background:rgba(212,64,64,0.08)">🏢</div>
           <div>
             <div class="stat-val">{{ total }}</div>
             <div class="stat-lbl">Компаний</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(37,99,235,0.1)">👑</div>
+          <div class="stat-icon" style="background:rgba(212,64,64,0.08)">🔴</div>
           <div>
-            <div class="stat-val">{{ admin_rows|length }}</div>
-            <div class="stat-lbl">Администратор</div>
+            <div class="stat-val" style="color:{% if ns.high > 0 %}#d44040{% else %}var(--text){% endif %}">{{ ns.high }}</div>
+            <div class="stat-lbl">Высокий риск</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(22,163,74,0.1)">👤</div>
+          <div class="stat-icon" style="background:rgba(217,119,6,0.08)">🟡</div>
           <div>
-            <div class="stat-val">{{ member_only_rows|length }}</div>
-            <div class="stat-lbl">Участник</div>
+            <div class="stat-val" style="color:{% if ns.medium > 0 %}#d97706{% else %}var(--text){% endif %}">{{ ns.medium }}</div>
+            <div class="stat-lbl">Средний риск</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(22,163,74,0.08)">🟢</div>
+          <div>
+            <div class="stat-val" style="color:{% if ns.low > 0 %}#16a34a{% else %}var(--text){% endif %}">{{ ns.low }}</div>
+            <div class="stat-lbl">Низкий риск</div>
           </div>
         </div>
       </div>
 
-      <!-- Add company form (hidden by default) -->
+      <!-- Active Alerts -->
+      {% set high_risk_companies = [] %}
+      {% for m in admin_rows %}
+        {% set c = m.companies %}
+        {% if c %}
+          {% set risk = risk_map.get(c.id) %}
+          {% if risk and risk.score is not none and risk.score | int >= 65 %}
+            {% set cats = risk.categories %}
+            {% set top_cat = namespace(name='', score=0) %}
+            {% if cats %}
+              {% for key, cat in cats.items() %}
+                {% if cat.score is not none and cat.score | int > top_cat.score %}
+                  {% set top_cat.score = cat.score | int %}
+                  {% set top_cat.name = key %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% set _ = high_risk_companies.append((c, risk.score | int, top_cat.name)) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {% if high_risk_companies %}
+      <div class="alerts-banner">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:7px">
+          <div class="alert-dot"></div> Активные алерты — {{ high_risk_companies|length }} компани{{ 'я' if high_risk_companies|length == 1 else ('и' if 2 <= high_risk_companies|length <= 4 else 'й') }}
+        </div>
+        {% set cat_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+        {% for c, score, top_cat in high_risk_companies %}
+        <div class="alert-row">
+          <span style="font-weight:700;color:var(--text)">{{ c.name }}</span>
+          <span style="background:rgba(212,64,64,0.08);color:#d44040;border:1px solid rgba(212,64,64,0.2);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">{{ score }}/100</span>
+          {% if top_cat %}<span style="color:var(--text-muted)">· {{ cat_labels.get(top_cat, top_cat) }} под угрозой</span>{% endif %}
+          <a href="/companies/{{ c.id }}" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--accent);text-decoration:none">Открыть →</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Add company form -->
       <div class="add-form-wrap" id="addFormWrap">
-        <div style="padding:18px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:13px;font-weight:700">Новая компания</div>
           <button onclick="toggleAddForm()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:0">×</button>
         </div>
@@ -181,9 +251,7 @@
               <input id="ceo_email" name="ceo_email" type="email" placeholder="ceo@company.com" required />
             </div>
             <div style="flex:0">
-              <button type="submit" class="btn btn-primary" id="add-btn" style="white-space:nowrap">
-                Создать →
-              </button>
+              <button type="submit" class="btn btn-primary" id="add-btn" style="white-space:nowrap">Создать →</button>
             </div>
           </div>
         </form>
@@ -200,22 +268,78 @@
           {% for m in admin_rows %}
             {% set c = m.companies %}
             {% if c %}
+              {% set risk = risk_map.get(c.id) %}
+              {% set snap = snapshot_map.get(c.id) %}
               {% set colors = ['#d44040','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d'] %}
               {% set color = colors[loop.index0 % colors|length] %}
-              {% set initial = c.name[0] | upper if c.name else '?' %}
+
+              {# Risk score vars #}
+              {% if risk and risk.score is not none %}
+                {% set s = risk.score | int %}
+                {% set risk_color = '#d44040' if s >= 65 else ('#d97706' if s >= 35 else '#16a34a') %}
+                {% set risk_bg = 'rgba(212,64,64,0.08)' if s >= 65 else ('rgba(217,119,6,0.08)' if s >= 35 else 'rgba(22,163,74,0.08)') %}
+                {% set risk_label = 'Высокий' if s >= 65 else ('Средний' if s >= 35 else 'Низкий') %}
+              {% else %}
+                {% set s = none %}
+                {% set risk_color = 'var(--text-muted)' %}
+                {% set risk_bg = 'var(--bg)' %}
+                {% set risk_label = '' %}
+              {% endif %}
+
+              {# Top 3 categories by score #}
+              {% set cat_meta = {'media':('#93bbff','📰'),'hr':('#4ade80','👥'),'gr':('#f87171','⚖️'),'pr':('#c084fc','🌐'),'market':('#fbbf24','📊')} %}
+              {% set top_cats = [] %}
+              {% if risk and risk.categories %}
+                {% for key, cat in risk.categories.items() %}
+                  {% if cat.score is not none %}
+                    {% set _ = top_cats.append((cat.score | int, key)) %}
+                  {% endif %}
+                {% endfor %}
+                {% set top_cats = top_cats | sort(attribute=0, reverse=True) %}
+              {% endif %}
+
               <div class="co-card">
+                <!-- Risk bar at top -->
+                <div class="co-card-risk-bar" style="background:{% if s is not none %}{{ risk_color }}{% else %}var(--border){% endif %}"></div>
+
                 <div class="co-card-header">
-                  <div class="co-avatar" style="background:{{ color }}">{{ initial }}</div>
+                  <div class="co-avatar" style="background:{{ color }}">{{ c.name[0] | upper }}</div>
                   <div style="flex:1;min-width:0">
                     <div class="co-name">{{ c.name }}</div>
                     <div class="co-email">{{ c.ceo_email }}</div>
                   </div>
+                  {% if s is not none %}
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-size:22px;font-weight:800;color:{{ risk_color }};line-height:1">{{ s }}</div>
+                    <div style="font-size:10px;color:{{ risk_color }};font-weight:600">{{ risk_label }}</div>
+                  </div>
+                  {% endif %}
                 </div>
-                <div class="co-card-body">
-                  <span class="co-badge co-badge-admin">👑 Admin</span>
+
+                {% if top_cats %}
+                <div class="co-cat-chips">
+                  {% for score, key in top_cats[:3] %}
+                    {% set chip_color, chip_icon = cat_meta.get(key, ('#aaa','?')) %}
+                    <span class="co-cat-chip" style="color:{{ chip_color }};border-color:{{ chip_color }};background:{{ chip_color }}1a">
+                      {{ chip_icon }} {{ score }}
+                    </span>
+                  {% endfor %}
+                  {% if snap and snap.last_checked_at %}
+                    <span style="font-size:10px;color:var(--text-muted);margin-left:auto;align-self:center">
+                      🔄 {{ snap.last_checked_at[:10] }}
+                    </span>
+                  {% endif %}
                 </div>
+                {% elif not s %}
+                <div class="co-no-data">
+                  <span>—</span> Анализ не запускался
+                </div>
+                {% endif %}
+
                 <div class="co-card-footer">
-                  <div style="font-size:11px;color:var(--text-muted)">Risk Intelligence</div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Admin</span>
+                  </div>
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -228,9 +352,9 @@
       </div>
       {% else %}
       <div class="empty-state" style="margin-bottom:24px">
-        <div class="empty-icon">🏢</div>
-        <div class="empty-title">Нет компаний</div>
-        <div class="empty-sub">Нажмите «Добавить компанию» чтобы начать</div>
+        <div style="font-size:40px;margin-bottom:12px">🏢</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px">Нет компаний</div>
+        <div style="font-size:13px;color:var(--text-muted)">Нажмите «Добавить компанию» чтобы начать</div>
         <button class="btn btn-primary btn-sm" onclick="toggleAddForm()" style="margin-top:14px">+ Добавить</button>
       </div>
       {% endif %}
@@ -249,23 +373,23 @@
             {% if c %}
               {% set colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
               {% set color = colors[loop.index0 % colors|length] %}
-              {% set initial = c.name[0] | upper if c.name else '?' %}
               <div class="co-card">
+                <div class="co-card-risk-bar" style="background:var(--border)"></div>
                 <div class="co-card-header">
-                  <div class="co-avatar" style="background:{{ color }}">{{ initial }}</div>
+                  <div class="co-avatar" style="background:{{ color }}">{{ c.name[0] | upper }}</div>
                   <div style="flex:1;min-width:0">
                     <div class="co-name">{{ c.name }}</div>
                     <div class="co-email">{{ c.ceo_email }}</div>
                   </div>
                 </div>
-                <div class="co-card-body">
-                  <span class="co-badge co-badge-member">👤 Member</span>
+                <div class="co-cat-chips">
+                  <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(113,113,122,0.08);color:#71717a;border:1px solid rgba(113,113,122,0.2)">👤 Member</span>
                   {% if m.role and m.role != 'member' %}
-                    <span class="co-badge co-badge-role">{{ role_labels.get(m.role, m.role) }}</span>
+                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(37,99,235,0.08);color:#2563eb;border:1px solid rgba(37,99,235,0.2)">{{ role_labels.get(m.role, m.role) }}</span>
                   {% endif %}
                 </div>
                 <div class="co-card-footer">
-                  <div style="font-size:11px;color:var(--text-muted)">Risk Intelligence</div>
+                  <div style="font-size:10px;color:var(--text-muted)">Risk Intelligence</div>
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -290,7 +414,6 @@ function toggleAddForm() {
     setTimeout(() => document.getElementById('name').focus(), 200);
   }
 }
-
 document.getElementById('company-form').addEventListener('submit', function() {
   const btn = document.getElementById('add-btn');
   btn.disabled = true;

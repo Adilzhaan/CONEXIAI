@@ -358,8 +358,48 @@ async def dashboard(req: Request):
             return resp
         member_rows = []
 
+    # Fetch latest risk score + top category for each company
+    company_ids = [
+        m["companies"]["id"]
+        for m in member_rows
+        if m.get("companies") and m["companies"].get("id")
+    ]
+    risk_map: dict[str, dict] = {}
+    snapshot_map: dict[str, dict] = {}
+
+    if company_ids and settings.SUPABASE_SERVICE_KEY:
+        ids_filter = f"in.({','.join(company_ids)})"
+        try:
+            risk_rows, snap_rows = await asyncio.gather(
+                supabase.rest_select_service(
+                    table="risk_runs",
+                    service_key=settings.SUPABASE_SERVICE_KEY,
+                    select="company_id,score,categories,created_at",
+                    query_params={"company_id": ids_filter, "order": "created_at.desc"},
+                ),
+                supabase.rest_select_service(
+                    table="monitoring_snapshots",
+                    service_key=settings.SUPABASE_SERVICE_KEY,
+                    select="company_id,last_checked_at,last_score",
+                    query_params={"company_id": ids_filter},
+                ),
+            )
+            # Keep only latest risk_run per company
+            for r in risk_rows:
+                cid = r.get("company_id")
+                if cid and cid not in risk_map:
+                    risk_map[cid] = r
+            for s in snap_rows:
+                cid = s.get("company_id")
+                if cid:
+                    snapshot_map[cid] = s
+        except Exception as e:
+            logger.warning("Dashboard risk fetch failed: %s", e)
+
     ctx = {
         "member_rows": member_rows,
+        "risk_map": risk_map,
+        "snapshot_map": snapshot_map,
         "user_id": user.get("id"),
         "app_name": settings.APP_NAME,
     }
@@ -483,7 +523,7 @@ async def company_detail(req: Request, company_id: str):
         supabase.rest_select(
             table="risk_runs",
             access_token=effective_token,
-            select="id,status,created_at,updated_at,score,advice,risks,categories",
+            select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios",
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         ),
@@ -1070,6 +1110,7 @@ async def risks_run(
             "advice": analysis["advice"],
             "risks": analysis["risks"],
             "categories": analysis["categories"],
+            "scenarios": analysis.get("scenarios", []),
         },
     )
 
@@ -1123,6 +1164,24 @@ async def category_detail(req: Request, company_id: str, category_key: str):
     icon, label, color = _CAT_META[category_key]
     cat_data = cats.get(category_key) if cats else None
 
+    # Fetch resolved risk hashes for this company + category
+    resolutions = await supabase.rest_select(
+        table="risk_resolutions",
+        access_token=effective_token,
+        select="risk_hash",
+        query_params={"company_id": f"eq.{company_id}", "category": f"eq.{category_key}"},
+    )
+    resolved_hashes = {r["risk_hash"] for r in (resolutions or [])}
+
+    # Attach _hash and _resolved to each risk item
+    if cat_data and cat_data.get("risks"):
+        for risk in cat_data["risks"]:
+            risk_text = risk.get("text", "") if isinstance(risk, dict) else str(risk)
+            h = hashlib.md5(f"{company_id}:{category_key}:{risk_text}".encode()).hexdigest()
+            if isinstance(risk, dict):
+                risk["_hash"] = h
+                risk["_resolved"] = h in resolved_hashes
+
     return templates.TemplateResponse(
         req, "category_detail.html",
         {
@@ -1136,6 +1195,120 @@ async def category_detail(req: Request, company_id: str, category_key: str):
             "app_name": settings.APP_NAME,
         },
     )
+
+
+@app.post("/companies/{company_id}/risks/resolve")
+async def resolve_risk(
+    req: Request,
+    company_id: str,
+    category: str = Form(...),
+    risk_text: str = Form(...),
+    action: str = Form("resolve"),
+):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+    risk_hash = hashlib.md5(f"{company_id}:{category}:{risk_text}".encode()).hexdigest()
+
+    if action == "resolve":
+        try:
+            await supabase.rest_insert(
+                table="risk_resolutions",
+                access_token=effective_token,
+                row={
+                    "company_id": company_id,
+                    "risk_hash": risk_hash,
+                    "category": category,
+                    "risk_text": risk_text[:500],
+                },
+                returning="minimal",
+            )
+        except Exception:
+            pass  # already exists (UNIQUE constraint) — that's fine
+    else:
+        try:
+            await supabase.rest_delete(
+                table="risk_resolutions",
+                access_token=effective_token,
+                query_params={"company_id": f"eq.{company_id}", "risk_hash": f"eq.{risk_hash}"},
+            )
+        except Exception:
+            pass
+
+    return JSONResponse({"ok": True, "hash": risk_hash, "action": action})
+
+
+@app.post("/companies/{company_id}/risk_runs/cleanup")
+async def cleanup_risk_runs(
+    req: Request,
+    company_id: str,
+    keep_last: int = Form(default=0),
+    older_than_days: int = Form(default=0),
+):
+    from fastapi.responses import JSONResponse
+    from datetime import datetime, timezone, timedelta
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    all_runs = await supabase.rest_select(
+        table="risk_runs",
+        access_token=effective_token,
+        select="id,created_at",
+        order_by="created_at.desc",
+        query_params={"company_id": f"eq.{company_id}"},
+    )
+
+    to_delete: list[str] = []
+
+    if keep_last > 0:
+        to_delete = [r["id"] for r in all_runs[keep_last:]]
+    elif older_than_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        for r in all_runs:
+            if r.get("created_at"):
+                try:
+                    dt = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))
+                    if dt < cutoff:
+                        to_delete.append(r["id"])
+                except Exception:
+                    pass
+
+    if not to_delete:
+        return JSONResponse({"deleted": 0})
+
+    ids_filter = ",".join(to_delete)
+    await supabase.rest_delete(
+        table="risk_runs",
+        access_token=effective_token,
+        query_params={"id": f"in.({ids_filter})", "company_id": f"eq.{company_id}"},
+    )
+
+    return JSONResponse({"deleted": len(to_delete)})
+
+
+@app.post("/companies/{company_id}/risk_runs/{run_id}/delete")
+async def delete_risk_run(req: Request, company_id: str, run_id: str):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+    await supabase.rest_delete(
+        table="risk_runs",
+        access_token=effective_token,
+        query_params={"id": f"eq.{run_id}", "company_id": f"eq.{company_id}"},
+    )
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/companies/{company_id}/emails")
@@ -1339,6 +1512,143 @@ async def _run_ci_and_save(company_id: str, company_name: str, competitors: list
         except Exception as e:
             logger.warning("Failed to save CI report: %s", e)
     return result
+
+
+@app.get("/companies/{company_id}/crisis", response_class=HTMLResponse)
+async def crisis_page(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows, risk_runs = await asyncio.gather(
+        supabase.rest_select(
+            table="companies",
+            access_token=effective_token,
+            select="id,name,ceo_email",
+            query_params={"id": f"eq.{company_id}"},
+        ),
+        supabase.rest_select(
+            table="risk_runs",
+            access_token=effective_token,
+            select="id,score,advice,categories,scenarios,created_at",
+            order_by="created_at.desc",
+            query_params={"company_id": f"eq.{company_id}"},
+            limit=1,
+        ),
+    )
+
+    company = company_rows[0] if company_rows else None
+    if not company:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    latest = risk_runs[0] if risk_runs else None
+
+    return templates.TemplateResponse(
+        req, "crisis.html",
+        {
+            "company": company,
+            "latest": latest,
+            "app_name": settings.APP_NAME,
+        },
+    )
+
+
+@app.post("/companies/{company_id}/risk_runs/{run_id}/scenarios")
+async def save_scenarios(req: Request, company_id: str, run_id: str):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    body = await req.json()
+    scenarios = body.get("scenarios")
+    if not isinstance(scenarios, list):
+        return JSONResponse({"error": "invalid payload"}, status_code=400)
+
+    await supabase.rest_update_raw(
+        path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}&company_id=eq.{company_id}",
+        access_token=effective_token,
+        patch={"scenarios": scenarios},
+        returning="minimal",
+    )
+    return JSONResponse({"ok": True})
+
+
+@app.post("/companies/{company_id}/crisis/generate")
+async def crisis_generate(
+    req: Request,
+    company_id: str,
+    scenario_id: str = Form(...),
+    comm_type: str = Form(...),
+):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    risk_runs = await supabase.rest_select(
+        table="risk_runs",
+        access_token=effective_token,
+        select="score,advice,categories,scenarios",
+        order_by="created_at.desc",
+        query_params={"company_id": f"eq.{company_id}"},
+        limit=1,
+    )
+
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="name",
+        query_params={"id": f"eq.{company_id}"},
+    )
+
+    from fastapi.responses import JSONResponse
+
+    if not risk_runs or not company_rows:
+        return JSONResponse({"error": "no_data"}, status_code=404)
+
+    latest = risk_runs[0]
+    company_name = company_rows[0]["name"]
+
+    scenarios = latest.get("scenarios") or []
+    scenario = next((s for s in scenarios if s.get("id") == scenario_id), None)
+    if not scenario and scenarios:
+        scenario = scenarios[0]
+    if not scenario:
+        return JSONResponse({"error": "no_scenario"}, status_code=404)
+
+    cats = latest.get("categories") or {}
+    top_risks = []
+    for cat in cats.values():
+        for r in (cat.get("risks") or [])[:1]:
+            top_risks.append(r.get("text", ""))
+    risk_summary = (
+        f"Общий балл риска: {latest.get('score', '—')}/100\n"
+        f"Ключевые риски: {'; '.join(top_risks[:4])}\n"
+        f"Рекомендация AI: {latest.get('advice', '')}"
+    )
+
+    try:
+        text = await ai_client.generate_communication(
+            company_name=company_name,
+            comm_type=comm_type,
+            scenario=scenario,
+            risk_summary=risk_summary,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+        return JSONResponse({"text": text})
+    except Exception as e:
+        logger.exception("Crisis generate failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/companies/{company_id}/ci", response_class=HTMLResponse)

@@ -347,7 +347,45 @@ async def analyze_company_risks(
     "gr":     {{"score": <0-100>, "risks": [{{"text": "...", "source_ids": ["G1"]}}]}},
     "pr":     {{"score": <0-100>, "risks": [{{"text": "...", "source_ids": ["X1", "R1"]}}]}},
     "market": {{"score": <0-100>, "risks": [{{"text": "...", "source_ids": ["M1", "FIN"]}}]}}
-  }}
+  }},
+  "scenarios": [
+    {{
+      "id": "A",
+      "label": "Мягкое реагирование",
+      "level": "low",
+      "trigger": "<при каком условии активировать, 1 предложение>",
+      "steps": [
+        {{"action": "<конкретное действие 6-10 слов>", "owner": "<HR|PR|GR|CEO|Legal>", "deadline": "<сегодня|48ч|неделя>"}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}}
+      ]
+    }},
+    {{
+      "id": "B",
+      "label": "Активное управление",
+      "level": "medium",
+      "trigger": "<при каком условии активировать>",
+      "steps": [
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}}
+      ]
+    }},
+    {{
+      "id": "C",
+      "label": "Кризисный протокол",
+      "level": "high",
+      "trigger": "<при каком условии активировать>",
+      "steps": [
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}},
+        {{"action": "...", "owner": "...", "deadline": "..."}}
+      ]
+    }}
+  ]
 }}
 
 Только JSON, без пояснений."""
@@ -400,11 +438,32 @@ async def analyze_company_risks(
 
         overall = int(result.get("overall_score", sum(c["score"] for c in categories.values()) // 5))
 
+        # Parse scenarios
+        raw_scenarios = result.get("scenarios", [])
+        scenarios = []
+        for sc in raw_scenarios:
+            if isinstance(sc, dict):
+                scenarios.append({
+                    "id": str(sc.get("id", "")),
+                    "label": str(sc.get("label", "")),
+                    "level": str(sc.get("level", "medium")),
+                    "trigger": str(sc.get("trigger", "")),
+                    "steps": [
+                        {
+                            "action": str(s.get("action", "")),
+                            "owner": str(s.get("owner", "")),
+                            "deadline": str(s.get("deadline", "")),
+                        }
+                        for s in sc.get("steps", []) if isinstance(s, dict)
+                    ],
+                })
+
         return {
             "score": overall,
             "advice": str(result.get("advice", "")),
             "risks": _resolve_risks(result.get("risks", [])),
             "categories": categories,
+            "scenarios": scenarios,
         }
 
     except Exception as e:
@@ -415,4 +474,72 @@ async def analyze_company_risks(
             "advice": "Анализ временно недоступен. Проверьте API-ключ Anthropic.",
             "risks": [{"text": "Не удалось выполнить AI-анализ: " + str(e), "sources": []}],
             "categories": {k: fallback_cat for k in ("media", "hr", "gr", "pr", "market")},
+            "scenarios": [],
         }
+
+
+_COMM_PROMPTS = {
+    "press": (
+        "Пресс-релиз для СМИ",
+        """Напиши официальный пресс-релиз от имени компании для публикации в СМИ.
+Тон: профессиональный, уверенный, без паники. Структура: заголовок, лид (1 абзац), основная часть (2-3 абзаца), цитата руководителя, контакты пресс-службы (placeholder).
+Объём: 250-350 слов. Язык: русский.""",
+    ),
+    "internal": (
+        "Письмо сотрудникам",
+        """Напиши внутреннее письмо от CEO сотрудникам компании.
+Тон: спокойный, открытый, поддерживающий. Структура: приветствие, описание ситуации без деталей, что делает компания, что это значит для сотрудников, призыв к спокойствию и продуктивности.
+Объём: 150-200 слов. Язык: русский.""",
+    ),
+    "regulatory": (
+        "Письмо регулятору",
+        """Напиши официальное письмо в регуляторный орган (без указания конкретного органа — оставь [Наименование органа]).
+Тон: формальный, юридический, конструктивный. Структура: обращение, описание ситуации, принятые меры, запрос или уведомление, подпись (placeholder).
+Объём: 200-250 слов. Язык: русский.""",
+    ),
+}
+
+
+async def generate_communication(
+    company_name: str,
+    comm_type: str,
+    scenario: dict,
+    risk_summary: str,
+    api_key: str,
+) -> str:
+    client = get_client(api_key)
+
+    _, comm_instruction = _COMM_PROMPTS.get(
+        comm_type, _COMM_PROMPTS["press"]
+    )
+
+    scenario_steps = "\n".join(
+        f"  {i+1}. {s.get('action','')} [{s.get('owner','')} / {s.get('deadline','')}]"
+        for i, s in enumerate(scenario.get("steps", []))
+    )
+
+    prompt = f"""Ты — PR-директор и кризисный коммуникатор компании «{company_name}».
+
+## Контекст ситуации
+{risk_summary}
+
+## Активированный сценарий: {scenario.get('label', '')} (уровень: {scenario.get('level', '')})
+Триггер: {scenario.get('trigger', '')}
+Шаги:
+{scenario_steps}
+
+## Задание
+{comm_instruction}
+
+Напиши только текст коммуникации, без пояснений и комментариев."""
+
+    response = await client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    for block in response.content:
+        if hasattr(block, "text"):
+            return block.text.strip()
+    return ""

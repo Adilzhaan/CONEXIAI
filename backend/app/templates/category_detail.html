@@ -101,6 +101,48 @@
   .tag-market     { background: rgba(251,191,36,0.15);  color: #fbbf24; }
   .tag-regulatory { background: rgba(248,113,113,0.15); color: #f87171; }
 
+  /* ── Resolve toggle ── */
+  .resolve-toggle {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 500; padding: 5px 12px 5px 7px;
+    border-radius: 999px; border: 1.5px solid #e5e7eb;
+    background: #fff; color: #9ca3af; cursor: pointer;
+    transition: all 0.18s; user-select: none; white-space: nowrap;
+  }
+  .resolve-toggle:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+  .resolve-toggle:hover .rt-circle { border-color: #16a34a; background: #dcfce7; }
+  .rt-circle {
+    width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid #d1d5db; background: #f9fafb;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.18s;
+  }
+  .rt-circle svg { display: none; }
+  .resolve-toggle:hover .rt-circle svg { display: block; }
+
+  /* Resolved state */
+  .resolve-toggle.is-resolved {
+    border-color: #bbf7d0; background: #f0fdf4; color: #15803d;
+  }
+  .resolve-toggle.is-resolved .rt-circle {
+    background: #16a34a; border-color: #16a34a;
+  }
+  .resolve-toggle.is-resolved .rt-circle svg { display: block; color: #fff; }
+  .resolve-toggle.is-resolved:hover {
+    border-color: #fca5a5; background: #fef2f2; color: #c93a3a;
+  }
+  .resolve-toggle.is-resolved:hover .rt-circle { background: #fee2e2; border-color: #fca5a5; }
+  .resolve-toggle.is-resolved:hover .rt-circle svg { color: #c93a3a; }
+  .resolve-toggle.is-resolved:hover .rt-label::after { content: ' — отменить'; font-size: 10px; opacity: 0.7; }
+
+  .risk-item.resolved .risk-text { color: #9ca3af; }
+  .risk-item.resolved .risk-text::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    width: 100%; height: 1px; background: #9ca3af; opacity: 0.5;
+  }
+  .risk-item.resolved .risk-text { position: relative; }
+  .risk-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
   /* ── Empty state ── */
   .empty-state {
     text-align: center; padding: 60px 24px; color: var(--text-muted);
@@ -156,12 +198,15 @@
     <div class="risk-list">
       {% for risk in cat.risks %}
         {% set idx = loop.index0 %}
-        <div class="risk-item">
+        {% set is_resolved = risk._resolved if risk is mapping and risk._resolved is defined else false %}
+        {% set risk_hash = risk._hash if risk is mapping and risk._hash is defined else '' %}
+        {% set risk_text_val = risk.text if risk is mapping else risk %}
+        <div class="risk-item {% if is_resolved %}resolved{% endif %}" id="risk-item-{{ risk_hash }}">
           <div class="risk-num {% if idx < 2 %}high{% elif idx < 4 %}med{% else %}low{% endif %}">
             {{ loop.index }}
           </div>
           <div class="risk-body">
-            <div class="risk-text">{{ risk.text if risk is mapping else risk }}</div>
+            <div class="risk-text">{{ risk_text_val }}</div>
             {% if risk is mapping and risk.sources %}
               <div class="risk-sources">
                 {% for src in risk.sources %}
@@ -176,6 +221,18 @@
                 {% endfor %}
               </div>
             {% endif %}
+            <div class="risk-actions">
+              <button class="resolve-toggle {% if is_resolved %}is-resolved{% endif %}"
+                      id="rtbtn-{{ risk_hash }}"
+                      onclick="toggleResolve('{{ risk_hash }}', '{{ active_key }}', {{ risk_text_val | tojson }}, {% if is_resolved %}'restore'{% else %}'resolve'{% endif %}, this)">
+                <span class="rt-circle">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <span class="rt-label">{% if is_resolved %}Устранён{% else %}Отметить устранённым{% endif %}</span>
+              </button>
+            </div>
           </div>
         </div>
       {% endfor %}
@@ -215,4 +272,44 @@
     {% endif %}
   {% endfor %}
 </div>
+
+<script>
+const COMPANY_ID = '{{ company.id }}';
+
+async function toggleResolve(hash, category, riskText, action, btn) {
+  btn.disabled = true;
+  const label = btn.querySelector('.rt-label');
+  const prev = label.textContent;
+  label.textContent = '…';
+
+  try {
+    const fd = new FormData();
+    fd.append('category', category);
+    fd.append('risk_text', riskText);
+    fd.append('action', action);
+    const res = await fetch(`/companies/${COMPANY_ID}/risks/resolve`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('server error');
+
+    const item = document.getElementById('risk-item-' + hash);
+    const nextAction = action === 'resolve' ? 'restore' : 'resolve';
+
+    if (action === 'resolve') {
+      item.classList.add('resolved');
+      btn.classList.add('is-resolved');
+      label.textContent = 'Устранён';
+    } else {
+      item.classList.remove('resolved');
+      btn.classList.remove('is-resolved');
+      label.textContent = 'Отметить устранённым';
+    }
+
+    btn.setAttribute('onclick', `toggleResolve('${hash}', '${category}', ${JSON.stringify(riskText)}, '${nextAction}', this)`);
+    btn.disabled = false;
+  } catch (e) {
+    btn.disabled = false;
+    label.textContent = prev;
+    alert('Ошибка, попробуйте снова');
+  }
+}
+</script>
 {% endblock %}

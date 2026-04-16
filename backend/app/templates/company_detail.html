@@ -33,6 +33,9 @@
       <a href="/companies/{{ company.id }}/ci" class="sidebar-item">
         <span class="sidebar-item-icon">🔍</span> CI Monitor
       </a>
+      <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
+        <span class="sidebar-item-icon">🚨</span> Crisis Center
+      </a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item">
         <span class="sidebar-item-icon">⚙</span> Выйти
@@ -197,6 +200,44 @@
         .advice-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:6px; }
         .advice-text { font-size:13px; line-height:1.6; color:var(--text); }
 
+        /* ── Scenarios ── */
+        .scenarios-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+        @media(max-width:800px){ .scenarios-grid { grid-template-columns:1fr; } }
+        .scenario-card {
+          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          transition: box-shadow 0.2s, transform 0.15s;
+        }
+        .scenario-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.08); transform:translateY(-1px); }
+        .scenario-header {
+          padding:14px 16px 12px; border-bottom:1px solid var(--border);
+        }
+        .scenario-badge {
+          display:inline-flex; align-items:center; gap:5px;
+          font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+          padding:2px 8px; border-radius:99px; margin-bottom:8px;
+        }
+        .scenario-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
+        .scenario-trigger { font-size:11px; color:var(--text-muted); line-height:1.5; }
+        .scenario-steps { padding:12px 16px; }
+        .scenario-step {
+          display:flex; align-items:flex-start; gap:10px;
+          padding:7px 0; border-bottom:1px solid var(--border);
+        }
+        .scenario-step:last-child { border-bottom:none; }
+        .scenario-step-num {
+          width:20px; height:20px; border-radius:50%; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center;
+          font-size:10px; font-weight:700; margin-top:1px;
+        }
+        .scenario-step-body { flex:1; min-width:0; }
+        .scenario-step-action { font-size:12px; font-weight:500; color:var(--text); line-height:1.4; }
+        .scenario-step-meta { display:flex; gap:6px; margin-top:3px; flex-wrap:wrap; }
+        .scenario-meta-tag {
+          font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px;
+          background:var(--bg); color:var(--text-muted); border:1px solid var(--border);
+        }
+
         /* ── Charts row ── */
         .charts-row { display:grid; grid-template-columns:160px 1fr; gap:12px; margin-bottom:16px; }
         @media(max-width:660px){.charts-row{grid-template-columns:1fr;}}
@@ -246,15 +287,133 @@
         .signal-text { font-size:13px; line-height:1.6; color:var(--text); }
 
         /* ── History ── */
+        .hist-list { display:flex; flex-direction:column; gap:6px; }
         .hist-item {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:16px 18px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          position: relative; display: flex; align-items: stretch;
+          background: #fff; border: 1px solid #e5e7eb;
+          border-radius: 10px; overflow: hidden;
+          transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .hist-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+        .hist-item:hover { border-color: #d1d5db; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+        .hist-item.selected { border-color: #93c5fd; background: #eff6ff; }
+        .hist-item.selected .hist-cb-visual { background: #3b82f6; border-color: #3b82f6; }
+        .hist-item.selected .hist-cb-check { display: block; }
+
+        /* Checkbox strip */
+        .hist-item-check {
+          width: 42px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; background: transparent; transition: background 0.12s;
+          border-right: 1px solid transparent;
+        }
+        .hist-item:hover .hist-item-check { border-right-color: #f3f4f6; }
+        .hist-item.selected .hist-item-check { border-right-color: #bfdbfe; background: #dbeafe22; }
+        .hist-cb-visual {
+          width: 17px; height: 17px; border-radius: 5px;
+          border: 1.5px solid #d1d5db; background: #fff;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s; flex-shrink: 0; position: relative;
+        }
+        .hist-item-check:hover .hist-cb-visual { border-color: #6b7280; }
+        .hist-cb-check {
+          display: none;
+          width: 9px; height: 6px; border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+          transform: rotate(-45deg) translate(1px,-1px);
+        }
+
+        /* Body */
+        .hist-item-body { flex: 1; padding: 13px 14px; min-width: 0; }
+        .hist-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+        .hist-item-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
+        .hist-item-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .hist-item-date { font-size: 11px; color: #9ca3af; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+        .hist-item-advice { font-size: 13px; line-height: 1.55; color: #4b5563; margin-top: 6px; }
+
+        /* Score pill */
+        .hist-score {
+          display: inline-flex; align-items: center; justify-content: center;
+          padding: 2px 9px; border-radius: 999px;
+          font-size: 12px; font-weight: 800; flex-shrink: 0;
+        }
+        .hist-score.high { background: #fee2e2; color: #c93a3a; }
+        .hist-score.med  { background: #fef9c3; color: #a16207; }
+        .hist-score.low  { background: #dcfce7; color: #15803d; }
+
+        /* Delete button */
+        .hist-del-btn {
+          width: 28px; height: 28px; border-radius: 7px; border: none;
+          background: transparent; cursor: pointer; flex-shrink: 0;
+          display: none; align-items: center; justify-content: center;
+          color: #9ca3af; transition: all 0.13s;
+        }
+        .hist-del-btn svg { width: 14px; height: 14px; }
+        .hist-del-btn:hover { background: #fee2e2; color: #c93a3a; }
+        .hist-item:hover .hist-del-btn { display: inline-flex; }
 
         /* ── Panel section hdr ── */
-        .panel-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+        .panel-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
         .panel-hdr-title { font-size:13px; font-weight:700; color:var(--text); }
+
+        /* Cleanup button */
+        .cleanup-trigger {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 12px; font-weight: 500; padding: 5px 10px;
+          border-radius: 7px; border: 1px solid #e5e7eb;
+          background: #fff; color: #6b7280; cursor: pointer;
+          transition: all 0.13s;
+        }
+        .cleanup-trigger:hover { border-color: #d1d5db; background: #f9fafb; color: #374151; }
+        .cleanup-trigger svg { width: 13px; height: 13px; }
+
+        /* Cleanup menu */
+        #cleanup-menu {
+          display: none; position: absolute; right: 0; top: calc(100% + 6px);
+          background: #fff; border: 1px solid #e5e7eb;
+          border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+          width: 210px; z-index: 200; overflow: hidden;
+        }
+        .cmenu-section { padding: 8px 0 4px; }
+        .cmenu-section + .cmenu-section { border-top: 1px solid #f3f4f6; }
+        .cmenu-label {
+          padding: 4px 13px 6px; font-size: 10px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af;
+        }
+        .cleanup-opt {
+          display: flex; align-items: center; gap: 8px;
+          width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+          padding: 7px 13px; font-size: 13px; color: #374151; transition: background 0.1s;
+        }
+        .cleanup-opt:hover { background: #f9fafb; }
+        .cleanup-opt .co-icon { font-size: 14px; width: 20px; text-align: center; }
+
+        /* Bulk action bar */
+        #hist-bulk-bar {
+          position: sticky; bottom: 12px; z-index: 50; margin: 8px -2px 0;
+          background: #1e293b; color: #fff; border-radius: 12px;
+          padding: 10px 14px; display: none; align-items: center; gap: 10px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+          animation: bulkSlideUp 0.2s ease;
+        }
+        @keyframes bulkSlideUp {
+          from { transform: translateY(12px); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+        #hist-sel-count { font-size: 13px; font-weight: 600; flex: 1; color: #e2e8f0; }
+        .bulk-del-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+          background: #ef4444; color: #fff; border: none; cursor: pointer;
+          transition: background 0.12s;
+        }
+        .bulk-del-btn:hover { background: #dc2626; }
+        .bulk-cancel-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+          background: rgba(255,255,255,0.1); color: #cbd5e1;
+          border: 1px solid rgba(255,255,255,0.15); cursor: pointer;
+          transition: background 0.12s;
+        }
+        .bulk-cancel-btn:hover { background: rgba(255,255,255,0.18); }
 
         /* ── Inline form ── */
         .inline-form {
@@ -274,6 +433,98 @@
         .bg-green { background:rgba(22,163,74,0.08); border-color:rgba(22,163,74,0.25); }
         .bg-yellow { background:rgba(217,119,6,0.08); border-color:rgba(217,119,6,0.25); }
         .bg-red { background:rgba(212,64,64,0.08); border-color:rgba(212,64,64,0.25); }
+
+        /* ── CEO Navigation Block ── */
+        .ceo-block {
+          background: #fff;
+          border: 1px solid var(--border);
+          border-top: 3px solid var(--accent);
+          border-radius: var(--radius);
+          padding: 20px 24px;
+          margin-bottom: 16px;
+          box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+        }
+        .ceo-block-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 16px;
+        }
+        .ceo-block-title {
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .1em; color: var(--accent);
+          display: flex; align-items: center; gap: 8px;
+        }
+        .ceo-pulse {
+          width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+          animation: ceoPulse 1.8s ease-in-out infinite; flex-shrink: 0;
+        }
+        @keyframes ceoPulse {
+          0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(212,64,64,0.4); }
+          50% { opacity:.7; box-shadow: 0 0 0 5px rgba(212,64,64,0); }
+        }
+        .ceo-trend-badge {
+          font-size: 11px; font-weight: 700; padding: 3px 10px;
+          border-radius: 99px; display: flex; align-items: center; gap: 4px;
+        }
+        .ceo-cards {
+          display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+          margin-bottom: 14px;
+        }
+        @media(max-width:700px){ .ceo-cards { grid-template-columns: 1fr; } }
+        .ceo-card {
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px 16px;
+          position: relative; overflow: hidden;
+          transition: box-shadow 0.2s, transform 0.15s;
+          text-decoration: none; display: block; color: inherit;
+        }
+        .ceo-card:hover {
+          box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+          transform: translateY(-1px);
+          text-decoration: none; color: inherit;
+        }
+        .ceo-card-accent {
+          position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+          border-radius: 3px 0 0 3px;
+        }
+        .ceo-card-rank {
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .08em; margin-bottom: 6px;
+        }
+        .ceo-card-name {
+          font-size: 13px; font-weight: 700; color: var(--text);
+          margin-bottom: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .ceo-card-score {
+          font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 6px;
+        }
+        .ceo-card-signal {
+          font-size: 11px; line-height: 1.5; color: var(--text-muted);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ceo-card-action {
+          margin-top: 10px; font-size: 11px; font-weight: 600;
+          color: var(--accent); text-decoration: none;
+          display: inline-flex; align-items: center; gap: 4px;
+          opacity: .7; transition: opacity 0.15s;
+        }
+        .ceo-card:hover .ceo-card-action { opacity: 1; }
+        .ceo-advice {
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-left: 3px solid var(--accent);
+          border-radius: 8px; padding: 12px 16px;
+          font-size: 12px; line-height: 1.7; color: var(--text-muted);
+        }
+        .ceo-advice-label {
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .08em; color: var(--accent);
+          margin-bottom: 6px;
+        }
+        .ceo-empty {
+          text-align: center; padding: 28px 20px;
+          color: var(--text-muted); font-size: 13px;
+        }
       </style>
 
       <!-- Loading overlay -->
@@ -320,61 +571,201 @@
       <!-- ══ OVERVIEW TAB ══ -->
       <div class="cd-panel active" id="tab-overview">
 
+      <style>
+        /* ── Section layout ── */
+        .ri-section { margin-bottom: 28px; }
+        .ri-sec-hdr {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 12px;
+        }
+        .ri-sec-title {
+          display: flex; align-items: center; gap: 7px;
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .09em; color: var(--text-muted);
+        }
+        .ri-sec-title-icon {
+          width: 22px; height: 22px; border-radius: 5px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px; background: var(--bg);
+          border: 1px solid var(--border);
+        }
+        /* ── Score+Stats row ── */
+        .overview-top {
+          display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start;
+        }
+        @media(max-width:660px){ .overview-top { grid-template-columns: 1fr; } }
+        /* ── Intel 2-col ── */
+        .intel-grid {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        }
+        @media(max-width:660px){ .intel-grid { grid-template-columns: 1fr; } }
+        .intel-col {
+          background: #fff; border: 1px solid var(--border);
+          border-radius: var(--radius); overflow: hidden;
+          box-shadow: var(--shadow-sm);
+        }
+        .intel-col-hdr {
+          padding: 11px 16px; border-bottom: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: space-between;
+          font-size: 11px; font-weight: 700; color: var(--text-muted);
+          text-transform: uppercase; letter-spacing: .07em;
+          background: #faf9f7;
+        }
+        .intel-col-body { padding: 4px 16px; }
+      </style>
+
         {% if latest and latest.score is not none %}
           {% set s = latest.score | int %}
           {% set sclass = 'c-green' if s < 35 else ('c-yellow' if s < 65 else 'c-red') %}
           {% set sborder = '#16a34a' if s < 35 else ('#d97706' if s < 65 else '#d44040') %}
           {% set slabel = 'Low Risk' if s < 35 else ('Moderate Risk' if s < 65 else 'High Risk') %}
 
-          <!-- Score hero -->
-          <div class="score-hero">
-            <div class="score-circle {{ sclass }}" style="border-color:{{ sborder }}">
-              <div class="score-num {{ sclass }}">{{ s }}</div>
-              <div class="score-max">/ 100</div>
-            </div>
-            <div class="score-info">
-              <div class="score-label {{ sclass }}">{{ slabel }}</div>
-              {% if latest.created_at %}
-                <div class="score-meta">Обновлено: {{ latest.created_at[:10] }}</div>
-              {% endif %}
-              <div class="score-bar-track" style="margin-bottom:12px">
-                <div class="score-bar-fill" style="width:{{ s }}%;background:{{ sborder }}"></div>
+          <!-- ══ SECTION 1: Risk Overview ══ -->
+          <div class="ri-section">
+            <div class="ri-sec-hdr">
+              <div class="ri-sec-title">
+                <div class="ri-sec-title-icon">◎</div> Risk Overview
               </div>
-              <div class="score-actions">
-                <a href="/companies/{{ company.id }}/market" class="btn btn-secondary btn-sm">📈 Market Analysis</a>
-                <a href="/companies/{{ company.id }}/ci" class="btn btn-secondary btn-sm">🔍 CI Monitor</a>
-                <a href="/companies/{{ company.id }}/category/gr" class="btn btn-secondary btn-sm">⚖️ Crisis Center</a>
+              <div style="font-size:11px;color:var(--text-muted)">
+                {% if latest.created_at %}Обновлено {{ latest.created_at[:10] }}{% endif %}
+              </div>
+            </div>
+
+            <div class="overview-top">
+              <!-- Score hero -->
+              <div class="score-hero" style="margin-bottom:0;flex-direction:column;align-items:center;min-width:160px;padding:20px 18px">
+                <div class="score-circle {{ sclass }}" style="border-color:{{ sborder }};margin-bottom:10px">
+                  <div class="score-num {{ sclass }}">{{ s }}</div>
+                  <div class="score-max">/ 100</div>
+                </div>
+                <div class="score-label {{ sclass }}" style="font-size:14px;margin-bottom:6px">{{ slabel }}</div>
+                <div class="score-bar-track" style="width:100%;margin-bottom:10px">
+                  <div class="score-bar-fill" style="width:{{ s }}%;background:{{ sborder }}"></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px;width:100%">
+                  <a href="/companies/{{ company.id }}/market" class="btn btn-secondary btn-sm" style="justify-content:center;font-size:11px">📈 Market</a>
+                  <a href="/companies/{{ company.id }}/ci" class="btn btn-secondary btn-sm" style="justify-content:center;font-size:11px">🔍 CI Monitor</a>
+                  <a href="/companies/{{ company.id }}/crisis" class="btn btn-secondary btn-sm" style="justify-content:center;font-size:11px">🚨 Crisis</a>
+                </div>
+              </div>
+
+              <!-- Stat chips stacked -->
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div class="stat-chip" style="flex:1">
+                  <div class="chip-lbl">Risk Velocity</div>
+                  {% if prev and prev.score is not none %}
+                    {% set delta = (latest.score | int) - (prev.score | int) %}
+                    <div class="chip-val {% if delta > 0 %}c-red{% elif delta < 0 %}c-green{% else %}c-yellow{% endif %}">
+                      {% if delta > 0 %}↑ +{{ delta }}{% elif delta < 0 %}↓ {{ delta }}{% else %}→ 0{% endif %}
+                    </div>
+                    <div class="chip-sub">vs предыдущий анализ</div>
+                  {% else %}
+                    <div class="chip-val" style="font-size:18px;color:var(--text-muted)">—</div>
+                    <div class="chip-sub">Нужно 2+ запуска</div>
+                  {% endif %}
+                </div>
+                <div class="stat-chip" style="flex:1">
+                  <div class="chip-lbl">Crisis Probability</div>
+                  {% set crisis = (s * 0.8 + 5) | int %}
+                  <div class="chip-val {% if crisis < 30 %}c-green{% elif crisis < 60 %}c-yellow{% else %}c-red{% endif %}">{{ crisis }}%</div>
+                  <div class="chip-sub">следующие 30 дней</div>
+                </div>
+                <div class="stat-chip" style="flex:1">
+                  <div class="chip-lbl">Всего анализов</div>
+                  <div class="chip-val">{{ risk_runs | length }}</div>
+                  <div class="chip-sub">запусков истории</div>
+                </div>
+                {% if stock %}
+                <div class="stat-chip" style="flex:1">
+                  <div class="chip-lbl">Market · {{ stock.get('ticker') }}</div>
+                  {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
+                  <div class="chip-val {% if chg and chg > 0 %}c-green{% elif chg and chg < 0 %}c-red{% endif %}">
+                    {{ stock.get('last') }}
+                    {% if chg is not none %}<span style="font-size:13px">{% if chg > 0 %}+{% endif %}{{ "%.1f"|format(chg) }}%</span>{% endif %}
+                  </div>
+                  <div class="chip-sub"><a href="/companies/{{ company.id }}/market" style="color:var(--accent)">Полный анализ →</a></div>
+                </div>
+                {% endif %}
               </div>
             </div>
           </div>
 
-          <!-- Stat chips -->
-          <div class="stat-chips">
-            <div class="stat-chip">
-              <div class="chip-lbl">Risk Velocity</div>
+          <!-- ══ CEO NAVIGATION BLOCK ══ -->
+          {% if is_admin and cats %}
+          {% set cat_meta_ceo = [
+            ("media", "📰", "InfoField & Media",  "#93bbff", "/companies/" ~ company.id ~ "/category/media"),
+            ("hr",    "👥", "Human Resources",    "#4ade80", "/companies/" ~ company.id ~ "/category/hr"),
+            ("gr",    "⚖️",  "Gov. Relations",     "#f87171", "/companies/" ~ company.id ~ "/category/gr"),
+            ("pr",    "🌐", "PR Environment",     "#c084fc", "/companies/" ~ company.id ~ "/category/pr"),
+            ("market","📊", "Market & Industry",  "#fbbf24", "/companies/" ~ company.id ~ "/market"),
+          ] %}
+          {% set sorted_cats = [] %}
+          {% for key, icon, label, color, url in cat_meta_ceo %}
+            {% set score = cats[key].score if cats[key] else 0 %}
+            {% set _ = sorted_cats.append((score, key, icon, label, color, url)) %}
+          {% endfor %}
+          {# Sort descending by score — Jinja2 trick: reverse sort #}
+          {% set top3 = sorted_cats | sort(attribute=0, reverse=True) | list %}
+
+          <div class="ceo-block">
+            <div class="ceo-block-header">
+              <div class="ceo-block-title">
+                <div class="ceo-pulse"></div>
+                Executive View — Сейчас критично
+              </div>
               {% if prev and prev.score is not none %}
                 {% set delta = (latest.score | int) - (prev.score | int) %}
-                <div class="chip-val {% if delta > 0 %}c-red{% elif delta < 0 %}c-green{% else %}c-yellow{% endif %}">
-                  {% if delta > 0 %}↑ +{{ delta }}{% elif delta < 0 %}↓ {{ delta }}{% else %}→ 0{% endif %}
+                <div class="ceo-trend-badge" style="{% if delta > 5 %}background:rgba(212,64,64,0.08);color:#d44040;border:1px solid rgba(212,64,64,0.2){% elif delta < -5 %}background:rgba(22,163,74,0.08);color:#16a34a;border:1px solid rgba(22,163,74,0.2){% else %}background:var(--bg);color:var(--text-muted);border:1px solid var(--border){% endif %}">
+                  {% if delta > 5 %}↑ Риск растёт +{{ delta }}
+                  {% elif delta < -5 %}↓ Риск снижается {{ delta }}
+                  {% else %}→ Стабильно{% endif %}
                 </div>
-                <div class="chip-sub">vs предыдущий анализ</div>
-              {% else %}
-                <div class="chip-val" style="font-size:18px;color:var(--text-muted)">—</div>
-                <div class="chip-sub">Нужно 2+ запуска</div>
               {% endif %}
             </div>
-            <div class="stat-chip">
-              <div class="chip-lbl">Анализов</div>
-              <div class="chip-val">{{ risk_runs | length }}</div>
-              <div class="chip-sub">запусков всего</div>
+
+            {% if top3 %}
+            <div class="ceo-cards">
+              {% for score, key, icon, label, color, url in top3[:3] %}
+                {% set rank_label = ["🔴 Критично", "🟠 Высокий", "🟡 Внимание"][loop.index0] %}
+                {% set risks = cats[key].risks if cats[key] else [] %}
+                {% set top_signal = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
+                {% set prev_cat_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
+                {% set cat_delta = ((score | int) - (prev_cat_score | int)) if prev_cat_score is not none else none %}
+                <div class="ceo-card">
+                  <div class="ceo-card-accent" style="background:{{ color }}"></div>
+                  <div class="ceo-card-rank" style="color:{{ color }}">{{ rank_label }}</div>
+                  <div class="ceo-card-name">
+                    {{ icon }} {{ label }}
+                    {% if cat_delta is not none %}
+                      <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;
+                        {% if cat_delta > 0 %}background:rgba(212,64,64,0.08);color:#d44040
+                        {% elif cat_delta < 0 %}background:rgba(22,163,74,0.08);color:#16a34a
+                        {% else %}background:var(--bg);color:var(--text-muted){% endif %}">
+                        {% if cat_delta > 0 %}↑ +{{ cat_delta }}{% elif cat_delta < 0 %}↓ {{ cat_delta }}{% else %}—{% endif %}
+                      </span>
+                    {% endif %}
+                  </div>
+                  <div class="ceo-card-score" style="color:{{ color }}">{{ score }}</div>
+                  {% if top_signal %}
+                    <div class="ceo-card-signal">{{ top_signal[:70] }}{% if top_signal|length > 70 %}…{% endif %}</div>
+                  {% endif %}
+                  <a href="{{ url }}" class="ceo-card-action">Подробнее →</a>
+                </div>
+              {% endfor %}
             </div>
-            <div class="stat-chip">
-              <div class="chip-lbl">Crisis Probability</div>
-              {% set crisis = (s * 0.8 + 5) | int %}
-              <div class="chip-val {% if crisis < 30 %}c-green{% elif crisis < 60 %}c-yellow{% else %}c-red{% endif %}">{{ crisis }}%</div>
-              <div class="chip-sub">следующие 30 дней</div>
+            {% else %}
+            <div class="ceo-empty">Нет данных по категориям</div>
+            {% endif %}
+
+            {% if latest.advice %}
+            <div class="ceo-advice">
+              <div class="ceo-advice-label">🤖 Рекомендация AI</div>
+              {{ latest.advice[:300] }}{% if latest.advice|length > 300 %}… <a href="#ai-advice" style="color:rgba(212,64,64,0.7);font-size:11px" onclick="document.getElementById('ai-advice-full').style.display='block';this.style.display='none';return false">читать далее</a>{% endif %}
             </div>
+            {% endif %}
           </div>
+          {% endif %}
+          <!-- ══ END CEO BLOCK ══ -->
 
         {% else %}
           <!-- No analysis yet -->
@@ -385,30 +776,7 @@
           </div>
         {% endif %}
 
-        <!-- Finance strip -->
-        <div class="finance-strip">
-          <div style="display:flex;align-items:center;gap:8px;flex:1">
-            <span style="font-size:16px">📈</span>
-            <div>
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:2px">Market Indicator</div>
-              {% if stock %}
-                <div style="font-size:14px;font-weight:700">{{ stock.get('ticker') }} · {{ stock.get('last') }}
-                  {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
-                  {% if chg is not none %}
-                    <span style="{% if chg > 0 %}color:#16a34a{% elif chg < 0 %}color:#d44040{% endif %}">
-                      {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-                    </span>
-                  {% endif %}
-                </div>
-              {% else %}
-                <div style="font-size:13px;color:var(--text-muted)">Не торгуется публично</div>
-              {% endif %}
-            </div>
-          </div>
-          <a href="/companies/{{ company.id }}/market" class="btn btn-primary btn-sm">Полный анализ →</a>
-        </div>
-
-        <!-- Category grid -->
+        <!-- ══ SECTION 2: Risk Categories ══ -->
         {% set cat_meta = [
           ("media", "📰", "InfoField & Media",  "#93bbff", "rgba(147,187,255,0.12)"),
           ("hr",    "👥", "Human Resources",    "#16a34a", "rgba(22,163,74,0.1)"),
@@ -418,9 +786,12 @@
         ] %}
 
         {% if cats %}
-        <div style="margin-bottom:8px">
-          <div class="panel-hdr">
-            <div class="panel-hdr-title">Risk Categories</div>
+        <div class="ri-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">⚡</div> Risk Categories
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">{{ cat_meta|length }} категории</div>
           </div>
           <div class="cat-grid">
             {% for key, icon, label, color, bg in cat_meta %}
@@ -456,16 +827,76 @@
         </div>
         {% endif %}
 
-        <!-- AI Advice -->
-        {% if latest and latest.advice %}
-        <div class="advice-box">
-          <div class="advice-lbl">🤖 AI Recommendation</div>
-          <div class="advice-text">{{ latest.advice }}</div>
+        <!-- ══ SECTION 3: AI Intelligence ══ -->
+        {% if (latest and latest.advice) or (latest and latest.scenarios) %}
+        <div class="ri-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">🤖</div> AI Intelligence
+            </div>
+            <a href="/companies/{{ company.id }}/crisis" style="font-size:11px;color:var(--accent);font-weight:600">Crisis Center →</a>
+          </div>
+
+          {% if latest and latest.advice %}
+          <div class="advice-box" id="ai-advice" style="margin-bottom:12px">
+            <div class="advice-lbl">Рекомендация AI</div>
+            <div class="advice-text" id="ai-advice-full">{{ latest.advice }}</div>
+          </div>
+          {% endif %}
+
+          {% set scenarios = latest.scenarios if latest and latest.scenarios else [] %}
+          {% if scenarios %}
+          {% set sc_colors = {
+            'low':    ('rgba(22,163,74,0.08)',  '#16a34a', 'rgba(22,163,74,0.12)',  '🟢'),
+            'medium': ('rgba(217,119,6,0.08)',  '#d97706', 'rgba(217,119,6,0.12)',  '🟡'),
+            'high':   ('rgba(212,64,64,0.08)',  '#d44040', 'rgba(212,64,64,0.12)',  '🔴'),
+          } %}
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:8px">
+            Action Scenarios · {{ scenarios|length }} варианта
+          </div>
+          <div class="scenarios-grid">
+            {% for sc in scenarios %}
+              {% set level = sc.level if sc.level in sc_colors else 'medium' %}
+              {% set bg, color, num_bg, emoji = sc_colors[level] %}
+              <div class="scenario-card">
+                <div class="scenario-header" style="border-top:3px solid {{ color }}">
+                  <div class="scenario-badge" style="background:{{ bg }};color:{{ color }}">
+                    {{ emoji }} Сценарий {{ sc.id }} · {{ level | upper }}
+                  </div>
+                  <div class="scenario-title">{{ sc.label }}</div>
+                  {% if sc.trigger %}
+                    <div class="scenario-trigger">⚡ {{ sc.trigger }}</div>
+                  {% endif %}
+                </div>
+                <div class="scenario-steps">
+                  {% for step in sc.steps %}
+                    <div class="scenario-step">
+                      <div class="scenario-step-num" style="background:{{ num_bg }};color:{{ color }}">{{ loop.index }}</div>
+                      <div class="scenario-step-body">
+                        <div class="scenario-step-action">{{ step.action }}</div>
+                        <div class="scenario-step-meta">
+                          {% if step.owner %}<span class="scenario-meta-tag">{{ step.owner }}</span>{% endif %}
+                          {% if step.deadline %}<span class="scenario-meta-tag" style="color:{{ color }};border-color:{{ bg }}">⏱ {{ step.deadline }}</span>{% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
         </div>
         {% endif %}
 
-        <!-- Charts -->
+        <!-- ══ SECTION 4: Analytics ══ -->
         {% if risk_runs | selectattr("score", "ne", none) | list %}
+        <div class="ri-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">📊</div> Analytics
+            </div>
+          </div>
         {% set completed = risk_runs | selectattr("score", "ne", none) | list %}
         {% set s = latest.score | int %}
         {% set gc = '#16a34a' if s < 35 else ('#d97706' if s < 65 else '#d44040') %}
@@ -519,34 +950,64 @@
           </div>
 
         </div>
+        </div>
         {% endif %}
         {% endif %}
 
-        <!-- News -->
+        <!-- ══ SECTION 5: Intelligence Feed ══ -->
         {% if company_news %}
-        <div class="panel-hdr" style="margin-bottom:10px">
-          <div class="panel-hdr-title">Последние новости</div>
-        </div>
-        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">
-          {% for n in company_news[:6] %}
-            <div class="news-item">
-              <a href="{{ n.link }}" target="_blank" rel="noopener" class="news-title">{{ n.title }}</a>
-              <div class="news-meta">{{ n.source or '' }}{% if n.source and n.pub_date %} · {% endif %}{{ n.pub_date or '' }}</div>
+        <div class="ri-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">📡</div> Intelligence Feed
             </div>
-          {% endfor %}
+          </div>
+          <div class="intel-grid">
+            <!-- News -->
+            <div class="intel-col">
+              <div class="intel-col-hdr">
+                📰 Последние новости
+                <span>{{ company_news[:6]|length }}</span>
+              </div>
+              <div class="intel-col-body">
+                {% for n in company_news[:6] %}
+                  <div class="news-item">
+                    <a href="{{ n.link }}" target="_blank" rel="noopener" class="news-title">{{ n.title }}</a>
+                    <div class="news-meta">{{ n.source or '' }}{% if n.source and n.pub_date %} · {% endif %}{{ n.pub_date or '' }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+            <!-- Social -->
+            <div class="intel-col">
+              <div class="intel-col-hdr">
+                🌐 Соцсети
+                <button id="social-refresh-btn" onclick="loadSocial()" class="btn btn-secondary btn-sm" style="padding:3px 9px;font-size:11px">🔍 Сканировать</button>
+              </div>
+              <div class="intel-col-body">
+                <div id="social-feed" style="min-height:48px">
+                  <div style="padding:14px 0;color:var(--text-muted);font-size:12px">Нажмите «Сканировать» для загрузки постов</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        {% endif %}
-
-        <!-- Social Media -->
-        <div style="margin-top:20px">
-          <div class="panel-hdr" style="margin-bottom:10px">
-            <div class="panel-hdr-title">Соцсети</div>
+        {% else %}
+        <!-- Social only (no news) -->
+        <div class="ri-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title"><div class="ri-sec-title-icon">🌐</div> Соцсети</div>
             <button id="social-refresh-btn" onclick="loadSocial()" class="btn btn-secondary btn-sm">🔍 Сканировать</button>
           </div>
-          <div id="social-feed" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04);min-height:48px">
-            <div style="padding:14px 0;color:var(--text-muted);font-size:13px">Нажмите «Сканировать» чтобы загрузить посты из соцсетей</div>
+          <div class="intel-col">
+            <div class="intel-col-body">
+              <div id="social-feed" style="min-height:48px">
+                <div style="padding:14px 0;color:var(--text-muted);font-size:12px">Нажмите «Сканировать» для загрузки постов</div>
+              </div>
+            </div>
           </div>
         </div>
+        {% endif %}
 
       </div>{# end overview #}
 
@@ -725,51 +1186,117 @@
       <!-- ══ HISTORY TAB ══ -->
       <div class="cd-panel" id="tab-history">
 
-        <div class="panel-hdr" style="margin-bottom:16px">
-          <div class="panel-hdr-title">История анализов</div>
-          <span style="font-size:11px;color:var(--text-muted)">{{ risk_runs|length }} запусков</span>
+        <div class="panel-hdr">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="panel-hdr-title">История анализов</div>
+            <span style="font-size:11px;padding:2px 8px;background:#f3f4f6;border-radius:999px;color:#6b7280;font-weight:600" id="hist-count">{{ risk_runs|length }}</span>
+          </div>
+          {% if risk_runs|length > 3 %}
+          <div style="position:relative" id="cleanup-dropdown-wrap">
+            <button class="cleanup-trigger" onclick="toggleCleanupMenu(event)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
+              </svg>
+              Очистить
+              <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" style="width:9px;height:9px;opacity:0.5">
+                <path d="M1 1l4 4 4-4"/>
+              </svg>
+            </button>
+            <div id="cleanup-menu">
+              <div class="cmenu-section">
+                <div class="cmenu-label">Оставить последние</div>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 5)"><span class="co-icon">5</span> последних запусков</button>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 10)"><span class="co-icon">10</span> последних запусков</button>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 20)"><span class="co-icon">20</span> последних запусков</button>
+              </div>
+              <div class="cmenu-section">
+                <div class="cmenu-label">Удалить записи старше</div>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 30)"><span class="co-icon">📅</span> 30 дней</button>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 90)"><span class="co-icon">📅</span> 90 дней</button>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 180)"><span class="co-icon">📅</span> 180 дней</button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
         </div>
 
         {% if risk_runs %}
+          <div class="hist-list">
           {% for rr in risk_runs %}
-            <div class="hist-item">
-              <div class="hist-header">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  {% if rr.status in ('done','completed') %}<span class="badge badge-green" style="font-size:11px">✓ Завершён</span>
-                  {% elif rr.status in ('queued','processing') %}<span class="badge badge-yellow" style="font-size:11px">⏳ {{ rr.status }}</span>
-                  {% elif rr.status == 'error' %}<span class="badge badge-red" style="font-size:11px">✕ Ошибка</span>
-                  {% else %}<span class="badge" style="font-size:11px">{{ rr.status }}</span>{% endif %}
-
-                  {% if rr.score is not none %}
-                    {% set rs = rr.score | int %}
-                    <span class="badge {% if rs < 35 %}badge-green{% elif rs < 65 %}badge-yellow{% else %}badge-red{% endif %}" style="font-size:11px">
-                      Риск: {{ rs }}/100
-                    </span>
-                  {% endif %}
-                </div>
-                <div style="font-size:11px;color:var(--text-muted);font-family:monospace">
-                  {{ rr.created_at[:19].replace('T',' ') if rr.created_at else '—' }}
+            {% set rs = (rr.score | int) if rr.score is not none else none %}
+            {% set score_cls = 'high' if rs is not none and rs >= 65 else ('med' if rs is not none and rs >= 35 else 'low') %}
+            <div class="hist-item" id="hist-{{ rr.id }}">
+              <!-- Checkbox -->
+              <div class="hist-item-check" onclick="toggleHistItem('{{ rr.id }}', this)" title="Выбрать">
+                <div class="hist-cb-visual">
+                  <div class="hist-cb-check"></div>
                 </div>
               </div>
-              {% if rr.advice %}
-                <div style="font-size:13px;line-height:1.6;color:var(--text);margin-bottom:10px">{{ rr.advice[:300] }}{% if rr.advice|length > 300 %}…{% endif %}</div>
-              {% endif %}
-              {% if is_admin %}
-              <details>
-                <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none">✉ Отправить CEO</summary>
-                <form method="post" action="/ceo/send" style="margin-top:12px">
-                  <input type="hidden" name="company_id" value="{{ company.id }}" />
-                  <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
-                  <div class="row">
-                    <div class="field"><label>Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
-                    <div class="field"><label>Комментарий</label><input name="message" type="text" /></div>
+
+              <!-- Body -->
+              <div class="hist-item-body">
+                <div class="hist-item-top">
+                  <div class="hist-item-badges">
+                    {% if rr.status in ('done','completed') %}
+                      <span class="badge badge-green" style="font-size:10px">✓ Завершён</span>
+                    {% elif rr.status in ('queued','processing') %}
+                      <span class="badge badge-yellow" style="font-size:10px">⏳ В процессе</span>
+                    {% elif rr.status == 'error' %}
+                      <span class="badge badge-red" style="font-size:10px">✕ Ошибка</span>
+                    {% else %}
+                      <span class="badge" style="font-size:10px">{{ rr.status }}</span>
+                    {% endif %}
+                    {% if rs is not none %}
+                      <span class="hist-score {{ score_cls }}">{{ rs }}/100</span>
+                    {% endif %}
                   </div>
-                  <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm">Отправить</button></div>
-                </form>
-              </details>
-              {% endif %}
+                  <div class="hist-item-right">
+                    <span class="hist-item-date">{{ rr.created_at[:16].replace('T',' ') if rr.created_at else '—' }}</span>
+                    <button class="hist-del-btn" onclick="deleteRun('{{ rr.id }}')" title="Удалить запись">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {% if rr.advice %}
+                  <div class="hist-item-advice">{{ rr.advice[:280] }}{% if rr.advice|length > 280 %}…{% endif %}</div>
+                {% endif %}
+
+                {% if is_admin %}
+                <details style="margin-top:8px">
+                  <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none;list-style:none;display:inline-flex;align-items:center;gap:4px">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
+                    Отправить CEO
+                  </summary>
+                  <form method="post" action="/ceo/send" style="margin-top:10px">
+                    <input type="hidden" name="company_id" value="{{ company.id }}" />
+                    <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
+                    <div class="row">
+                      <div class="field"><label>Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
+                      <div class="field"><label>Комментарий</label><input name="message" type="text" /></div>
+                    </div>
+                    <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm">Отправить</button></div>
+                  </form>
+                </details>
+                {% endif %}
+              </div>
             </div>
           {% endfor %}
+          </div>
+
+          <!-- Floating bulk action bar -->
+          <div id="hist-bulk-bar">
+            <span id="hist-sel-count"></span>
+            <button class="bulk-del-btn" onclick="deleteSelected()">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
+              </svg>
+              Удалить выбранные
+            </button>
+            <button class="bulk-cancel-btn" onclick="clearSelection()">Отмена</button>
+          </div>
         {% else %}
           <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius)">
             <div class="empty-box-icon">📋</div>
@@ -1106,6 +1633,127 @@ async function loadSocial() {
   } catch(e) {
     feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">Ошибка загрузки</div>`;
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Сканировать'; }
+  }
+}
+
+// ── History selection ──
+const _histSelected = new Set();
+
+function toggleHistItem(runId, checkEl) {
+  const item = document.getElementById('hist-' + runId);
+  if (_histSelected.has(runId)) {
+    _histSelected.delete(runId);
+    item.classList.remove('selected');
+  } else {
+    _histSelected.add(runId);
+    item.classList.add('selected');
+  }
+  syncBulkBar();
+}
+
+function syncBulkBar() {
+  const bar = document.getElementById('hist-bulk-bar');
+  const countEl = document.getElementById('hist-sel-count');
+  const n = _histSelected.size;
+  if (n > 0) {
+    bar.style.display = 'flex';
+    const word = n === 1 ? 'запись' : (n < 5 ? 'записи' : 'записей');
+    countEl.textContent = `Выбрано ${n} ${word}`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelection() {
+  _histSelected.forEach(id => {
+    const item = document.getElementById('hist-' + id);
+    if (item) item.classList.remove('selected');
+  });
+  _histSelected.clear();
+  syncBulkBar();
+}
+
+// ── Delete single run ──
+async function deleteRun(runId) {
+  if (!confirm('Удалить эту запись истории?')) return;
+  try {
+    const res = await fetch(`/companies/${COMPANY_ID}/risk_runs/${runId}/delete`, { method: 'POST' });
+    if (!res.ok) throw new Error();
+    const el = document.getElementById('hist-' + runId);
+    if (el) { el.style.opacity = '0'; el.style.transform = 'translateX(8px)'; el.style.transition = 'all 0.2s'; setTimeout(() => el.remove(), 200); }
+    _histSelected.delete(runId);
+    syncBulkBar();
+    updateHistCount();
+  } catch (e) {
+    alert('Ошибка при удалении.');
+  }
+}
+
+// ── Delete selected ──
+async function deleteSelected() {
+  const ids = [..._histSelected];
+  if (!ids.length) return;
+  const n = ids.length;
+  const word = n === 1 ? 'запись' : (n < 5 ? 'записи' : 'записей');
+  if (!confirm(`Удалить ${n} ${word}? Это нельзя отменить.`)) return;
+
+  await Promise.all(ids.map(id =>
+    fetch(`/companies/${COMPANY_ID}/risk_runs/${id}/delete`, { method: 'POST' }).catch(() => {})
+  ));
+  ids.forEach(id => {
+    const el = document.getElementById('hist-' + id);
+    if (el) el.remove();
+    _histSelected.delete(id);
+  });
+  syncBulkBar();
+  updateHistCount();
+}
+
+function updateHistCount() {
+  const remaining = document.querySelectorAll('.hist-item').length;
+  const el = document.getElementById('hist-count');
+  if (el) el.textContent = remaining;
+  if (remaining <= 3) {
+    const wrap = document.getElementById('cleanup-dropdown-wrap');
+    if (wrap) wrap.style.display = 'none';
+  }
+}
+
+// ── Cleanup history ──
+function toggleCleanupMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('cleanup-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', () => {
+  const menu = document.getElementById('cleanup-menu');
+  if (menu) menu.style.display = 'none';
+});
+
+async function doCleanup(mode, value) {
+  const menu = document.getElementById('cleanup-menu');
+  if (menu) menu.style.display = 'none';
+
+  const labels = {
+    keep_last: `Оставить последние ${value}?`,
+    older_than_days: `Удалить записи старше ${value} дней?`,
+  };
+  if (!confirm(labels[mode] + '\nЭто действие нельзя отменить.')) return;
+
+  const fd = new FormData();
+  fd.append(mode, value);
+  try {
+    const res = await fetch(`/companies/${COMPANY_ID}/risk_runs/cleanup`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (data.deleted > 0) {
+      // Remove deleted items from DOM (reload is simplest)
+      window.location.reload();
+    } else {
+      alert('Нечего удалять.');
+    }
+  } catch (e) {
+    alert('Ошибка при очистке. Попробуйте снова.');
   }
 }
 </script>
