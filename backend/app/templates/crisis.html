@@ -41,11 +41,11 @@
         @media(max-width:800px){ .crisis-grid { grid-template-columns:1fr; } }
 
         .scenario-select-card {
-          background:#fff; border:2px solid var(--border); border-radius:var(--radius);
+          background:rgba(255,255,255,0.05); border:2px solid var(--border); border-radius:var(--radius);
           padding:18px 20px; cursor:pointer; transition:border-color 0.2s, box-shadow 0.2s;
           position:relative; overflow:hidden;
         }
-        .scenario-select-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.08); }
+        .scenario-select-card:hover { box-shadow:0 4px 20px rgba(124,58,237,0.20); }
         .scenario-select-card.active { border-color:var(--sc-color); box-shadow:0 0 0 3px var(--sc-glow); }
         .scenario-select-card .sc-accent {
           position:absolute; top:0; left:0; right:0; height:3px;
@@ -77,8 +77,8 @@
         }
 
         .comm-panel {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          box-shadow:0 1px 6px rgba(0,0,0,0.05);
+          background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius);
+          box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .comm-panel-hdr {
           padding:16px 20px; border-bottom:1px solid var(--border);
@@ -109,17 +109,17 @@
           font-size:13px; color:var(--text-muted); padding:40px 0; justify-content:center;
         }
         .gen-spinner {
-          width:20px; height:20px; border:2px solid rgba(212,64,64,0.2);
+          width:20px; height:20px; border:2px solid rgba(124,58,237,0.25);
           border-top-color:var(--accent); border-radius:50%;
           animation:spin 0.7s linear infinite;
         }
 
         .no-analysis {
           text-align:center; padding:60px 20px;
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius);
         }
         .copy-success {
-          font-size:11px; color:#16a34a; font-weight:600; display:none;
+          font-size:11px; color:#34d399; font-weight:600; display:none;
         }
 
         /* ── Scenario edit ── */
@@ -127,26 +127,26 @@
           position:absolute; top:12px; right:12px;
           display:inline-flex; align-items:center; gap:4px;
           font-size:11px; font-weight:600; padding:4px 9px;
-          border-radius:6px; border:1px solid #e5e7eb;
-          background:#fff; color:#6b7280; cursor:pointer;
+          border-radius:6px; border:1px solid rgba(255,255,255,0.12);
+          background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.50); cursor:pointer;
           transition:all 0.13s; z-index:2;
         }
-        .sc-edit-btn:hover { border-color:#d1d5db; color:#374151; background:#f9fafb; }
+        .sc-edit-btn:hover { border-color:rgba(255,255,255,0.22); color:#fff; background:rgba(255,255,255,0.10); }
         .sc-edit-btn svg { width:12px; height:12px; }
 
         .sc-editor {
-          display:none; margin-top:14px; border-top:1px solid #f3f4f6; padding-top:14px;
+          display:none; margin-top:14px; border-top:1px solid rgba(255,255,255,0.08); padding-top:14px;
         }
         .sc-editor.open { display:block; }
 
         .sc-field-lbl {
           font-size:10px; font-weight:700; text-transform:uppercase;
-          letter-spacing:.06em; color:#9ca3af; margin-bottom:5px;
+          letter-spacing:.06em; color:rgba(255,255,255,0.40); margin-bottom:5px;
         }
         .sc-input {
-          width:100%; padding:7px 10px; border:1px solid #e5e7eb;
+          width:100%; padding:7px 10px; border:1px solid rgba(255,255,255,0.12);
           border-radius:7px; font-size:13px; font-family:inherit;
-          color:#111827; background:#fff; outline:none; transition:border-color 0.15s;
+          color:#ffffff; background:rgba(255,255,255,0.05); outline:none; transition:border-color 0.15s;
           box-sizing:border-box;
         }
         .sc-input:focus { border-color:#93c5fd; }
@@ -154,34 +154,34 @@
 
         .sc-step-editor {
           display:flex; gap:8px; align-items:flex-start;
-          padding:10px 10px 10px 0; border-bottom:1px solid #f9fafb;
+          padding:10px 10px 10px 0; border-bottom:1px solid rgba(255,255,255,0.06);
         }
         .sc-step-editor:last-child { border-bottom:none; }
         .sc-step-drag {
-          color:#d1d5db; cursor:grab; padding-top:8px; font-size:13px; flex-shrink:0;
+          color:rgba(255,255,255,0.18); cursor:grab; padding-top:8px; font-size:13px; flex-shrink:0;
         }
         .sc-step-fields { flex:1; display:flex; flex-direction:column; gap:6px; }
         .sc-step-row { display:grid; grid-template-columns:1fr 120px 100px; gap:6px; }
         .sc-step-del {
           width:26px; height:26px; border-radius:6px; flex-shrink:0; margin-top:4px;
-          border:none; background:none; cursor:pointer; color:#9ca3af;
+          border:none; background:none; cursor:pointer; color:rgba(255,255,255,0.40);
           display:flex; align-items:center; justify-content:center; transition:all 0.12s;
         }
-        .sc-step-del:hover { background:#fee2e2; color:#c93a3a; }
+        .sc-step-del:hover { background:rgba(248,113,113,0.12); color:#f87171; }
         .sc-step-del svg { width:13px; height:13px; }
 
         .sc-add-step {
           display:inline-flex; align-items:center; gap:5px;
           font-size:12px; font-weight:600; padding:6px 12px;
-          border-radius:7px; border:1.5px dashed #d1d5db;
-          background:none; color:#6b7280; cursor:pointer;
+          border-radius:7px; border:1.5px dashed rgba(255,255,255,0.18);
+          background:none; color:rgba(255,255,255,0.50); cursor:pointer;
           transition:all 0.13s; margin-top:8px; width:100%; justify-content:center;
         }
         .sc-add-step:hover { border-color:#93c5fd; color:#3b82f6; background:#eff6ff; }
 
         .sc-edit-actions {
           display:flex; gap:8px; margin-top:14px; padding-top:12px;
-          border-top:1px solid #f3f4f6;
+          border-top:1px solid rgba(255,255,255,0.08);
         }
         .sc-save-btn {
           display:inline-flex; align-items:center; gap:5px;
@@ -193,10 +193,51 @@
         .sc-cancel-btn {
           display:inline-flex; align-items:center;
           padding:7px 14px; border-radius:8px; font-size:13px; font-weight:500;
-          background:#fff; color:#6b7280; border:1px solid #e5e7eb; cursor:pointer; transition:all 0.13s;
+          background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.50); border:1px solid rgba(255,255,255,0.12); cursor:pointer; transition:all 0.13s;
         }
-        .sc-cancel-btn:hover { border-color:#d1d5db; color:#374151; }
-        .sc-saved-hint { font-size:12px; color:#16a34a; font-weight:600; display:none; }
+        .sc-cancel-btn:hover { border-color:rgba(255,255,255,0.18); color:rgba(255,255,255,0.80); }
+        .sc-saved-hint { font-size:12px; color:#34d399; font-weight:600; display:none; }
+
+        /* ── Incident cards ── */
+        .incident-card {
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09);
+          border-radius:16px; padding:18px 20px; display:flex; gap:16px;
+          backdrop-filter:blur(20px); transition:border-color 0.2s, box-shadow 0.2s; cursor:pointer;
+        }
+        .incident-card:hover {
+          border-color:rgba(255,255,255,0.18); box-shadow:0 8px 32px rgba(0,0,0,0.20);
+        }
+        .incident-icon {
+          width:44px; height:44px; border-radius:50%; display:flex;
+          align-items:center; justify-content:center; font-size:18px; flex-shrink:0; font-weight:700;
+        }
+        .incident-body { flex:1; min-width:0; }
+        .incident-header {
+          display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;
+        }
+        .incident-title { font-size:14px; font-weight:700; color:var(--text); }
+        .incident-status {
+          display:inline-flex; align-items:center; gap:4px;
+          font-size:11px; font-weight:600; padding:3px 10px; border-radius:99px; flex-shrink:0;
+        }
+        .incident-category {
+          font-size:11px; padding:3px 10px; border-radius:99px;
+          background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.40); flex-shrink:0;
+        }
+        .incident-desc {
+          font-size:12px; color:rgba(255,255,255,0.50); line-height:1.5; margin-bottom:10px;
+        }
+        .incident-meta {
+          font-size:11px; color:rgba(255,255,255,0.30); margin-bottom:10px;
+          display:flex; gap:14px; flex-wrap:wrap;
+        }
+        .incident-tags { display:flex; gap:6px; flex-wrap:wrap; }
+        .incident-tag {
+          font-size:11px; padding:3px 10px; border-radius:99px;
+          background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.45);
+          border:1px solid rgba(255,255,255,0.09); white-space:nowrap;
+          max-width:200px; overflow:hidden; text-overflow:ellipsis;
+        }
       </style>
 
       {% if not latest or not latest.scenarios %}
@@ -210,10 +251,67 @@
       {% else %}
         {% set scenarios = latest.scenarios %}
         {% set sc_meta = {
-          'low':    ('#16a34a', 'rgba(22,163,74,0.08)',  'rgba(22,163,74,0.15)',  '🟢'),
-          'medium': ('#d97706', 'rgba(217,119,6,0.08)',  'rgba(217,119,6,0.15)',  '🟡'),
-          'high':   ('#d44040', 'rgba(212,64,64,0.08)',  'rgba(212,64,64,0.15)',  '🔴'),
+          'low':    ('#34d399', 'rgba(52,211,153,0.10)',  'rgba(52,211,153,0.22)',  '🟢'),
+          'medium': ('#fbbf24', 'rgba(217,119,6,0.08)',  'rgba(217,119,6,0.15)',  '🟡'),
+          'high':   ('#f87171', 'rgba(248,113,113,0.10)',  'rgba(248,113,113,0.22)',  '🔴'),
         } %}
+
+        <!-- Section: Incident cards -->
+        {% set status_label_map = {'low': 'Решён', 'medium': 'Мониторинг', 'high': 'Активен'} %}
+        {% set level_label_map  = {'low': 'Низкий риск', 'medium': 'Средний риск', 'high': 'Высокий риск'} %}
+        <div style="margin-bottom:24px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:12px">
+            Активные инциденты
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            {% for sc in scenarios %}
+              {% set level = sc.level if sc.level in sc_meta else 'medium' %}
+              {% set color, bg, glow, emoji = sc_meta[level] %}
+              {% set status_label = status_label_map.get(level, 'Мониторинг') %}
+              {% set level_label  = level_label_map.get(level, 'Риск') %}
+              {% set sc_icon = '!' if level == 'high' else ('⚡' if level == 'medium' else '✓') %}
+
+              <div class="incident-card" onclick="scrollToScenario('{{ sc.id }}')">
+                <div class="incident-icon" style="background:{{ bg }};color:{{ color }}">{{ sc_icon }}</div>
+                <div class="incident-body">
+                  <div class="incident-header">
+                    <span class="incident-title">{{ sc.label }}</span>
+                    <span class="incident-status" style="background:{{ bg }};color:{{ color }}">● {{ status_label }}</span>
+                    <span class="incident-category">{{ level_label }}</span>
+                  </div>
+                  {% if sc.trigger %}
+                    <div class="incident-desc">{{ sc.trigger }}</div>
+                  {% endif %}
+                  <div class="incident-meta">
+                    {% set ns = namespace(owners=[]) %}
+                    {% for step in sc.steps %}
+                      {% if step.owner and step.owner not in ns.owners %}
+                        {% set ns.owners = ns.owners + [step.owner] %}
+                      {% endif %}
+                    {% endfor %}
+                    {% if sc.steps and sc.steps[0].deadline %}
+                      <span>🕐 {{ sc.steps[0].deadline }}</span>
+                    {% endif %}
+                    {% if ns.owners %}
+                      <span>👥 {{ ns.owners[:3] | join(' · ') }}</span>
+                    {% endif %}
+                    <span>↗ {{ sc.steps | length }} шагов</span>
+                  </div>
+                  {% if sc.steps %}
+                    <div class="incident-tags">
+                      {% for step in sc.steps[:3] %}
+                        <span class="incident-tag">{{ step.action }}</span>
+                      {% endfor %}
+                      {% if sc.steps | length > 3 %}
+                        <span class="incident-tag">+{{ sc.steps | length - 3 }}</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
 
         <!-- Section: Scenario selector -->
         <div style="margin-bottom:20px">
@@ -361,6 +459,14 @@
     activeScenarioId = id;
     document.querySelectorAll(".scenario-select-card").forEach(c => c.classList.remove("active"));
     el.classList.add("active");
+  }
+
+  function scrollToScenario(id) {
+    const card = document.getElementById('sc-card-' + id);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      selectScenario(id, card);
+    }
   }
 
   function selectCommType(type, el) {

@@ -45,11 +45,11 @@
         <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
           {{ company.name }}
           {% if cache_updated_at %}
-            <span id="updated-badge" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
+            <span id="updated-badge" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
               ✓ обновлено {{ cache_updated_at[:10] }}
             </span>
           {% elif loading %}
-            <span id="loading-badge" style="background:#fef9c3;color:#a16207;border:1px solid #fde68a;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
+            <span id="loading-badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
               ⏳ загружается...
             </span>
           {% endif %}
@@ -60,11 +60,11 @@
         {% if idx %}
           {% set idx_val = idx.get('currentvalue') or idx.get('lastvalue') %}
           {% set idx_chg = idx.get('lasttoprevprice') %}
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:#f5f3ef;border:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12)">
             <span style="font-size:11px;color:var(--text-muted);font-weight:600">IMOEX</span>
             <span style="font-size:13px;font-weight:700">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</span>
             {% if idx_chg is not none %}
-              <span style="font-size:12px;font-weight:700;{% if idx_chg > 0 %}color:#16a34a{% elif idx_chg < 0 %}color:#d44040{% endif %}">
+              <span style="font-size:12px;font-weight:700;{% if idx_chg > 0 %}color:#34d399{% elif idx_chg < 0 %}color:#f87171{% endif %}">
                 {% if idx_chg > 0 %}▲{% elif idx_chg < 0 %}▼{% endif %}{{ "%.2f"|format(idx_chg|abs) }}%
               </span>
             {% endif %}
@@ -84,7 +84,7 @@
         /* Skeleton */
         @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
         .skeleton {
-          background: linear-gradient(90deg, #ede9e2 25%, #f5f3ef 50%, #ede9e2 75%);
+          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
           background-size: 400px 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 6px;
@@ -99,19 +99,19 @@
         /* Top metrics */
         .mkt-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
         @media(max-width:900px){.mkt-metrics{grid-template-columns:repeat(2,1fr);}}
-        .mkt-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
+        .mkt-card { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
         .mkt-card-label { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
         .mkt-card-value { font-size:26px; font-weight:800; line-height:1; margin-bottom:4px; }
         .mkt-card-sub { font-size:11px; color:var(--text-muted); margin-top:4px; }
         .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
-        .badge-bull { background:rgba(22,163,74,0.1); color:#16a34a; border:1px solid rgba(22,163,74,0.25); }
-        .badge-bear { background:rgba(212,64,64,0.1); color:#d44040; border:1px solid rgba(212,64,64,0.25); }
-        .badge-neutral { background:rgba(113,113,122,0.1); color:#71717a; border:1px solid rgba(113,113,122,0.2); }
+        .badge-bull { background:rgba(52,211,153,0.10); color:#34d399; border:1px solid rgba(52,211,153,0.28); }
+        .badge-bear { background:rgba(124,58,237,0.12); color:#f87171; border:1px solid rgba(248,113,113,0.28); }
+        .badge-neutral { background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.50); border:1px solid rgba(255,255,255,0.15); }
 
         /* Summary banner */
         .summary-banner {
-          background:linear-gradient(135deg,rgba(212,64,64,0.06),rgba(232,115,74,0.04));
-          border:1px solid rgba(212,64,64,0.18); border-left:3px solid #d44040;
+          background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04));
+          border:1px solid rgba(124,58,237,0.25); border-left:3px solid #7c3aed;
           border-radius:var(--radius); padding:14px 18px; margin-bottom:20px;
           display:flex; align-items:center; gap:12px;
         }
@@ -126,14 +126,14 @@
         @media(max-width:600px){.mkt-three-col{grid-template-columns:1fr;}}
 
         /* AI block */
-        .ai-block { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
+        .ai-block { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
         .blk-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
 
         /* Position block */
         .pos-summary { font-size:13px; color:var(--text); margin-bottom:10px; line-height:1.5; }
         .pos-points { display:flex; flex-direction:column; gap:6px; }
         .pos-point { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text); }
-        .pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#d44040; flex-shrink:0; }
+        .pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#f87171; flex-shrink:0; }
 
         /* Competitors */
         .comp-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
@@ -141,50 +141,50 @@
         .comp-name { font-size:13px; font-weight:600; flex:1; }
         .comp-note { font-size:11px; color:var(--text-muted); }
         .comp-status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
-        .status-stronger { background:rgba(212,64,64,0.1); color:#d44040; }
-        .status-weaker { background:rgba(22,163,74,0.1); color:#16a34a; }
-        .status-similar { background:rgba(113,113,122,0.1); color:#71717a; }
+        .status-stronger { background:rgba(124,58,237,0.12); color:#f87171; }
+        .status-weaker { background:rgba(52,211,153,0.10); color:#34d399; }
+        .status-similar { background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.50); }
 
         /* Risks */
         .risk-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
         .risk-row:last-child { border-bottom:none; padding-bottom:0; }
         .risk-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .dot-high { background:#d44040; }
-        .dot-medium { background:#d97706; }
-        .dot-low { background:#16a34a; }
+        .dot-high { background:#f87171; }
+        .dot-medium { background:#fbbf24; }
+        .dot-low { background:#34d399; }
         .risk-label { font-size:13px; font-weight:500; flex:1; }
         .risk-sev-badge { font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
-        .sev-high { background:rgba(212,64,64,0.1); color:#d44040; }
-        .sev-medium { background:rgba(217,119,6,0.1); color:#d97706; }
-        .sev-low { background:rgba(22,163,74,0.1); color:#16a34a; }
+        .sev-high { background:rgba(124,58,237,0.12); color:#f87171; }
+        .sev-medium { background:rgba(217,119,6,0.1); color:#fbbf24; }
+        .sev-low { background:rgba(52,211,153,0.10); color:#34d399; }
 
         /* Opportunities */
         .opp-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
         .opp-row:last-child { border-bottom:none; padding-bottom:0; }
-        .opp-icon { color:#16a34a; font-size:14px; flex-shrink:0; }
+        .opp-icon { color:#34d399; font-size:14px; flex-shrink:0; }
         .opp-label { font-size:13px; font-weight:500; }
 
         /* SWOT */
         .swot-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); margin-bottom:16px; }
         .swot-quad { padding:16px 18px; }
         .swot-quad:nth-child(1) { background:rgba(22,163,74,0.05); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
-        .swot-quad:nth-child(2) { background:rgba(212,64,64,0.05); border-bottom:1px solid var(--border); }
+        .swot-quad:nth-child(2) { background:rgba(124,58,237,0.05); border-bottom:1px solid var(--border); }
         .swot-quad:nth-child(3) { background:rgba(37,99,235,0.05); border-right:1px solid var(--border); }
         .swot-quad:nth-child(4) { background:rgba(217,119,6,0.05); }
         .swot-quad-hdr { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
         .swot-letter { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0; }
-        .swot-s .swot-letter { background:rgba(22,163,74,0.15); color:#16a34a; }
-        .swot-w .swot-letter { background:rgba(212,64,64,0.15); color:#d44040; }
+        .swot-s .swot-letter { background:rgba(22,163,74,0.15); color:#34d399; }
+        .swot-w .swot-letter { background:rgba(124,58,237,0.15); color:#f87171; }
         .swot-o .swot-letter { background:rgba(37,99,235,0.15); color:#2563eb; }
-        .swot-t .swot-letter { background:rgba(217,119,6,0.15); color:#d97706; }
+        .swot-t .swot-letter { background:rgba(217,119,6,0.15); color:#fbbf24; }
         .swot-quad-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); }
         .swot-items { display:flex; flex-direction:column; gap:5px; }
         .swot-item { display:flex; align-items:flex-start; gap:7px; font-size:12px; color:var(--text); line-height:1.4; }
         .swot-item-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; margin-top:5px; }
-        .swot-s .swot-item-dot { background:#16a34a; }
-        .swot-w .swot-item-dot { background:#d44040; }
+        .swot-s .swot-item-dot { background:#34d399; }
+        .swot-w .swot-item-dot { background:#f87171; }
         .swot-o .swot-item-dot { background:#2563eb; }
-        .swot-t .swot-item-dot { background:#d97706; }
+        .swot-t .swot-item-dot { background:#fbbf24; }
         @media(max-width:600px){ .swot-grid { grid-template-columns:1fr; } .swot-quad:nth-child(1),.swot-quad:nth-child(3) { border-right:none; } .swot-quad:nth-child(1),.swot-quad:nth-child(2),.swot-quad:nth-child(3) { border-bottom:1px solid var(--border); } }
 
         /* Stocks table */
@@ -194,8 +194,8 @@
         .stocks-table tr:last-child td { border-bottom:none; }
         .stocks-table tr:hover td { background:#f8f6f2; }
         .ticker-cell { font-family:monospace; font-weight:700; }
-        .chg-pos { color:#16a34a; font-weight:700; }
-        .chg-neg { color:#d44040; font-weight:700; }
+        .chg-pos { color:#34d399; font-weight:700; }
+        .chg-neg { color:#f87171; font-weight:700; }
 
         /* Section dot header */
         .sec-hdr { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
@@ -246,7 +246,7 @@
             <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
               <span style="font-size:20px;font-weight:800">{{ stock.get('last') or '—' }}</span>
               {% if chg is not none %}
-                <span style="font-size:12px;font-weight:700;{% if chg > 0 %}color:#16a34a{% elif chg < 0 %}color:#d44040{% endif %}">
+                <span style="font-size:12px;font-weight:700;{% if chg > 0 %}color:#34d399{% elif chg < 0 %}color:#f87171{% endif %}">
                   {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
                 </span>
               {% endif %}
@@ -266,7 +266,7 @@
             {% set idx_chg = idx.get('lasttoprevprice') %}
             <div class="mkt-card-value">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</div>
             {% if idx_chg is not none %}
-              <div style="font-size:12px;font-weight:700;margin-bottom:4px;{% if idx_chg > 0 %}color:#16a34a{% elif idx_chg < 0 %}color:#d44040{% endif %}">
+              <div style="font-size:12px;font-weight:700;margin-bottom:4px;{% if idx_chg > 0 %}color:#34d399{% elif idx_chg < 0 %}color:#f87171{% endif %}">
                 {% if idx_chg > 0 %}▲ +{% elif idx_chg < 0 %}▼ {% endif %}{{ "%.2f"|format(idx_chg) }}%
               </div>
             {% endif %}
@@ -281,7 +281,7 @@
           <div class="mkt-card-label">Рыночный риск</div>
           {% if ai %}
             {% set rs = ai.risk_score | int %}
-            <div class="mkt-card-value" style="{% if rs < 35 %}color:#16a34a{% elif rs < 65 %}color:#d97706{% else %}color:#d44040{% endif %}">{{ rs }}<span style="font-size:13px;font-weight:500">/100</span></div>
+            <div class="mkt-card-value" style="{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">{{ rs }}<span style="font-size:13px;font-weight:500">/100</span></div>
             <span class="badge {% if rs < 35 %}badge-bull{% elif rs < 65 %}badge-neutral{% else %}badge-bear{% endif %}">
               {% if rs < 35 %}Low Risk{% elif rs < 65 %}Moderate{% else %}High Risk{% endif %}
             </span>
@@ -294,7 +294,7 @@
           <div class="mkt-card-label">Тренд рынка</div>
           {% if ai %}
             {% set trend = ai.trend | default('neutral') %}
-            <div class="mkt-card-value" style="font-size:32px;{% if trend == 'bullish' %}color:#16a34a{% elif trend == 'bearish' %}color:#d44040{% else %}color:#d97706{% endif %}">
+            <div class="mkt-card-value" style="font-size:32px;{% if trend == 'bullish' %}color:#34d399{% elif trend == 'bearish' %}color:#f87171{% else %}color:#fbbf24{% endif %}">
               {% if trend == 'bullish' %}↗{% elif trend == 'bearish' %}↘{% else %}→{% endif %}
             </div>
             <span class="badge {% if trend == 'bullish' %}badge-bull{% elif trend == 'bearish' %}badge-bear{% else %}badge-neutral{% endif %}">
@@ -327,7 +327,7 @@
             <div style="position:relative;width:120px;height:66px;flex-shrink:0">
               <canvas id="riskGauge" width="120" height="66"></canvas>
               <div style="position:absolute;bottom:-4px;left:0;right:0;text-align:center">
-                <span style="font-size:22px;font-weight:800;{% if rs < 35 %}color:#16a34a{% elif rs < 65 %}color:#d97706{% else %}color:#d44040{% endif %}">{{ rs }}</span>
+                <span style="font-size:22px;font-weight:800;{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">{{ rs }}</span>
                 <span style="font-size:11px;color:var(--text-muted);font-weight:500">/100</span>
               </div>
             </div>
@@ -337,20 +337,20 @@
             {% set hi_raw = [rs - 67, 0] | max %}
             {% set hi_w = [hi_raw, 33] | min %}
             <div style="flex:1">
-              <div style="font-size:20px;font-weight:800;margin-bottom:4px;{% if rs < 35 %}color:#16a34a{% elif rs < 65 %}color:#d97706{% else %}color:#d44040{% endif %}">
+              <div style="font-size:20px;font-weight:800;margin-bottom:4px;{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">
                 {% if rs < 35 %}Low Risk{% elif rs < 65 %}Moderate{% else %}High Risk{% endif %}
               </div>
               <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
                 <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#16a34a;width:{{ low_w * 3 }}px;min-width:4px"></div>
+                  <div style="height:4px;border-radius:2px;background:#34d399;width:{{ low_w * 3 }}px;min-width:4px"></div>
                   <span style="color:var(--text-muted)">Low 0–33</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#d97706;width:{{ mid_w * 3 }}px;min-width:4px"></div>
+                  <div style="height:4px;border-radius:2px;background:#fbbf24;width:{{ mid_w * 3 }}px;min-width:4px"></div>
                   <span style="color:var(--text-muted)">Mid 34–66</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#d44040;width:{{ hi_w * 3 }}px;min-width:4px"></div>
+                  <div style="height:4px;border-radius:2px;background:#f87171;width:{{ hi_w * 3 }}px;min-width:4px"></div>
                   <span style="color:var(--text-muted)">High 67–100</span>
                 </div>
               </div>
@@ -378,19 +378,19 @@
               </div>
               <div style="flex:1;display:flex;flex-direction:column;gap:12px">
                 <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:10px;height:10px;border-radius:50%;background:#d44040;flex-shrink:0"></div>
+                  <div style="width:10px;height:10px;border-radius:50%;background:#f87171;flex-shrink:0"></div>
                   <div style="flex:1;font-size:13px;color:var(--text-muted)">Сильнее</div>
-                  <div style="font-size:18px;font-weight:800;color:#d44040">{{ ns.stronger }}</div>
+                  <div style="font-size:18px;font-weight:800;color:#f87171">{{ ns.stronger }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">
                   <div style="width:10px;height:10px;border-radius:50%;background:#71717a;flex-shrink:0"></div>
                   <div style="flex:1;font-size:13px;color:var(--text-muted)">Схоже</div>
-                  <div style="font-size:18px;font-weight:800;color:#71717a">{{ ns.similar }}</div>
+                  <div style="font-size:18px;font-weight:800;color:rgba(255,255,255,0.50)">{{ ns.similar }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0"></div>
+                  <div style="width:10px;height:10px;border-radius:50%;background:#34d399;flex-shrink:0"></div>
                   <div style="flex:1;font-size:13px;color:var(--text-muted)">Слабее</div>
-                  <div style="font-size:18px;font-weight:800;color:#16a34a">{{ ns.weaker }}</div>
+                  <div style="font-size:18px;font-weight:800;color:#34d399">{{ ns.weaker }}</div>
                 </div>
               </div>
             </div>
@@ -553,7 +553,7 @@
 
         <div class="ai-block" style="margin-bottom:0">
           <div class="sec-hdr">
-            <div class="sec-dot" style="background:#d44040"></div>
+            <div class="sec-dot" style="background:#f87171"></div>
             <div class="sec-title">Топ акций рынка</div>
             <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">по объёму</span>
           </div>
@@ -604,7 +604,7 @@
       <!-- News -->
       <div class="ai-block" style="margin-top:16px">
         <div class="sec-hdr">
-          <div class="sec-dot" style="background:#d97706"></div>
+          <div class="sec-dot" style="background:#fbbf24"></div>
           <div class="sec-title">Новости</div>
         </div>
         {% if company_news %}
@@ -632,7 +632,7 @@
 // Risk gauge
 (function(){
   const rs = {{ ai_analysis.risk_score | default(50) | int }};
-  const gaugeColor = rs < 35 ? '#16a34a' : rs < 65 ? '#d97706' : '#d44040';
+  const gaugeColor = rs < 35 ? '#34d399' : rs < 65 ? '#fbbf24' : '#f87171';
   const ctx = document.getElementById('riskGauge');
   if (!ctx) return;
   new Chart(ctx, {
@@ -673,8 +673,8 @@
       labels: ['Сильнее', 'Схоже', 'Слабее'],
       datasets: [{
         data: [stronger || 0.01, similar || 0.01, weaker || 0.01],
-        backgroundColor: ['rgba(212,64,64,0.8)', 'rgba(113,113,122,0.5)', 'rgba(22,163,74,0.8)'],
-        borderColor: ['#d44040', '#71717a', '#16a34a'],
+        backgroundColor: ['rgba(248,113,113,0.8)', 'rgba(113,113,122,0.5)', 'rgba(52,211,153,0.8)'],
+        borderColor: ['#f87171', '#71717a', '#34d399'],
         borderWidth: 1.5,
         hoverOffset: 4,
       }]
@@ -695,7 +695,7 @@ const peersData = {{ finance.top_stocks | tojson | safe }};
 const labels = peersData.map(s => s.ticker);
 const changes = peersData.map(s => s.change !== null ? parseFloat(s.change.toFixed(2)) : 0);
 const colors = changes.map(v => v > 0 ? 'rgba(22,163,74,0.75)' : v < 0 ? 'rgba(212,64,64,0.75)' : 'rgba(113,113,122,0.5)');
-const borders = changes.map(v => v > 0 ? '#16a34a' : v < 0 ? '#d44040' : '#71717a');
+const borders = changes.map(v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#71717a');
 const ctx = document.getElementById('peersChart');
 if (ctx) {
   new Chart(ctx, {
@@ -721,10 +721,10 @@ async function triggerRefresh() {
   const btn = document.getElementById('refresh-btn');
   if (btn) { btn.textContent = '↻ Обновляю...'; btn.disabled = true; }
   const badge = document.getElementById('updated-badge') || document.getElementById('loading-badge');
-  if (badge) { badge.textContent = '⏳ обновляется...'; badge.style.background='#fef9c3'; badge.style.color='#a16207'; badge.style.borderColor='#fde68a'; }
+  if (badge) { badge.textContent = '⏳ обновляется...'; badge.style.background='rgba(251,191,36,0.12)'; badge.style.color='#a16207'; badge.style.borderColor='rgba(251,191,36,0.28)'; }
   try {
     await fetch(`/companies/${COMPANY_ID}/market/refresh`, { method: 'POST' });
-    setTimeout(() => pollForData(20), 3000);
+    setTimeout(() => pollForData(20), 5000);
   } catch(e) {
     if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
   }
@@ -745,7 +745,7 @@ async function pollForData(attempts) {
       return;
     }
   } catch(e) {}
-  setTimeout(() => pollForData(attempts - 1), 3000);
+  setTimeout(() => pollForData(attempts - 1), 5000);
 }
 
 // Auto-start polling if no cache

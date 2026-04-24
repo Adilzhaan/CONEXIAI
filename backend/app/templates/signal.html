@@ -8,17 +8,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #080e1a;
-      --surface: #0f1929;
-      --surface2: #111f35;
-      --border: #1a2d47;
-      --border2: #243550;
-      --accent: #4f8fff;
-      --accent-glow: rgba(79,143,255,0.25);
-      --accent-hover: #6fa0ff;
+      --bg: transparent;
+      --surface: rgba(255,255,255,0.05);
+      --surface2: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.09);
+      --border2: rgba(255,255,255,0.13);
+      --accent: #7c3aed;
+      --accent-glow: rgba(124,58,237,0.30);
+      --accent-hover: #a78bfa;
       --text: #e8edf5;
-      --text-muted: #6b7a94;
-      --text-dim: #4a5568;
+      --text-muted: rgba(255,255,255,0.55);
+      --text-dim: rgba(255,255,255,0.35);
       --success: #34d399;
       --success-bg: rgba(52,211,153,0.08);
       --success-border: rgba(52,211,153,0.25);
@@ -28,7 +28,7 @@
     }
 
     body {
-      background: var(--bg);
+      background: linear-gradient(135deg, #0f1020 0%, #3d1265 100%); background-attachment: fixed;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
       color: var(--text);
       min-height: 100vh;
@@ -48,7 +48,7 @@
       transform: translateX(-50%);
       width: 600px;
       height: 600px;
-      background: radial-gradient(circle, rgba(79,143,255,0.07) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
       pointer-events: none;
       z-index: 0;
     }
@@ -191,7 +191,7 @@
     textarea {
       width: 100%;
       padding: 14px 16px;
-      background: var(--bg);
+      background: linear-gradient(135deg, #0f1020 0%, #3d1265 100%); background-attachment: fixed;
       border: 1.5px solid var(--border);
       border-radius: 10px;
       color: var(--text);
@@ -358,7 +358,7 @@
     .page-loader {
       position: fixed;
       inset: 0;
-      background: var(--bg);
+      background: linear-gradient(135deg, #0f1020 0%, #3d1265 100%); background-attachment: fixed;
       display: flex;
       align-items: center;
       justify-content: center;

@@ -413,23 +413,79 @@ async def dashboard(req: Request):
     return templates.TemplateResponse(req, "dashboard.html", ctx)
 
 
+@app.get("/companies/new", response_class=HTMLResponse)
+async def company_new_page(req: Request):
+    user = await get_current_user(req)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(req, "company_new.html", {"app_name": settings.APP_NAME})
+
+
 @app.post("/companies/create")
 async def companies_create(
     req: Request,
     name: str = Form(...),
     ceo_email: str = Form(...),
+    ceo_name: str = Form(""),
+    website: str = Form(""),
+    location: str = Form(""),
+    industry: str = Form(""),
+    description: str = Form(""),
+    market_info: str = Form(""),
+    competitors_json: str = Form("[]"),
+    news_sources_json: str = Form("[]"),
 ):
+    import json as _json
     user = await get_current_user(req)
     access_token, _ = _get_tokens(req)
     if not user or not access_token:
         return RedirectResponse(url="/login", status_code=302)
 
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    row = {
+        "name": name.strip(),
+        "ceo_email": ceo_email.strip(),
+    }
+    if ceo_name.strip():   row["ceo_name"]    = ceo_name.strip()
+    if website.strip():    row["website"]      = website.strip()
+    if location.strip():   row["location"]     = location.strip()
+    if industry.strip():   row["industry"]     = industry.strip()
+    if description.strip():row["description"]  = description.strip()
+    if market_info.strip():row["market_info"]  = market_info.strip()
+
+    try:
+        news_list = _json.loads(news_sources_json) if news_sources_json else []
+        if isinstance(news_list, list):
+            row["news_sources"] = news_list
+    except Exception:
+        pass
+
     company = await supabase.rest_insert(
         table="companies",
-        access_token=access_token,
-        row={"name": name, "ceo_email": ceo_email},
+        access_token=effective_token,
+        row=row,
     )
-    return RedirectResponse(url=f"/companies/{company['id']}", status_code=302)
+    company_id = company["id"]
+
+    # Insert competitors into the competitors table
+    try:
+        comp_list = _json.loads(competitors_json) if competitors_json else []
+        for c in comp_list[:5]:
+            if isinstance(c, dict) and c.get("name", "").strip():
+                await supabase.rest_insert(
+                    table="competitors",
+                    access_token=effective_token,
+                    row={
+                        "company_id": company_id,
+                        "name": c["name"].strip(),
+                        "website": c.get("website", "").strip(),
+                    },
+                )
+    except Exception as e:
+        logger.warning("Failed to insert competitors: %s", e)
+
+    return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
 
 
 @app.get("/signal", response_class=HTMLResponse)

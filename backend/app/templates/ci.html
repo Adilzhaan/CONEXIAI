@@ -32,9 +32,9 @@
         <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
           {{ company.name }}
           {% if updated_at %}
-            <span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">✓ {{ updated_at[:10] }}</span>
+            <span style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">✓ {{ updated_at[:10] }}</span>
           {% elif loading %}
-            <span id="loading-badge" style="background:#fef9c3;color:#a16207;border:1px solid #fde68a;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">⏳ загружается...</span>
+            <span id="loading-badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">⏳ загружается...</span>
           {% endif %}
         </div>
       </div>
@@ -54,39 +54,39 @@
         .ci-grid { display:grid; grid-template-columns:280px 1fr; gap:20px; }
         @media(max-width:900px){.ci-grid{grid-template-columns:1fr;}}
 
-        .ci-panel { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+        .ci-panel { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.15); }
         .ci-panel-hdr { padding:14px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; display:flex; align-items:center; justify-content:space-between; }
 
         /* Competitor list */
         .comp-row { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--border); }
         .comp-row:last-child { border-bottom:none; }
-        .comp-avatar { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#d44040,#e8734a); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0; }
+        .comp-avatar { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#7c3aed,#5b21b6); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0; }
         .comp-info { flex:1; min-width:0; }
         .comp-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .comp-site { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .comp-del { width:24px; height:24px; border-radius:6px; border:none; background:transparent; cursor:pointer; color:var(--text-muted); font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .comp-del:hover { background:#fee2e2; color:#d44040; }
+        .comp-del:hover { background:rgba(248,113,113,0.15); color:#f87171; }
 
         /* Add form */
         .add-form { padding:12px 16px; }
         .add-form input { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; margin-bottom:6px; outline:none; }
-        .add-form input:focus { border-color:#d44040; }
-        .add-form button { width:100%; padding:8px; background:#d44040; color:#fff; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+        .add-form input:focus { border-color:#f87171; }
+        .add-form button { width:100%; padding:8px; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
         .add-form button:hover { background:#b83030; }
 
         /* Summary banner */
-        .ci-summary { background:linear-gradient(135deg,rgba(212,64,64,0.06),rgba(232,115,74,0.04)); border:1px solid rgba(212,64,64,0.18); border-left:3px solid #d44040; border-radius:var(--radius); padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+        .ci-summary { background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04)); border:1px solid rgba(124,58,237,0.25); border-left:3px solid #f87171; border-radius:var(--radius); padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
         .threat-badge { padding:3px 12px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
-        .threat-high { background:rgba(212,64,64,0.12); color:#d44040; border:1px solid rgba(212,64,64,0.3); }
-        .threat-medium { background:rgba(217,119,6,0.12); color:#d97706; border:1px solid rgba(217,119,6,0.3); }
-        .threat-low { background:rgba(22,163,74,0.12); color:#16a34a; border:1px solid rgba(22,163,74,0.3); }
+        .threat-high { background:rgba(212,64,64,0.12); color:#f87171; border:1px solid rgba(212,64,64,0.3); }
+        .threat-medium { background:rgba(217,119,6,0.12); color:#fbbf24; border:1px solid rgba(217,119,6,0.3); }
+        .threat-low { background:rgba(52,211,153,0.12); color:#34d399; border:1px solid rgba(22,163,74,0.3); }
 
         /* Competitor cards */
-        .ci-comp-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 1px 6px rgba(0,0,0,0.06); margin-bottom:14px; }
+        .ci-comp-card { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.15); margin-bottom:14px; }
         .ci-comp-hdr { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
         .activity-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .act-growing { background:#16a34a; }
-        .act-stable { background:#d97706; }
+        .act-growing { background:#34d399; }
+        .act-stable { background:#fbbf24; }
         .act-declining { background:#71717a; }
         .ci-comp-body { padding:14px 16px; }
         .news-item { padding:7px 0; border-bottom:1px solid var(--border); }
@@ -100,7 +100,7 @@
         /* Three col */
         .ci-three { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:16px; }
         @media(max-width:800px){.ci-three{grid-template-columns:1fr;}}
-        .ci-block { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+        .ci-block { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:0 4px 20px rgba(0,0,0,0.15); }
         .ci-block-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; }
       </style>
 
@@ -202,7 +202,7 @@
               <div class="ci-block-title">⚠️ Риски</div>
               <div class="ci-list">
                 {% for r in ai.risks %}
-                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#d44040"></div><span>{{ r }}</span></div>
+                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#f87171"></div><span>{{ r }}</span></div>
                 {% else %}<div style="font-size:12px;color:var(--text-muted)">—</div>{% endfor %}
               </div>
             </div>
@@ -210,7 +210,7 @@
               <div class="ci-block-title">🚀 Возможности</div>
               <div class="ci-list">
                 {% for o in ai.opportunities %}
-                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#16a34a"></div><span>{{ o }}</span></div>
+                  <div class="ci-list-item"><div class="ci-list-dot" style="background:#34d399"></div><span>{{ o }}</span></div>
                 {% else %}<div style="font-size:12px;color:var(--text-muted)">—</div>{% endfor %}
               </div>
             </div>
@@ -253,7 +253,7 @@
               </div>
               <div class="ci-comp-body">
                 {% if ai_comp and ai_comp.key_move %}
-                  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#a16207">
+                  <div style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.28);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#a16207">
                     🔑 {{ ai_comp.key_move }}
                   </div>
                 {% endif %}
@@ -299,7 +299,7 @@ async function triggerRefresh() {
   if (btn) { btn.textContent = '↻ Обновляю...'; btn.disabled = true; }
   try {
     await fetch(`/companies/${COMPANY_ID}/ci/refresh`, { method: 'POST' });
-    setTimeout(() => pollForData(25), 3000);
+    setTimeout(() => pollForData(25), 5000);
   } catch(e) {
     if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
   }

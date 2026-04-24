@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+{% block title %}Новая компания — {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="sidebar-layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="sidebar-logo-icon">⚡</div>
+        <div>
+          <div class="sidebar-logo-text">{{ app_name }}</div>
+          <div class="sidebar-logo-sub">Risk Intelligence</div>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-item active"><span class="sidebar-item-icon">⊞</span> Command Center</a>
+      <div class="sidebar-section-label">Система</div>
+      <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
+    </nav>
+  </aside>
+
+  <div class="sidebar-content">
+    <div class="sidebar-topbar">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Новая компания</div>
+        <div style="font-size:11px;color:var(--text-muted)">Заполните профиль для точного AI-анализа</div>
+      </div>
+      <a href="/dashboard" class="btn btn-secondary btn-sm">← Назад</a>
+    </div>
+
+    <div class="sidebar-wrap">
+      <style>
+        .wizard-wrap {
+          max-width: 680px; margin: 0 auto;
+        }
+
+        /* Step indicator */
+        .step-bar {
+          display: flex; align-items: center; margin-bottom: 32px;
+        }
+        .step-node {
+          display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
+        }
+        .step-circle {
+          width: 36px; height: 36px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px; font-weight: 700;
+          background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+          color: rgba(255,255,255,0.35); transition: all 0.25s;
+        }
+        .step-circle.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 4px rgba(124,58,237,0.20); }
+        .step-circle.done   { background: rgba(52,211,153,0.20); border-color: #34d399; color: #34d399; }
+        .step-lbl { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.35); white-space: nowrap; transition: color 0.25s; }
+        .step-lbl.active { color: #fff; }
+        .step-lbl.done   { color: #34d399; }
+        .step-connector { flex: 1; height: 1px; background: rgba(255,255,255,0.12); margin: 0 8px; margin-bottom: 22px; transition: background 0.25s; }
+        .step-connector.done { background: #34d399; }
+
+        /* Card panel */
+        .wizard-card {
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 20px; backdrop-filter: blur(20px);
+          overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,0.20);
+        }
+        .wizard-card-hdr {
+          padding: 22px 28px 18px;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.02);
+        }
+        .wizard-card-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+        .wizard-card-sub   { font-size: 12px; color: var(--text-muted); }
+
+        .wizard-body { padding: 24px 28px; }
+
+        /* Fields */
+        .wf { margin-bottom: 18px; }
+        .wf:last-child { margin-bottom: 0; }
+        .wf label {
+          display: block; font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: .06em;
+          color: rgba(255,255,255,0.45); margin-bottom: 7px;
+        }
+        .wf input, .wf textarea, .wf select {
+          width: 100%; padding: 11px 14px; border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.10);
+          background: rgba(255,255,255,0.05); color: #fff;
+          font-size: 13px; outline: none; font-family: inherit;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .wf input:focus, .wf textarea:focus, .wf select:focus {
+          border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+        }
+        .wf input::placeholder, .wf textarea::placeholder { color: rgba(255,255,255,0.22); }
+        .wf select option { background: #1a1040; }
+        .wf textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+        .wf-hint { font-size: 11px; color: rgba(255,255,255,0.30); margin-top: 5px; }
+        .wf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media(max-width:600px){ .wf-row { grid-template-columns: 1fr; } }
+
+        /* Competitor list */
+        .comp-item {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 14px; margin-bottom: 8px;
+          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 10px;
+        }
+        .comp-item-name { font-size: 13px; font-weight: 600; flex: 1; }
+        .comp-item-url  { font-size: 11px; color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .comp-del {
+          width: 24px; height: 24px; border-radius: 6px; border: none; cursor: pointer; flex-shrink: 0;
+          background: rgba(248,113,113,0.12); color: #f87171;
+          display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;
+        }
+        .add-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: center; }
+        @media(max-width:600px){ .add-row { grid-template-columns: 1fr; } }
+
+        /* News tags */
+        .news-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; min-height: 28px; }
+        .ntag {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 500;
+          background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.28); color: #a78bfa;
+        }
+        .ntag-del { cursor: pointer; color: rgba(167,139,250,0.55); font-size: 14px; }
+        .ntag-del:hover { color: #f87171; }
+
+        /* Footer */
+        .wizard-footer {
+          padding: 18px 28px;
+          border-top: 1px solid rgba(255,255,255,0.08);
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          background: rgba(255,255,255,0.02);
+        }
+        .step-hint { font-size: 11px; color: rgba(255,255,255,0.25); }
+      </style>
+
+      <div class="wizard-wrap">
+
+        <!-- Step bar -->
+        <div class="step-bar">
+          <div class="step-node">
+            <div class="step-circle active" id="sc1">1</div>
+            <div class="step-lbl active" id="sl1">Основное</div>
+          </div>
+          <div class="step-connector" id="cn1"></div>
+          <div class="step-node">
+            <div class="step-circle" id="sc2">2</div>
+            <div class="step-lbl" id="sl2">Контекст</div>
+          </div>
+          <div class="step-connector" id="cn2"></div>
+          <div class="step-node">
+            <div class="step-circle" id="sc3">3</div>
+            <div class="step-lbl" id="sl3">Конкуренты</div>
+          </div>
+        </div>
+
+        <form method="post" action="/companies/create" id="company-form">
+          <input type="hidden" name="competitors_json"  id="competitors_json"  value="[]" />
+          <input type="hidden" name="news_sources_json" id="news_sources_json" value="[]" />
+
+          <!-- ── Step 1 ── -->
+          <div id="step-1">
+            <div class="wizard-card">
+              <div class="wizard-card-hdr">
+                <div class="wizard-card-title">Основная информация</div>
+                <div class="wizard-card-sub">Название, CEO и контактные данные</div>
+              </div>
+              <div class="wizard-body">
+                <div class="wf-row">
+                  <div class="wf">
+                    <label>Название компании *</label>
+                    <input name="name" type="text" placeholder="ТОО «Acme»" required />
+                  </div>
+                  <div class="wf">
+                    <label>Сайт</label>
+                    <input name="website" type="url" placeholder="https://acme.kz" />
+                  </div>
+                </div>
+                <div class="wf-row" style="margin-top:4px">
+                  <div class="wf">
+                    <label>Имя CEO *</label>
+                    <input name="ceo_name" type="text" placeholder="Алибек Сейтов" required />
+                  </div>
+                  <div class="wf">
+                    <label>Email CEO *</label>
+                    <input name="ceo_email" type="email" placeholder="ceo@acme.kz" required />
+                  </div>
+                </div>
+              </div>
+              <div class="wizard-footer">
+                <span class="step-hint">Шаг 1 из 3</span>
+                <button type="button" class="btn btn-primary" onclick="stepNext()">Далее →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 2 ── -->
+          <div id="step-2" style="display:none">
+            <div class="wizard-card">
+              <div class="wizard-card-hdr">
+                <div class="wizard-card-title">Контекст компании</div>
+                <div class="wizard-card-sub">Поможет AI точнее анализировать риски</div>
+              </div>
+              <div class="wizard-body">
+                <div class="wf-row">
+                  <div class="wf">
+                    <label>Локация *</label>
+                    <input name="location" type="text" placeholder="Алматы, Казахстан" required />
+                  </div>
+                  <div class="wf">
+                    <label>Отрасль *</label>
+                    <select name="industry" required>
+                      <option value="" disabled selected>Выбрать…</option>
+                      <option>Финансы и банкинг</option>
+                      <option>Технологии и IT</option>
+                      <option>Ритейл и e-commerce</option>
+                      <option>Производство</option>
+                      <option>Добывающая промышленность</option>
+                      <option>Строительство и недвижимость</option>
+                      <option>Телеком и медиа</option>
+                      <option>Здравоохранение и фарма</option>
+                      <option>Образование</option>
+                      <option>Логистика и транспорт</option>
+                      <option>Сельское хозяйство</option>
+                      <option>Энергетика</option>
+                      <option>Другое</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="wf" style="margin-top:4px">
+                  <label>Описание компании</label>
+                  <textarea name="description" placeholder="Чем занимается компания, её продукты/услуги, целевой рынок…"></textarea>
+                </div>
+                <div class="wf">
+                  <label>Рыночный контекст</label>
+                  <textarea name="market_info" placeholder="Объём рынка, ключевые тренды, регуляторная среда…" style="min-height:64px"></textarea>
+                </div>
+              </div>
+              <div class="wizard-footer">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="stepBack()">← Назад</button>
+                <span class="step-hint">Шаг 2 из 3</span>
+                <button type="button" class="btn btn-primary" onclick="stepNext()">Далее →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 3 ── -->
+          <div id="step-3" style="display:none">
+            <div class="wizard-card">
+              <div class="wizard-card-hdr">
+                <div class="wizard-card-title">Конкуренты и источники</div>
+                <div class="wizard-card-sub">Для CI Monitor и качества анализа</div>
+              </div>
+              <div class="wizard-body">
+
+                <!-- Competitors -->
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);margin-bottom:10px">
+                  Конкуренты <span style="font-weight:400;color:var(--text-muted)">(до 5)</span>
+                </div>
+                <div id="comp-list"></div>
+                <div class="add-row" id="comp-add-row">
+                  <input id="comp-name-in" type="text" placeholder="Название конкурента"
+                    style="padding:10px 13px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;width:100%;" />
+                  <input id="comp-url-in" type="url" placeholder="https://competitor.kz"
+                    style="padding:10px 13px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;width:100%;" />
+                  <button type="button" onclick="addComp()" class="btn btn-secondary btn-sm">+ Добавить</button>
+                </div>
+                <div class="wf-hint" style="margin-top:8px">Конкуренты сразу появятся в CI Monitor</div>
+
+                <!-- News sources -->
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);margin-top:24px;margin-bottom:10px">
+                  Рекомендуемые источники новостей
+                </div>
+                <div class="news-tags" id="news-tags"></div>
+                <div style="display:flex;gap:10px">
+                  <input id="news-in" type="text" placeholder="Forbes Kazakhstan, Kapital.kz…"
+                    style="padding:10px 13px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;flex:1;"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault();addNews();}" />
+                  <button type="button" onclick="addNews()" class="btn btn-secondary btn-sm">+ Добавить</button>
+                </div>
+                <div class="wf-hint" style="margin-top:6px">AI будет учитывать эти источники при анализе рисков</div>
+
+              </div>
+              <div class="wizard-footer">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="stepBack()">← Назад</button>
+                <span class="step-hint">Шаг 3 из 3</span>
+                <button type="submit" class="btn btn-primary" id="create-btn">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Создать компанию
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentStep = 1;
+
+function goToStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('step-' + i);
+    if (el) el.style.display = i === n ? 'block' : 'none';
+
+    const sc = document.getElementById('sc' + i);
+    const sl = document.getElementById('sl' + i);
+    sc.className = 'step-circle' + (i < n ? ' done' : (i === n ? ' active' : ''));
+    sc.textContent = i < n ? '✓' : i;
+    sl.className = 'step-lbl' + (i < n ? ' done' : (i === n ? ' active' : ''));
+
+    const cn = document.getElementById('cn' + i);
+    if (cn) cn.className = 'step-connector' + (i < n ? ' done' : '');
+  }
+  currentStep = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function stepNext() {
+  const step = document.getElementById('step-' + currentStep);
+  for (const f of step.querySelectorAll('[required]')) {
+    if (!f.value.trim()) {
+      f.focus();
+      f.style.borderColor = '#f87171';
+      f.addEventListener('input', () => f.style.borderColor = '', { once: true });
+      return;
+    }
+  }
+  if (currentStep < 3) goToStep(currentStep + 1);
+}
+
+function stepBack() {
+  if (currentStep > 1) goToStep(currentStep - 1);
+}
+
+// ── Competitors ──
+let comps = [];
+function addComp() {
+  const name = document.getElementById('comp-name-in').value.trim();
+  const url  = document.getElementById('comp-url-in').value.trim();
+  if (!name || comps.length >= 5) return;
+  comps.push({ name, website: url });
+  document.getElementById('comp-name-in').value = '';
+  document.getElementById('comp-url-in').value  = '';
+  renderComps();
+}
+function removeComp(i) { comps.splice(i, 1); renderComps(); }
+function renderComps() {
+  document.getElementById('competitors_json').value = JSON.stringify(comps);
+  document.getElementById('comp-list').innerHTML = comps.map((c, i) => `
+    <div class="comp-item">
+      <span class="comp-item-name">${c.name}</span>
+      <span class="comp-item-url">${c.website || '—'}</span>
+      <button type="button" class="comp-del" onclick="removeComp(${i})">×</button>
+    </div>`).join('');
+  document.getElementById('comp-add-row').style.display = comps.length >= 5 ? 'none' : 'grid';
+}
+
+// ── News sources ──
+let news = [];
+function addNews() {
+  const val = document.getElementById('news-in').value.trim();
+  if (!val || news.includes(val) || news.length >= 8) return;
+  news.push(val);
+  document.getElementById('news-in').value = '';
+  renderNews();
+}
+function removeNews(i) { news.splice(i, 1); renderNews(); }
+function renderNews() {
+  document.getElementById('news_sources_json').value = JSON.stringify(news);
+  document.getElementById('news-tags').innerHTML = news.map((t, i) => `
+    <span class="ntag">${t}<span class="ntag-del" onclick="removeNews(${i})">×</span></span>`).join('');
+}
+
+// ── Submit ──
+document.getElementById('company-form').addEventListener('submit', function() {
+  const btn = document.getElementById('create-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Создаю…';
+});
+</script>
+{% endblock %}

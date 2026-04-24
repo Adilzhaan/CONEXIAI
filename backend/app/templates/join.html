@@ -2,12 +2,13 @@
 {% block title %}Приглашение — {{ app_name }}{% endblock %}
 
 {% block body %}
-<div class="auth-page">
-  <div class="auth-box">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 24px">
+  <div style="width:100%;max-width:420px">
 
-    <div class="auth-logo">
-      <div class="auth-logo-text">{{ app_name }}</div>
-      <div class="auth-logo-sub">AI-анализ рисков для бизнеса</div>
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 8px 24px rgba(124,58,237,0.40);font-size:24px">🛡️</div>
+      <div style="font-size:22px;font-weight:800;letter-spacing:0.05em;background:linear-gradient(135deg,#a78bfa,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">{{ app_name }}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-top:4px">AI-анализ рисков для бизнеса</div>
     </div>
 
     {% if invalid %}
@@ -20,13 +21,13 @@
       </div>
 
     {% else %}
-      <div class="card" style="padding:28px;text-align:center">
-        <div style="font-size:36px;margin-bottom:16px">🏢</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">Вас пригласили в</div>
-        <div style="font-size:22px;font-weight:800;color:var(--accent);margin-bottom:6px">{{ company_name }}</div>
+      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:20px;padding:32px;backdrop-filter:blur(20px);text-align:center">
+        <div style="font-size:40px;margin-bottom:16px">🏢</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px;color:rgba(255,255,255,0.70)">Вас пригласили в</div>
+        <div style="font-size:24px;font-weight:800;color:#a78bfa;margin-bottom:10px">{{ company_name }}</div>
         {% if role_label %}
           <div style="margin-bottom:20px">
-            <span style="font-size:13px;padding:4px 12px;border-radius:999px;background:rgba(79,143,255,0.12);color:var(--accent)">
+            <span style="font-size:13px;padding:4px 14px;border-radius:999px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.28);color:#a78bfa">
               {{ role_label }}
             </span>
           </div>
@@ -34,9 +35,9 @@
           <div style="margin-bottom:20px"></div>
         {% endif %}
 
-        <div style="font-size:14px;color:var(--text-muted);margin-bottom:24px;line-height:1.6">
+        <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:24px;line-height:1.7">
           Войдите или зарегистрируйтесь с email<br>
-          <strong style="color:var(--text)">{{ invited_email }}</strong>
+          <strong style="color:#fff">{{ invited_email }}</strong>
         </div>
 
         <a href="/login?invite={{ token }}" class="btn btn-primary btn-full" style="margin-bottom:10px">

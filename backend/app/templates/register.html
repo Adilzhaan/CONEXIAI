@@ -2,12 +2,13 @@
 {% block title %}Регистрация — {{ app_name }}{% endblock %}
 
 {% block body %}
-<div class="auth-page">
-  <div class="auth-box">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 24px">
+  <div style="width:100%;max-width:460px">
 
-    <div class="auth-logo">
-      <div class="auth-logo-text">{{ app_name }}</div>
-      <div class="auth-logo-sub">AI-анализ рисков для бизнеса</div>
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 8px 24px rgba(124,58,237,0.40);font-size:24px">🛡️</div>
+      <div style="font-size:24px;font-weight:800;letter-spacing:0.05em;background:linear-gradient(135deg,#a78bfa,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">{{ app_name }}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-top:4px">AI-анализ рисков для бизнеса</div>
     </div>
 
     {% if error %}
@@ -18,41 +19,40 @@
     {% endif %}
 
     {% if email_exists %}
-      <div class="alert alert-error" style="border-color:rgba(251,191,36,0.4);background:rgba(251,191,36,0.08)">
-        <span class="alert-icon" style="color:#fbbf24">!</span>
+      <div class="alert" style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.28);color:#fbbf24">
+        <span class="alert-icon">!</span>
         <div>
           Аккаунт с этим email уже существует.<br>
-          <a href="/login?email={{ prefill_email }}" style="color:var(--accent);font-weight:600">Войдите в аккаунт →</a>
+          <a href="/login?email={{ prefill_email }}" style="color:#a78bfa;font-weight:600">Войдите в аккаунт →</a>
         </div>
       </div>
     {% endif %}
 
     {% if message %}
-      <div class="alert alert-success">
-        <span class="alert-icon">✓</span>
-        <div>
-          <strong>Аккаунт создан!</strong><br>
+      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:20px;padding:32px;backdrop-filter:blur(20px);text-align:center">
+        <div style="font-size:40px;margin-bottom:16px">✅</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">Аккаунт создан!</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.60);line-height:1.6;margin-bottom:20px">
           Мы отправили письмо со ссылкой для подтверждения.<br>
-          Перейдите по ссылке в письме, затем <a href="/login">войдите</a>.
+          Перейдите по ссылке в письме, затем войдите.
         </div>
-      </div>
-
-      <div class="card" style="padding: 20px;">
-        <div style="font-weight: 600; margin-bottom: 12px;">Что дальше?</div>
-        <ol style="margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 14px; line-height: 1.8;">
-          <li>Откройте почту и найдите письмо от CONEXIAI</li>
-          <li>Нажмите на ссылку «Подтвердить email»</li>
-          <li>Вернитесь и <a href="/login">войдите в аккаунт</a></li>
-        </ol>
-        <div class="hint mt-12">Не пришло письмо? Проверьте папку «Спам».</div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:16px;text-align:left;margin-bottom:20px">
+          <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.70);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Что дальше?</div>
+          <ol style="margin:0;padding-left:18px;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.9">
+            <li>Откройте почту и найдите письмо от CONEXIAI</li>
+            <li>Нажмите на ссылку «Подтвердить email»</li>
+            <li>Вернитесь и войдите в аккаунт</li>
+          </ol>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:10px">Не пришло письмо? Проверьте папку «Спам».</div>
+        </div>
+        <a href="/login" class="btn btn-primary btn-full">Войти в аккаунт</a>
       </div>
 
     {% else %}
-      <div class="card" style="padding: 28px;">
-        <h2 style="margin: 0 0 20px; font-size: 20px; font-weight: 600;">Создать аккаунт</h2>
+      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:20px;padding:28px;backdrop-filter:blur(20px)">
 
         <a href="/auth/google" class="btn btn-secondary btn-full" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px">
-          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
           Зарегистрироваться через Google
         </a>
 
@@ -61,41 +61,27 @@
         <form method="post" action="/register" id="reg-form">
           <div class="field">
             <label for="full_name">Имя и фамилия</label>
-            <input
-              id="full_name" name="full_name" type="text"
-              placeholder="Иван Иванов"
-              autocomplete="name"
-              required
-            />
+            <input id="full_name" name="full_name" type="text"
+              placeholder="Иван Иванов" autocomplete="name" required />
           </div>
 
           <div class="field mt-12">
             <label for="email">Email</label>
-            <input
-              id="email" name="email" type="email"
-              placeholder="you@company.com"
-              autocomplete="email"
-              required
-            />
+            <input id="email" name="email" type="email"
+              placeholder="you@company.com" autocomplete="email" required />
           </div>
 
           <div class="field mt-12">
             <label for="password">Пароль</label>
             <div class="pwd-wrap">
-              <input
-                id="password" name="password" type="password"
-                placeholder="Минимум 6 символов"
-                autocomplete="new-password"
-                required minlength="6"
-                oninput="checkStrength(this.value)"
-              />
-              <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)" title="Показать/скрыть пароль">
-                👁
-              </button>
+              <input id="password" name="password" type="password"
+                placeholder="Минимум 6 символов" autocomplete="new-password"
+                required minlength="6" oninput="checkStrength(this.value)" />
+              <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)">👁</button>
             </div>
             <div class="hint" id="pwd-hint">Минимум 6 символов</div>
-            <div id="pwd-bar" style="margin-top:6px; height:3px; border-radius:2px; background:var(--border); overflow:hidden;">
-              <div id="pwd-fill" style="height:100%; width:0; transition:width 0.2s, background 0.2s;"></div>
+            <div style="margin-top:6px;height:3px;border-radius:2px;background:rgba(255,255,255,0.10);overflow:hidden">
+              <div id="pwd-fill" style="height:100%;width:0;transition:width 0.2s,background 0.2s"></div>
             </div>
           </div>
 
@@ -106,11 +92,11 @@
           </div>
         </form>
 
-        <div class="divider"><span class="divider-text">уже есть аккаунт?</span></div>
+      </div>
 
-        <a href="/login" class="btn btn-secondary btn-full">
-          Войти
-        </a>
+      <div style="text-align:center;margin-top:20px;font-size:13px;color:rgba(255,255,255,0.45)">
+        Уже есть аккаунт?
+        <a href="/login" style="color:#a78bfa;font-weight:600;margin-left:4px">Войти →</a>
       </div>
     {% endif %}
 
@@ -120,13 +106,8 @@
 <script>
 function togglePwd(id, btn) {
   var input = document.getElementById(id);
-  if (input.type === 'password') {
-    input.type = 'text';
-    btn.textContent = '🙈';
-  } else {
-    input.type = 'password';
-    btn.textContent = '👁';
-  }
+  input.type = input.type === 'password' ? 'text' : 'password';
+  btn.textContent = input.type === 'password' ? '👁' : '🙈';
 }
 
 function checkStrength(val) {
@@ -134,14 +115,15 @@ function checkStrength(val) {
   var hint = document.getElementById('pwd-hint');
   var len = val.length;
   var pct, color, text;
-  if (len === 0) { pct = 0; color = '#4b5563'; text = 'Минимум 6 символов'; }
+  if (len === 0) { pct = 0; color = 'transparent'; text = 'Минимум 6 символов'; }
   else if (len < 6) { pct = 25; color = '#f87171'; text = 'Слишком короткий'; }
   else if (len < 10) { pct = 55; color = '#fbbf24'; text = 'Средний'; }
-  else if (len < 14) { pct = 80; color = '#4ade80'; text = 'Хороший'; }
-  else { pct = 100; color = '#4ade80'; text = 'Отличный'; }
+  else if (len < 14) { pct = 80; color = '#34d399'; text = 'Хороший'; }
+  else { pct = 100; color = '#34d399'; text = 'Отличный'; }
   fill.style.width = pct + '%';
   fill.style.background = color;
   hint.textContent = text;
+  hint.style.color = len > 0 ? color : 'rgba(255,255,255,0.45)';
 }
 
 document.getElementById('reg-form').addEventListener('submit', function() {

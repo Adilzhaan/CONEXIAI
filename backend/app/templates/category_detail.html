@@ -105,15 +105,15 @@
   .resolve-toggle {
     display: inline-flex; align-items: center; gap: 7px;
     font-size: 12px; font-weight: 500; padding: 5px 12px 5px 7px;
-    border-radius: 999px; border: 1.5px solid #e5e7eb;
-    background: #fff; color: #9ca3af; cursor: pointer;
+    border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.05); color: #9ca3af; cursor: pointer;
     transition: all 0.18s; user-select: none; white-space: nowrap;
   }
-  .resolve-toggle:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
-  .resolve-toggle:hover .rt-circle { border-color: #16a34a; background: #dcfce7; }
+  .resolve-toggle:hover { border-color: #34d399; color: #34d399; background: rgba(52,211,153,0.10); }
+  .resolve-toggle:hover .rt-circle { border-color: #34d399; background: #dcfce7; }
   .rt-circle {
     width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
-    border: 1.5px solid #d1d5db; background: #f9fafb;
+    border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08);
     display: flex; align-items: center; justify-content: center;
     transition: all 0.18s;
   }
@@ -122,16 +122,16 @@
 
   /* Resolved state */
   .resolve-toggle.is-resolved {
-    border-color: #bbf7d0; background: #f0fdf4; color: #15803d;
+    border-color: rgba(52,211,153,0.28); background: rgba(52,211,153,0.10); color: #15803d;
   }
   .resolve-toggle.is-resolved .rt-circle {
-    background: #16a34a; border-color: #16a34a;
+    background: #34d399; border-color: #34d399;
   }
   .resolve-toggle.is-resolved .rt-circle svg { display: block; color: #fff; }
   .resolve-toggle.is-resolved:hover {
     border-color: #fca5a5; background: #fef2f2; color: #c93a3a;
   }
-  .resolve-toggle.is-resolved:hover .rt-circle { background: #fee2e2; border-color: #fca5a5; }
+  .resolve-toggle.is-resolved:hover .rt-circle { background: rgba(248,113,113,0.12); border-color: #fca5a5; }
   .resolve-toggle.is-resolved:hover .rt-circle svg { color: #c93a3a; }
   .resolve-toggle.is-resolved:hover .rt-label::after { content: ' — отменить'; font-size: 10px; opacity: 0.7; }
 

@@ -49,7 +49,7 @@
     <!-- Topbar -->
     <div class="sidebar-topbar">
       <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#d44040,#e8734a);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
           {{ company.name[0] | upper }}
         </div>
         <div>
@@ -96,7 +96,7 @@
         /* ── Tabs ── */
         .cd-tabs {
           display:flex; gap:0; border-bottom:1px solid var(--border);
-          background:#fff; padding:0 32px; position:sticky; top:56px; z-index:9;
+          background:rgba(15,16,32,0.60); backdrop-filter:blur(20px); padding:0 32px; position:sticky; top:56px; z-index:9;
         }
         .cd-tab {
           padding:14px 18px; font-size:13px; font-weight:600; color:var(--text-muted);
@@ -111,7 +111,7 @@
         .cd-tab-badge {
           display:inline-flex; align-items:center; justify-content:center;
           min-width:18px; height:18px; border-radius:9px; font-size:10px; font-weight:700;
-          background:rgba(212,64,64,0.1); color:var(--accent); padding:0 5px;
+          background:rgba(124,58,237,0.15); color:#a78bfa; padding:0 5px;
         }
 
         /* ── Tab panels ── */
@@ -126,7 +126,7 @@
           z-index:999; flex-direction:column; align-items:center; justify-content:center; gap:20px;
         }
         .analysis-loading.active { display:flex; }
-        .loading-spinner { width:44px;height:44px;border:3px solid rgba(212,64,64,0.2);border-top-color:#d44040;border-radius:50%;animation:spin 0.8s linear infinite; }
+        .loading-spinner { width:44px;height:44px;border:3px solid rgba(124,58,237,0.2);border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite; }
         .loading-step { display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,0.4);transition:color 0.3s; }
         .loading-step.active { color:#fff; }
         .loading-step.done { color:#4ade80; }
@@ -134,13 +134,14 @@
         /* ── Score hero ── */
         .score-hero {
           display:flex; align-items:center; gap:24px;
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:24px 28px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.06);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
+          padding:24px 28px; margin-bottom:16px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .score-circle {
           width:88px; height:88px; border-radius:50%; flex-shrink:0;
           display:flex; align-items:center; justify-content:center; flex-direction:column;
-          border:4px solid; position:relative;
+          border:3px solid; position:relative;
+          /* glow applied via inline style box-shadow */
         }
         .score-num { font-size:28px; font-weight:800; line-height:1; }
         .score-max { font-size:10px; color:var(--text-muted); font-weight:600; }
@@ -155,8 +156,14 @@
         .stat-chips { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
         @media(max-width:700px){.stat-chips{grid-template-columns:1fr 1fr;}}
         .stat-chip {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
+          padding:14px 16px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
+          transition:border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        .stat-chip:hover {
+          background:rgba(255,255,255,0.08);
+          border-color:rgba(255,255,255,0.18);
+          box-shadow:0 6px 24px rgba(0,0,0,0.20);
         }
         .chip-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:6px; }
         .chip-val { font-size:24px; font-weight:800; line-height:1; margin-bottom:3px; }
@@ -166,17 +173,23 @@
         .cat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
         @media(max-width:700px){.cat-grid{grid-template-columns:1fr;}}
         .cat-card {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
           padding:16px 18px; text-decoration:none; color:inherit;
-          transition:box-shadow 0.2s, transform 0.15s;
+          transition:border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s;
           display:flex; align-items:center; gap:14px;
-          position:relative; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          position:relative; overflow:hidden; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .cat-card::before {
           content:''; position:absolute; left:0;top:0;bottom:0; width:3px;
           background:var(--cc, var(--accent));
         }
-        .cat-card:hover { box-shadow:0 4px 18px rgba(0,0,0,0.1); transform:translateY(-1px); text-decoration:none; }
+        .cat-card:hover {
+          background:rgba(255,255,255,0.08);
+          border-color:rgba(124,58,237,0.30);
+          box-shadow:0 8px 28px rgba(124,58,237,0.18);
+          transform:translateY(-2px);
+          text-decoration:none;
+        }
         .cat-icon-wrap {
           width:40px; height:40px; border-radius:10px; display:flex; align-items:center;
           justify-content:center; font-size:18px; flex-shrink:0;
@@ -193,19 +206,19 @@
 
         /* ── Advice ── */
         .advice-box {
-          background:rgba(212,64,64,0.04); border:1px solid rgba(212,64,64,0.15);
-          border-left:3px solid var(--accent); border-radius:var(--radius);
+          background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.18);
+          border-left:3px solid #7c3aed; border-radius:var(--radius);
           padding:14px 18px; margin-bottom:16px;
         }
-        .advice-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:6px; }
+        .advice-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#a78bfa; margin-bottom:6px; }
         .advice-text { font-size:13px; line-height:1.6; color:var(--text); }
 
         /* ── Scenarios ── */
         .scenarios-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
         @media(max-width:800px){ .scenarios-grid { grid-template-columns:1fr; } }
         .scenario-card {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
+          overflow:hidden; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
           transition: box-shadow 0.2s, transform 0.15s;
         }
         .scenario-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.08); transform:translateY(-1px); }
@@ -235,37 +248,37 @@
         .scenario-step-meta { display:flex; gap:6px; margin-top:3px; flex-wrap:wrap; }
         .scenario-meta-tag {
           font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px;
-          background:var(--bg); color:var(--text-muted); border:1px solid var(--border);
+          background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.12);
         }
 
         /* ── Charts row ── */
         .charts-row { display:grid; grid-template-columns:160px 1fr; gap:12px; margin-bottom:16px; }
         @media(max-width:660px){.charts-row{grid-template-columns:1fr;}}
-        .chart-box { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+        .chart-box { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius); padding:16px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15); }
         .chart-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:12px; }
         .gauge-wrap { position:relative; width:120px; height:66px; margin:0 auto 4px; }
         .gauge-val { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); font-size:24px; font-weight:800; white-space:nowrap; }
 
         /* ── Finance strip ── */
         .finance-strip {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
           padding:14px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;
-          margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          margin-bottom:16px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
 
         /* ── News list ── */
-        .news-item { padding:10px 0; border-bottom:1px solid var(--border); }
+        .news-item { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
         .news-item:last-child { border-bottom:none; }
         .news-title { font-size:13px; font-weight:500; line-height:1.4; color:var(--text); display:block; margin-bottom:3px; }
-        .news-title:hover { color:var(--accent); }
+        .news-title:hover { color:#a78bfa; }
         .news-meta { font-size:11px; color:var(--text-muted); }
 
         /* ── Team cards ── */
         .team-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; margin-bottom:16px; }
         .team-card {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
           padding:16px; display:flex; align-items:flex-start; gap:12px;
-          box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .team-avatar {
           width:38px; height:38px; border-radius:9px; display:flex; align-items:center;
@@ -275,13 +288,13 @@
         .team-meta { font-size:11px; color:var(--text-muted); }
         .team-role-badge {
           display:inline-block; margin-top:5px; padding:2px 8px; border-radius:99px;
-          font-size:10px; font-weight:700; background:rgba(0,0,0,0.05); color:var(--text-muted);
+          font-size:10px; font-weight:700; background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.55);
         }
 
         /* ── Signal feed ── */
         .signal-item {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
+          padding:14px 16px; margin-bottom:10px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .signal-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
         .signal-text { font-size:13px; line-height:1.6; color:var(--text); }
@@ -290,13 +303,13 @@
         .hist-list { display:flex; flex-direction:column; gap:6px; }
         .hist-item {
           position: relative; display: flex; align-items: stretch;
-          background: #fff; border: 1px solid #e5e7eb;
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
           border-radius: 10px; overflow: hidden;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .hist-item:hover { border-color: #d1d5db; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
-        .hist-item.selected { border-color: #93c5fd; background: #eff6ff; }
-        .hist-item.selected .hist-cb-visual { background: #3b82f6; border-color: #3b82f6; }
+        .hist-item:hover { border-color: rgba(124,58,237,0.40); box-shadow: 0 4px 20px rgba(0,0,0,0.20); }
+        .hist-item.selected { border-color: rgba(124,58,237,0.50); background: rgba(124,58,237,0.10); }
+        .hist-item.selected .hist-cb-visual { background: #7c3aed; border-color: #7c3aed; }
         .hist-item.selected .hist-cb-check { display: block; }
 
         /* Checkbox strip */
@@ -306,15 +319,15 @@
           cursor: pointer; background: transparent; transition: background 0.12s;
           border-right: 1px solid transparent;
         }
-        .hist-item:hover .hist-item-check { border-right-color: #f3f4f6; }
-        .hist-item.selected .hist-item-check { border-right-color: #bfdbfe; background: #dbeafe22; }
+        .hist-item:hover .hist-item-check { border-right-color: rgba(255,255,255,0.08); }
+        .hist-item.selected .hist-item-check { border-right-color: rgba(124,58,237,0.30); background: rgba(124,58,237,0.08); }
         .hist-cb-visual {
           width: 17px; height: 17px; border-radius: 5px;
-          border: 1.5px solid #d1d5db; background: #fff;
+          border: 1.5px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);
           display: flex; align-items: center; justify-content: center;
           transition: all 0.15s; flex-shrink: 0; position: relative;
         }
-        .hist-item-check:hover .hist-cb-visual { border-color: #6b7280; }
+        .hist-item-check:hover .hist-cb-visual { border-color: rgba(255,255,255,0.55); }
         .hist-cb-check {
           display: none;
           width: 9px; height: 6px; border-left: 2px solid #fff; border-bottom: 2px solid #fff;
@@ -326,8 +339,8 @@
         .hist-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
         .hist-item-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
         .hist-item-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-        .hist-item-date { font-size: 11px; color: #9ca3af; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
-        .hist-item-advice { font-size: 13px; line-height: 1.55; color: #4b5563; margin-top: 6px; }
+        .hist-item-date { font-size: 11px; color: rgba(255,255,255,0.40); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+        .hist-item-advice { font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.70); margin-top: 6px; }
 
         /* Score pill */
         .hist-score {
@@ -335,19 +348,19 @@
           padding: 2px 9px; border-radius: 999px;
           font-size: 12px; font-weight: 800; flex-shrink: 0;
         }
-        .hist-score.high { background: #fee2e2; color: #c93a3a; }
-        .hist-score.med  { background: #fef9c3; color: #a16207; }
-        .hist-score.low  { background: #dcfce7; color: #15803d; }
+        .hist-score.high { background: rgba(248,113,113,0.15); color: #f87171; }
+        .hist-score.med  { background: rgba(251,191,36,0.15); color: #fbbf24; }
+        .hist-score.low  { background: rgba(52,211,153,0.15); color: #34d399; }
 
         /* Delete button */
         .hist-del-btn {
           width: 28px; height: 28px; border-radius: 7px; border: none;
           background: transparent; cursor: pointer; flex-shrink: 0;
           display: none; align-items: center; justify-content: center;
-          color: #9ca3af; transition: all 0.13s;
+          color: rgba(255,255,255,0.35); transition: all 0.13s;
         }
         .hist-del-btn svg { width: 14px; height: 14px; }
-        .hist-del-btn:hover { background: #fee2e2; color: #c93a3a; }
+        .hist-del-btn:hover { background: rgba(248,113,113,0.15); color: #f87171; }
         .hist-item:hover .hist-del-btn { display: inline-flex; }
 
         /* ── Panel section hdr ── */
@@ -358,32 +371,32 @@
         .cleanup-trigger {
           display: inline-flex; align-items: center; gap: 5px;
           font-size: 12px; font-weight: 500; padding: 5px 10px;
-          border-radius: 7px; border: 1px solid #e5e7eb;
-          background: #fff; color: #6b7280; cursor: pointer;
+          border-radius: 7px; border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55); cursor: pointer;
           transition: all 0.13s;
         }
-        .cleanup-trigger:hover { border-color: #d1d5db; background: #f9fafb; color: #374151; }
+        .cleanup-trigger:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.10); color: #fff; }
         .cleanup-trigger svg { width: 13px; height: 13px; }
 
         /* Cleanup menu */
         #cleanup-menu {
           display: none; position: absolute; right: 0; top: calc(100% + 6px);
-          background: #fff; border: 1px solid #e5e7eb;
-          border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+          background: rgba(20,16,50,0.95); border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.40); backdrop-filter:blur(20px);
           width: 210px; z-index: 200; overflow: hidden;
         }
         .cmenu-section { padding: 8px 0 4px; }
-        .cmenu-section + .cmenu-section { border-top: 1px solid #f3f4f6; }
+        .cmenu-section + .cmenu-section { border-top: 1px solid rgba(255,255,255,0.08); }
         .cmenu-label {
           padding: 4px 13px 6px; font-size: 10px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af;
+          text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,255,255,0.35);
         }
         .cleanup-opt {
           display: flex; align-items: center; gap: 8px;
           width: 100%; text-align: left; background: none; border: none; cursor: pointer;
-          padding: 7px 13px; font-size: 13px; color: #374151; transition: background 0.1s;
+          padding: 7px 13px; font-size: 13px; color: rgba(255,255,255,0.75); transition: background 0.1s;
         }
-        .cleanup-opt:hover { background: #f9fafb; }
+        .cleanup-opt:hover { background: rgba(255,255,255,0.08); }
         .cleanup-opt .co-icon { font-size: 14px; width: 20px; text-align: center; }
 
         /* Bulk action bar */
@@ -417,8 +430,8 @@
 
         /* ── Inline form ── */
         .inline-form {
-          background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-          padding:18px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
+          padding:18px; margin-bottom:16px; backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .inline-form-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:14px; }
 
@@ -429,20 +442,20 @@
         .empty-box-sub { font-size:12px; }
 
         /* color utils */
-        .c-green { color:#16a34a; } .c-yellow { color:#d97706; } .c-red { color:#d44040; }
-        .bg-green { background:rgba(22,163,74,0.08); border-color:rgba(22,163,74,0.25); }
-        .bg-yellow { background:rgba(217,119,6,0.08); border-color:rgba(217,119,6,0.25); }
-        .bg-red { background:rgba(212,64,64,0.08); border-color:rgba(212,64,64,0.25); }
+        .c-green { color:#34d399; } .c-yellow { color:#fbbf24; } .c-red { color:#f87171; }
+        .bg-green { background:rgba(52,211,153,0.12); border-color:rgba(52,211,153,0.28); }
+        .bg-yellow { background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.28); }
+        .bg-red { background:rgba(248,113,113,0.12); border-color:rgba(248,113,113,0.28); }
 
         /* ── CEO Navigation Block ── */
         .ceo-block {
-          background: #fff;
-          border: 1px solid var(--border);
-          border-top: 3px solid var(--accent);
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.09);
+          border-top: 3px solid #7c3aed;
           border-radius: var(--radius);
           padding: 20px 24px;
           margin-bottom: 16px;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+          backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
         }
         .ceo-block-header {
           display: flex; align-items: center; justify-content: space-between;
@@ -450,16 +463,16 @@
         }
         .ceo-block-title {
           font-size: 11px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: .1em; color: var(--accent);
+          letter-spacing: .1em; color: #a78bfa;
           display: flex; align-items: center; gap: 8px;
         }
         .ceo-pulse {
-          width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+          width: 7px; height: 7px; border-radius: 50%; background: #a78bfa;
           animation: ceoPulse 1.8s ease-in-out infinite; flex-shrink: 0;
         }
         @keyframes ceoPulse {
-          0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(212,64,64,0.4); }
-          50% { opacity:.7; box-shadow: 0 0 0 5px rgba(212,64,64,0); }
+          0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(124,58,237,0.5); }
+          50% { opacity:.7; box-shadow: 0 0 0 5px rgba(124,58,237,0); }
         }
         .ceo-trend-badge {
           font-size: 11px; font-weight: 700; padding: 3px 10px;
@@ -471,15 +484,15 @@
         }
         @media(max-width:700px){ .ceo-cards { grid-template-columns: 1fr; } }
         .ceo-card {
-          background: var(--bg);
-          border: 1px solid var(--border);
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.09);
           border-radius: 10px; padding: 14px 16px;
           position: relative; overflow: hidden;
           transition: box-shadow 0.2s, transform 0.15s;
           text-decoration: none; display: block; color: inherit;
         }
         .ceo-card:hover {
-          box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+          box-shadow: 0 4px 20px rgba(124,58,237,0.20);
           transform: translateY(-1px);
           text-decoration: none; color: inherit;
         }
@@ -600,25 +613,43 @@
         }
         @media(max-width:660px){ .intel-grid { grid-template-columns: 1fr; } }
         .intel-col {
-          background: #fff; border: 1px solid var(--border);
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
           border-radius: var(--radius); overflow: hidden;
-          box-shadow: var(--shadow-sm);
+          backdrop-filter: blur(20px); box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
         .intel-col-hdr {
-          padding: 11px 16px; border-bottom: 1px solid var(--border);
+          padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
           display: flex; align-items: center; justify-content: space-between;
           font-size: 11px; font-weight: 700; color: var(--text-muted);
           text-transform: uppercase; letter-spacing: .07em;
-          background: #faf9f7;
+          background: rgba(255,255,255,0.03);
         }
         .intel-col-body { padding: 4px 16px; }
       </style>
 
         {% if latest and latest.score is not none %}
           {% set s = latest.score | int %}
-          {% set sclass = 'c-green' if s < 35 else ('c-yellow' if s < 65 else 'c-red') %}
-          {% set sborder = '#16a34a' if s < 35 else ('#d97706' if s < 65 else '#d44040') %}
-          {% set slabel = 'Low Risk' if s < 35 else ('Moderate Risk' if s < 65 else 'High Risk') %}
+          {% if s >= 70 %}
+            {% set sclass  = 'c-red' %}
+            {% set sborder = '#f87171' %}
+            {% set sglow   = 'rgba(248,113,113,0.35)' %}
+            {% set slabel  = 'Критический' %}
+          {% elif s >= 50 %}
+            {% set sclass  = 'c-red' %}
+            {% set sborder = '#fb923c' %}
+            {% set sglow   = 'rgba(251,146,60,0.35)' %}
+            {% set slabel  = 'Высокий риск' %}
+          {% elif s >= 30 %}
+            {% set sclass  = 'c-yellow' %}
+            {% set sborder = '#fbbf24' %}
+            {% set sglow   = 'rgba(251,191,36,0.35)' %}
+            {% set slabel  = 'Умеренный' %}
+          {% else %}
+            {% set sclass  = 'c-green' %}
+            {% set sborder = '#34d399' %}
+            {% set sglow   = 'rgba(52,211,153,0.35)' %}
+            {% set slabel  = 'Низкий риск' %}
+          {% endif %}
 
           <!-- ══ SECTION 1: Risk Overview ══ -->
           <div class="ri-section">
@@ -634,7 +665,8 @@
             <div class="overview-top">
               <!-- Score hero -->
               <div class="score-hero" style="margin-bottom:0;flex-direction:column;align-items:center;min-width:160px;padding:20px 18px">
-                <div class="score-circle {{ sclass }}" style="border-color:{{ sborder }};margin-bottom:10px">
+                <div class="score-circle {{ sclass }}"
+                     style="border-color:{{ sborder }};margin-bottom:10px;box-shadow:0 0 0 6px {{ sglow }}33,0 4px 20px {{ sglow }}">
                   <div class="score-num {{ sclass }}">{{ s }}</div>
                   <div class="score-max">/ 100</div>
                 </div>
@@ -715,7 +747,7 @@
               </div>
               {% if prev and prev.score is not none %}
                 {% set delta = (latest.score | int) - (prev.score | int) %}
-                <div class="ceo-trend-badge" style="{% if delta > 5 %}background:rgba(212,64,64,0.08);color:#d44040;border:1px solid rgba(212,64,64,0.2){% elif delta < -5 %}background:rgba(22,163,74,0.08);color:#16a34a;border:1px solid rgba(22,163,74,0.2){% else %}background:var(--bg);color:var(--text-muted);border:1px solid var(--border){% endif %}">
+                <div class="ceo-trend-badge" style="{% if delta > 5 %}background:rgba(248,113,113,0.10);color:#d44040;border:1px solid rgba(212,64,64,0.2){% elif delta < -5 %}background:rgba(52,211,153,0.10);color:#34d399;border:1px solid rgba(22,163,74,0.2){% else %}background:var(--bg);color:var(--text-muted);border:1px solid var(--border){% endif %}">
                   {% if delta > 5 %}↑ Риск растёт +{{ delta }}
                   {% elif delta < -5 %}↓ Риск снижается {{ delta }}
                   {% else %}→ Стабильно{% endif %}
@@ -738,8 +770,8 @@
                     {{ icon }} {{ label }}
                     {% if cat_delta is not none %}
                       <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;
-                        {% if cat_delta > 0 %}background:rgba(212,64,64,0.08);color:#d44040
-                        {% elif cat_delta < 0 %}background:rgba(22,163,74,0.08);color:#16a34a
+                        {% if cat_delta > 0 %}background:rgba(248,113,113,0.10);color:#d44040
+                        {% elif cat_delta < 0 %}background:rgba(52,211,153,0.10);color:#34d399
                         {% else %}background:var(--bg);color:var(--text-muted){% endif %}">
                         {% if cat_delta > 0 %}↑ +{{ cat_delta }}{% elif cat_delta < 0 %}↓ {{ cat_delta }}{% else %}—{% endif %}
                       </span>
@@ -769,7 +801,7 @@
 
         {% else %}
           <!-- No analysis yet -->
-          <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px">
+          <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:16px;backdrop-filter:blur(20px)">
             <div class="empty-box-icon">🔍</div>
             <div class="empty-box-title">Анализ не запускался</div>
             <div class="empty-box-sub">Нажмите «Запустить анализ» чтобы получить оценку рисков</div>
@@ -779,8 +811,8 @@
         <!-- ══ SECTION 2: Risk Categories ══ -->
         {% set cat_meta = [
           ("media", "📰", "InfoField & Media",  "#93bbff", "rgba(147,187,255,0.12)"),
-          ("hr",    "👥", "Human Resources",    "#16a34a", "rgba(22,163,74,0.1)"),
-          ("gr",    "⚖️",  "Gov. Relations",     "#d44040", "rgba(212,64,64,0.1)"),
+          ("hr",    "👥", "Human Resources",    "#16a34a", "rgba(52,211,153,0.10)"),
+          ("gr",    "⚖️",  "Gov. Relations",     "#d44040", "rgba(248,113,113,0.12)"),
           ("pr",    "🌐", "PR Environment",     "#7c3aed", "rgba(124,58,237,0.1)"),
           ("market","📊", "Market & Industry",  "#d97706", "rgba(217,119,6,0.1)"),
         ] %}
@@ -806,7 +838,7 @@
                   <div class="cat-name">
                     {{ label }}
                     {% if trend is not none %}
-                      <span class="cat-trend" style="{% if trend > 0 %}background:rgba(212,64,64,0.1);color:#d44040{% elif trend < 0 %}background:rgba(22,163,74,0.1);color:#16a34a{% else %}background:rgba(0,0,0,0.05);color:var(--text-muted){% endif %}">
+                      <span class="cat-trend" style="{% if trend > 0 %}background:rgba(248,113,113,0.12);color:#d44040{% elif trend < 0 %}background:rgba(52,211,153,0.10);color:#34d399{% else %}background:rgba(0,0,0,0.05);color:var(--text-muted){% endif %}">
                         {% if trend > 0 %}↗ +{{ trend }}{% elif trend < 0 %}↘ {{ trend }}{% else %}—{% endif %}
                       </span>
                     {% endif %}
@@ -847,9 +879,9 @@
           {% set scenarios = latest.scenarios if latest and latest.scenarios else [] %}
           {% if scenarios %}
           {% set sc_colors = {
-            'low':    ('rgba(22,163,74,0.08)',  '#16a34a', 'rgba(22,163,74,0.12)',  '🟢'),
+            'low':    ('rgba(52,211,153,0.10)',  '#16a34a', 'rgba(52,211,153,0.12)',  '🟢'),
             'medium': ('rgba(217,119,6,0.08)',  '#d97706', 'rgba(217,119,6,0.12)',  '🟡'),
-            'high':   ('rgba(212,64,64,0.08)',  '#d44040', 'rgba(212,64,64,0.12)',  '🔴'),
+            'high':   ('rgba(248,113,113,0.10)',  '#d44040', 'rgba(212,64,64,0.12)',  '🔴'),
           } %}
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:8px">
             Action Scenarios · {{ scenarios|length }} варианта
@@ -915,7 +947,7 @@
               </div>
             </div>
             <div style="margin-top:6px;padding:3px 12px;border-radius:99px;font-size:11px;font-weight:700;
-              background:{{ 'rgba(22,163,74,0.1)' if s < 35 else ('rgba(217,119,6,0.1)' if s < 65 else 'rgba(212,64,64,0.1)') }};
+              background:{{ 'rgba(52,211,153,0.10)' if s < 35 else ('rgba(217,119,6,0.1)' if s < 65 else 'rgba(248,113,113,0.12)') }};
               color:{{ gc }}">{{ glabel }}</div>
             <!-- Zone labels -->
             <div style="display:flex;gap:8px;margin-top:8px">
@@ -1035,7 +1067,7 @@
                   <div class="team-role-badge" style="color:{{ role_colors.get(m.role,'var(--text-muted)') }}">{{ role_labels.get(m.role, m.role) }}</div>
                 {% endif %}
                 <div class="team-meta" style="margin-top:5px">
-                  {% if m.status == 'active' %}<span style="color:#16a34a">● активен</span>{% else %}<span>○ ожидает</span>{% endif %}
+                  {% if m.status == 'active' %}<span style="color:#34d399">● активен</span>{% else %}<span>○ ожидает</span>{% endif %}
                 </div>
               </div>
               <form method="post" action="/members/{{ m.id }}/remove" onsubmit="return confirm('Удалить?')" style="margin:0">
@@ -1046,7 +1078,7 @@
           {% endfor %}
         </div>
         {% else %}
-        <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px">
+        <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:20px;backdrop-filter:blur(20px)">
           <div class="empty-box-icon">👥</div>
           <div class="empty-box-title">Команда пуста</div>
           <div class="empty-box-sub">Пригласите первого участника</div>
@@ -1067,7 +1099,7 @@
               </div>
               <div class="field">
                 <label>Сфера доступа</label>
-                <select name="role" style="width:100%;padding:9px 12px;background:#fafaf8;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;font-family:inherit">
+                <select name="role" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius-sm);color:#fff;font-size:14px;font-family:inherit">
                   <option value="">— без ограничений —</option>
                   <option value="media">📰 InfoField & Media</option>
                   <option value="hr">👥 Human Resources</option>
@@ -1101,7 +1133,7 @@
           {% endfor %}
         </div>
         {% else %}
-        <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px">
+        <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:20px;backdrop-filter:blur(20px)">
           <div class="empty-box-icon">📋</div>
           <div class="empty-box-title">Контактов нет</div>
           <div class="empty-box-sub">Добавьте сотрудников для сбора сигналов</div>
@@ -1132,11 +1164,8 @@
       <div class="cd-panel" id="tab-signals">
 
         <div class="panel-hdr">
-          <div class="panel-hdr-title" style="display:flex;align-items:center;gap:8px">
-            Сигналы от сотрудников
-            <span id="emails-live-dot" style="width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;transition:background 0.5s"></span>
-            <span style="font-size:11px;color:var(--text-muted);font-weight:400">Live</span>
-          </div>
+          <div class="panel-hdr-title">Сигналы от сотрудников</div>
+          <button onclick="refreshEmails()" class="btn btn-secondary btn-sm" id="emails-refresh-btn">↻ Обновить</button>
         </div>
 
         <!-- Add signal form -->
@@ -1189,7 +1218,7 @@
         <div class="panel-hdr">
           <div style="display:flex;align-items:center;gap:8px">
             <div class="panel-hdr-title">История анализов</div>
-            <span style="font-size:11px;padding:2px 8px;background:#f3f4f6;border-radius:999px;color:#6b7280;font-weight:600" id="hist-count">{{ risk_runs|length }}</span>
+            <span style="font-size:11px;padding:2px 8px;background:rgba(255,255,255,0.08);border-radius:999px;color:rgba(255,255,255,0.50);font-weight:600" id="hist-count">{{ risk_runs|length }}</span>
           </div>
           {% if risk_runs|length > 3 %}
           <div style="position:relative" id="cleanup-dropdown-wrap">
@@ -1298,7 +1327,7 @@
             <button class="bulk-cancel-btn" onclick="clearSelection()">Отмена</button>
           </div>
         {% else %}
-          <div class="empty-box" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);backdrop-filter:blur(20px)">
             <div class="empty-box-icon">📋</div>
             <div class="empty-box-title">История пуста</div>
             <div class="empty-box-sub">Запустите первый анализ</div>
@@ -1328,7 +1357,7 @@ const completed = riskRuns.filter(r => r.score !== null && r.score !== undefined
 const COMPANY_ID = '{{ company.id }}';
 let lastEmailIds = new Set({{ emails | map(attribute='id') | list | tojson | safe }});
 
-// ── Email polling ──
+// ── Email refresh (manual only) ──
 function renderEmail(em) {
   const pos = (em.position || '').toLowerCase();
   let badge = em.position ? `<span class="badge" style="font-size:10px">${em.position}</span>` : '';
@@ -1344,7 +1373,9 @@ function renderEmail(em) {
   </div>`;
 }
 
-async function pollEmails() {
+async function refreshEmails() {
+  const btn = document.getElementById('emails-refresh-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
   try {
     const r = await fetch(`/api/companies/${COMPANY_ID}/emails`);
     if (!r.ok) return;
@@ -1355,12 +1386,10 @@ async function pollEmails() {
       const empty = document.getElementById('emails-empty');
       if (empty) empty.remove();
       fresh.forEach(em => { lastEmailIds.add(em.id); c.insertAdjacentHTML('afterbegin', renderEmail(em)); });
-      const dot = document.getElementById('emails-live-dot');
-      if (dot) { dot.style.background = '#fff'; setTimeout(() => dot.style.background = '#4ade80', 600); }
     }
   } catch(e) {}
+  if (btn) { btn.disabled = false; btn.innerHTML = '↻ Обновить'; }
 }
-setInterval(pollEmails, 5000);
 
 // ── Loading overlay ──
 {% if is_admin %}
@@ -1502,7 +1531,7 @@ if (completed.length > 0) {
         datasets: [{
           data: catScores,
           borderColor: '#d44040',
-          backgroundColor: 'rgba(212,64,64,0.08)',
+          backgroundColor: 'rgba(248,113,113,0.10)',
           borderWidth: 2,
           pointBackgroundColor: catKeys.map((_,i) => catColors[i]),
           pointBorderColor: '#fff',

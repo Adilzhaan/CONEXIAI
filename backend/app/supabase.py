@@ -127,6 +127,9 @@ class SupabaseClient:
         headers = self._headers(access_token)
         headers["Prefer"] = f"return={returning}"
         r = await self._http.post(url, headers=headers, json=[row])
+        if not r.is_success:
+            import logging as _log
+            _log.getLogger(__name__).error("rest_insert %s 400: %s", table, r.text)
         r.raise_for_status()
         if not r.content or returning == "minimal":
             return {}
