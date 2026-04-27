@@ -992,9 +992,18 @@
                   <div class="feed-news-item">
                     <a href="{{ n.link }}" target="_blank" rel="noopener" class="feed-news-title">{{ n.title }}</a>
                     <div class="feed-news-meta">
-                      {% if n.source %}<span class="feed-news-source">{{ n.source }}</span>{% endif %}
-                      {% if n.source and n.pub_date %}<span>·</span>{% endif %}
+                      {% set src = n.source or '' %}
+                      {% if 'reddit' in src.lower() %}
+                        <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">
+                          <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="10"/><path fill="#fff" d="M16.67 10a1.46 1.46 0 0 0-2.47-1 7.12 7.12 0 0 0-3.85-1.23l.65-3.08 2.13.45a1 1 0 1 0 .14-.61l-2.38-.5a.19.19 0 0 0-.22.14l-.73 3.44a7.14 7.14 0 0 0-3.89 1.23 1.46 1.46 0 1 0-1.61 2.39 2.87 2.87 0 0 0 0 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 0 0 0-.44 1.46 1.46 0 0 0 .57-1.17zm-10 1a1 1 0 1 1 1 1 1 1 0 0 1-1-1zm5.58 2.65a3.56 3.56 0 0 1-2.25.65 3.56 3.56 0 0 1-2.25-.65.19.19 0 0 1 .27-.27 3.2 3.2 0 0 0 2 .54 3.2 3.2 0 0 0 2-.54.19.19 0 0 1 .27.27zm-.16-1.65a1 1 0 1 1 1-1 1 1 0 0 1-1 1z"/></svg>
+                          {{ src }}
+                        </span>
+                      {% elif src %}
+                        <span class="feed-news-source">{{ src }}</span>
+                      {% endif %}
+                      {% if src and n.pub_date %}<span>·</span>{% endif %}
                       {% if n.pub_date %}<span>{{ n.pub_date }}</span>{% endif %}
+                      {% if n.get('score') %}<span style="color:rgba(255,69,0,0.7);font-size:10px">▲ {{ n.score }}</span>{% endif %}
                     </div>
                   </div>
                 {% endfor %}

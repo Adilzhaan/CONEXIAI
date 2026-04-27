@@ -27,6 +27,9 @@
       <a href="/companies/{{ company.id }}/ci" class="sidebar-item">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor
       </a>
+      <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Center
+      </a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item">
         <span class="sidebar-item-icon">⚙</span> Выйти
@@ -671,11 +674,22 @@
           <div class="sec-title">Новости</div>
         </div>
         {% if company_news %}
-          {% for n in company_news[:8] %}
+          {% for n in company_news[:12] %}
+            {% set src = n.source or '' %}
             <div style="padding:8px 0;border-bottom:1px solid var(--border){% if loop.last %};border-bottom:none{% endif %}">
               <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:500;line-height:1.4;display:block;color:var(--text)">{{ n.title }}</a>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-                {{ n.source or '' }}{% if n.source and n.pub_date %} · {% endif %}{{ n.pub_date or '' }}
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                {% if 'reddit' in src.lower() %}
+                  <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">
+                    <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="10"/><path fill="#fff" d="M16.67 10a1.46 1.46 0 0 0-2.47-1 7.12 7.12 0 0 0-3.85-1.23l.65-3.08 2.13.45a1 1 0 1 0 .14-.61l-2.38-.5a.19.19 0 0 0-.22.14l-.73 3.44a7.14 7.14 0 0 0-3.89 1.23 1.46 1.46 0 1 0-1.61 2.39 2.87 2.87 0 0 0 0 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 0 0 0-.44 1.46 1.46 0 0 0 .57-1.17zm-10 1a1 1 0 1 1 1 1 1 1 0 0 1-1-1zm5.58 2.65a3.56 3.56 0 0 1-2.25.65 3.56 3.56 0 0 1-2.25-.65.19.19 0 0 1 .27-.27 3.2 3.2 0 0 0 2 .54 3.2 3.2 0 0 0 2-.54.19.19 0 0 1 .27.27zm-.16-1.65a1 1 0 1 1 1-1 1 1 0 0 1-1 1z"/></svg>
+                    {{ src }}
+                  </span>
+                  {% if n.get('score') %}<span style="color:rgba(255,69,0,0.7)">▲ {{ n.score }}</span>{% endif %}
+                {% else %}
+                  <span>{{ src }}</span>
+                {% endif %}
+                {% if src and n.pub_date %}<span>·</span>{% endif %}
+                <span>{{ n.pub_date or '' }}</span>
               </div>
             </div>
           {% endfor %}

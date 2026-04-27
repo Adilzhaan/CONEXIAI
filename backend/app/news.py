@@ -96,6 +96,57 @@ async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, 
     return await _fetch_yahoo(company_name, limit)
 
 
+async def _fetch_reddit(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Search Reddit via Atom RSS feed — no auth required."""
+    query = company_name.replace('"', '').strip()
+    _NS = "http://www.w3.org/2005/Atom"
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    async def _parse_feed(url: str) -> None:
+        try:
+            r = await _http.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; CONEXIAI/1.0)"})
+            if r.status_code != 200:
+                return
+            root = ET.fromstring(r.content)
+            for entry in root.findall(f"{{{_NS}}}entry"):
+                title = (entry.findtext(f"{{{_NS}}}title") or "").strip()
+                if not title or title.lower()[:50] in seen:
+                    continue
+                seen.add(title.lower()[:50])
+                # Link
+                link_el = entry.find(f"{{{_NS}}}link")
+                link = link_el.get("href", "") if link_el is not None else ""
+                # Date
+                updated = entry.findtext(f"{{{_NS}}}updated") or ""
+                pub_date = updated[:10].replace("-", ".")[8:] + "." + updated[:10].replace("-", ".")[5:7] + "." + updated[:10].replace("-", ".")[0:4] if updated else ""
+                # Subreddit from category
+                cat = entry.find(f"{{{_NS}}}category")
+                sub = cat.get("label", "reddit") if cat is not None else "reddit"
+                sub = sub.replace("r/", "").strip()
+                items.append({
+                    "title":    title,
+                    "link":     link,
+                    "pub_date": pub_date,
+                    "source":   f"Reddit r/{sub}",
+                    "type":     "reddit",
+                })
+        except Exception:
+            pass
+
+    import asyncio
+    tasks = [
+        _parse_feed(f"https://www.reddit.com/search.rss?q={quote(query)}&sort=new&limit={limit}"),
+        _parse_feed(f"https://www.reddit.com/search.rss?q={quote(query)}&sort=relevance&limit={limit}"),
+    ]
+    for sub in ["investing", "stocks", "business", "Kazakhstan"]:
+        tasks.append(
+            _parse_feed(f"https://www.reddit.com/r/{sub}/search.rss?q={quote(query)}&restrict_sr=1&sort=new&limit=5")
+        )
+    await asyncio.gather(*tasks)
+    return items[:limit]
+
+
 async def _fetch_gdelt(query: str, limit: int) -> list[dict[str, Any]]:
     """GDELT Doc 2.0 API — global news database, free, no key required."""
     try:
@@ -199,6 +250,7 @@ async def fetch_news(
     tasks += [
         _fetch_yahoo(exact_query, limit),
         _fetch_gdelt(company_name, limit),
+        _fetch_reddit(company_name, limit),
         gr_client.fetch_gr_news(company_name, categories=["media_kz", "media_global"], relevance_filter=True),
     ]
     results = await asyncio.gather(*tasks)
