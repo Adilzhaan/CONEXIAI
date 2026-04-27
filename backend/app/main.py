@@ -639,12 +639,21 @@ async def _refresh_market_cache(company_id: str, company_name: str) -> dict:
         finance_client.fetch_full_market_data(company_name, twelve_key=settings.TWELVE_DATA_API_KEY),
         news_client.fetch_news(company_name),
     )
+
+    # Don't overwrite existing cache with empty data (e.g. when APIs are rate-limited)
+    has_useful_data = market_data.get("found") or market_data.get("market_indices") or market_data.get("top_stocks")
+    if not has_useful_data:
+        existing = await _get_market_cache(company_id)
+        if existing:
+            logger.info("Market fetch returned no data for %s — keeping existing cache", company_name)
+            return existing
+
     ai_analysis = None
     if settings.ANTHROPIC_API_KEY:
         ai_analysis = await ai_client.analyze_market_position(
             company_name=company_name,
             stock=market_data.get("stock"),
-            market_index=market_data.get("market_index"),
+            market_indices=market_data.get("market_indices", []),
             top_stocks=market_data.get("top_stocks", []),
             news=company_news,
             api_key=settings.ANTHROPIC_API_KEY,
@@ -1058,12 +1067,12 @@ async def risks_run(
 
     effective_token = getattr(req.state, "new_access_token", None) or access_token
 
-    # 1) Получаем название компании и список сотрудников параллельно
+    # 1) Получаем полный профиль компании и список сотрудников параллельно
     company_rows, employees = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
-            select="name",
+            select="name,ceo_name,location,industry,description,market_info,news_sources,website",
             query_params={"id": f"eq.{company_id}"},
         ),
         supabase.rest_select(
@@ -1073,7 +1082,8 @@ async def risks_run(
             query_params={"company_id": f"eq.{company_id}"},
         ),
     )
-    company_name = company_rows[0]["name"] if company_rows else ""
+    company_profile = company_rows[0] if company_rows else {}
+    company_name = company_profile.get("name", "")
 
     # 2) Параллельно тянем все источники данных
     (
@@ -1082,11 +1092,11 @@ async def risks_run(
         finance_data,
     ) = await asyncio.gather(
         asyncio.sleep(0, result={"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}),
-        news_client.fetch_news(company_name, limit=12),
-        news_client.fetch_yandex_news(company_name, limit=8),
+        news_client.fetch_news(company_name, limit=12, company=company_profile),
+        news_client.fetch_yandex_news(company_name, limit=8, company=company_profile),
         hh_client.fetch_vacancies(company_name, limit=10),
-        news_client.fetch_regulatory_news(company_name, limit=6),
-        news_client.fetch_market_news(company_name, limit=6),
+        news_client.fetch_regulatory_news(company_name, limit=6, company=company_profile),
+        news_client.fetch_market_news(company_name, limit=6, company=company_profile),
         gr_client.fetch_gr_news_all(company_name, limit=20),
         supabase.rest_select(
             table="emails",
@@ -1519,7 +1529,7 @@ async def company_report_pdf(req: Request, company_id: str):
 
     company = company_rows[0]
     latest_run = next((r for r in risk_runs if r.get("score") is not None), risk_runs[0] if risk_runs else {})
-    news = await news_client.fetch_news(company["name"], limit=8)
+    news = await news_client.fetch_news(company["name"], limit=8, company=company)
 
     pdf_bytes = generate_report(
         company=company,

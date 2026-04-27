@@ -91,7 +91,7 @@ async def _refresh_market_cache(
             ai_analysis = await ai_client.analyze_market_position(
                 company_name=company_name,
                 stock=market_data.get("stock"),
-                market_index=market_data.get("market_index"),
+                market_indices=market_data.get("market_indices", []),
                 top_stocks=market_data.get("top_stocks", []),
                 news=company_news,
                 api_key=settings.ANTHROPIC_API_KEY,

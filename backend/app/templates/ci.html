@@ -7,18 +7,17 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="sidebar-logo-icon">⚡</div>
-        <div>
-          <div class="sidebar-logo-text">{{ app_name }}</div>
-          <div class="sidebar-logo-sub">Risk Intelligence</div>
-        </div>
+        
+        <a href="/dashboard" style="display:block;line-height:0">
+          <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+        </a>
       </div>
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard" class="sidebar-item"><span class="sidebar-item-icon">⊞</span> Command Center</a>
       <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
-      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon">📈</span> Market Analysis</a>
-      <a href="/companies/{{ company.id }}/ci" class="sidebar-item active"><span class="sidebar-item-icon">🔍</span> CI Monitor</a>
+      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis</a>
+      <a href="/companies/{{ company.id }}/ci" class="sidebar-item active"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor</a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
     </nav>
@@ -155,7 +154,7 @@
 
           {% if not competitors %}
           <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
-            <div style="font-size:40px;margin-bottom:12px">🔍</div>
+            <div style="margin-bottom:12px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
             <div style="font-size:15px;font-weight:600;margin-bottom:6px">Добавьте конкурентов</div>
             <div style="font-size:13px">До 5 компаний. Система будет автоматически<br>мониторить их новости и анализировать угрозы.</div>
           </div>
@@ -171,7 +170,7 @@
             <div class="skeleton" style="height:180px;margin-bottom:14px"></div>
             <div class="skeleton" style="height:180px"></div>
             <div style="text-align:center;margin-top:24px;color:var(--text-muted);font-size:13px">
-              <div style="font-size:22px;margin-bottom:8px">⏳</div>
+              
               Анализируем конкурентов...<br>
               <span style="font-size:11px">Обычно 20–40 секунд</span>
             </div>
@@ -183,11 +182,11 @@
           <!-- Summary -->
           {% if ai and ai.summary %}
           <div class="ci-summary">
-            <span style="font-size:20px;flex-shrink:0">🤖</span>
+            <span style="flex-shrink:0;width:28px;height:28px;border-radius:8px;background:rgba(124,58,237,0.12);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></span>
             <div style="flex:1;font-size:13px;font-weight:500">{{ ai.summary }}</div>
             {% if ai.threat_level %}
               <span class="threat-badge threat-{{ ai.threat_level }}">
-                {% if ai.threat_level == 'high' %}⚠ Высокая угроза
+                {% if ai.threat_level == 'high' %}! Высокая угроза
                 {% elif ai.threat_level == 'medium' %}~ Средняя
                 {% else %}✓ Низкая{% endif %}
               </span>
@@ -199,7 +198,7 @@
           {% if ai %}
           <div class="ci-three">
             <div class="ci-block">
-              <div class="ci-block-title">⚠️ Риски</div>
+              <div class="ci-block-title">Риски</div>
               <div class="ci-list">
                 {% for r in ai.risks %}
                   <div class="ci-list-item"><div class="ci-list-dot" style="background:#f87171"></div><span>{{ r }}</span></div>
@@ -207,7 +206,7 @@
               </div>
             </div>
             <div class="ci-block">
-              <div class="ci-block-title">🚀 Возможности</div>
+              <div class="ci-block-title">Возможности</div>
               <div class="ci-list">
                 {% for o in ai.opportunities %}
                   <div class="ci-list-item"><div class="ci-list-dot" style="background:#34d399"></div><span>{{ o }}</span></div>
@@ -215,7 +214,7 @@
               </div>
             </div>
             <div class="ci-block">
-              <div class="ci-block-title">📌 Рекомендации</div>
+              <div class="ci-block-title">Рекомендации</div>
               <div class="ci-list">
                 {% for rec in ai.recommendations %}
                   <div class="ci-list-item"><div class="ci-list-dot" style="background:#2563eb"></div><span>{{ rec }}</span></div>
@@ -254,7 +253,7 @@
               <div class="ci-comp-body">
                 {% if ai_comp and ai_comp.key_move %}
                   <div style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.28);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#a16207">
-                    🔑 {{ ai_comp.key_move }}
+                    → {{ ai_comp.key_move }}
                   </div>
                 {% endif %}
                 {% if ai_comp and ai_comp.impact %}
@@ -277,7 +276,7 @@
 
           {% else %}
           <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
-            <div style="font-size:40px;margin-bottom:12px">📊</div>
+            <div style="margin-bottom:12px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 15v-4M12 15v-7M15 15v-2"/></svg></div>
             <div style="font-size:15px;font-weight:600;margin-bottom:6px">Данных пока нет</div>
             <button onclick="triggerRefresh()" class="btn btn-primary" style="margin-top:12px">Запустить анализ</button>
           </div>

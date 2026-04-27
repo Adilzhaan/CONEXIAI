@@ -8,11 +8,10 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="sidebar-logo-icon">⚡</div>
-        <div>
-          <div class="sidebar-logo-text">{{ app_name }}</div>
-          <div class="sidebar-logo-sub">Risk Intelligence</div>
-        </div>
+        
+        <a href="/dashboard" style="display:block;line-height:0">
+          <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+        </a>
       </div>
     </div>
     <nav class="sidebar-nav">
@@ -23,10 +22,10 @@
         <span class="sidebar-item-icon">◎</span> Risk Intelligence
       </a>
       <a href="/companies/{{ company.id }}/market" class="sidebar-item active">
-        <span class="sidebar-item-icon">📈</span> Market Analysis
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis
       </a>
       <a href="/companies/{{ company.id }}/ci" class="sidebar-item">
-        <span class="sidebar-item-icon">🔍</span> CI Monitor
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor
       </a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item">
@@ -46,7 +45,7 @@
           {{ company.name }}
           {% if cache_updated_at %}
             <span id="updated-badge" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
-              ✓ обновлено {{ cache_updated_at[:10] }}
+              обновлено {{ cache_updated_at[:10] }}
             </span>
           {% elif loading %}
             <span id="loading-badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
@@ -56,16 +55,15 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
-        {% set idx = finance.market_index %}
-        {% if idx %}
-          {% set idx_val = idx.get('currentvalue') or idx.get('lastvalue') %}
-          {% set idx_chg = idx.get('lasttoprevprice') %}
+        {% if finance and finance.market_indices %}
+          {% set primary = finance.market_indices[0] %}
+          {% set pri_chg = primary.get('change_pct') %}
           <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12)">
-            <span style="font-size:11px;color:var(--text-muted);font-weight:600">IMOEX</span>
-            <span style="font-size:13px;font-weight:700">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</span>
-            {% if idx_chg is not none %}
-              <span style="font-size:12px;font-weight:700;{% if idx_chg > 0 %}color:#34d399{% elif idx_chg < 0 %}color:#f87171{% endif %}">
-                {% if idx_chg > 0 %}▲{% elif idx_chg < 0 %}▼{% endif %}{{ "%.2f"|format(idx_chg|abs) }}%
+            <span style="font-size:11px;color:var(--text-muted);font-weight:600">{{ primary.get('name', primary.get('symbol', '')) }}</span>
+            <span style="font-size:13px;font-weight:700">{{ "%.0f"|format(primary.get('last')) if primary.get('last') else '—' }}</span>
+            {% if pri_chg is not none %}
+              <span style="font-size:12px;font-weight:700;{% if pri_chg > 0 %}color:#34d399{% elif pri_chg < 0 %}color:#f87171{% endif %}">
+                {% if pri_chg > 0 %}▲{% elif pri_chg < 0 %}▼{% endif %}{{ "%.2f"|format(pri_chg|abs) }}%
               </span>
             {% endif %}
           </div>
@@ -233,7 +231,8 @@
 
       {% set stock = finance.stock if finance and finance.found else none %}
       {% set ai = ai_analysis %}
-      {% set top = finance.top_stocks if finance else [] %}
+      {# support both new key (top_stocks) and old cached key (trending) #}
+      {% set top = (finance.top_stocks or finance.trending) if finance else [] %}
 
       <!-- Top metrics -->
       <div class="mkt-metrics">
@@ -258,19 +257,24 @@
           {% endif %}
         </div>
 
-        {% set idx = finance.market_index if finance else none %}
         <div class="mkt-card">
-          <div class="mkt-card-label">Индекс МосБиржи</div>
-          {% if idx %}
-            {% set idx_val = idx.get('currentvalue') or idx.get('lastvalue') %}
-            {% set idx_chg = idx.get('lasttoprevprice') %}
-            <div class="mkt-card-value">{{ "%.0f"|format(idx_val) if idx_val else '—' }}</div>
-            {% if idx_chg is not none %}
-              <div style="font-size:12px;font-weight:700;margin-bottom:4px;{% if idx_chg > 0 %}color:#34d399{% elif idx_chg < 0 %}color:#f87171{% endif %}">
-                {% if idx_chg > 0 %}▲ +{% elif idx_chg < 0 %}▼ {% endif %}{{ "%.2f"|format(idx_chg) }}%
-              </div>
-            {% endif %}
-            <div class="mkt-card-sub">IMOEX</div>
+          <div class="mkt-card-label">Индексы рынков</div>
+          {% set indices = finance.market_indices if finance else [] %}
+          {% if indices %}
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px">
+              {% for idx in indices[:3] %}
+                {% set chg = idx.get('change_pct') %}
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+                  <span style="font-weight:700;color:var(--text);min-width:68px;white-space:nowrap">{{ idx.get('name', idx.get('symbol', '')) }}</span>
+                  <span style="font-weight:600;color:var(--text)">{{ "%.0f"|format(idx.get('last')) if idx.get('last') else '—' }}</span>
+                  {% if chg is not none %}
+                    <span style="font-size:11px;font-weight:700;margin-left:auto;{% if chg > 0 %}color:#34d399{% elif chg < 0 %}color:#f87171{% else %}color:var(--text-muted){% endif %}">
+                      {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
+                    </span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
           {% else %}
             <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
             <div class="mkt-card-sub">Данные недоступны</div>
@@ -307,10 +311,69 @@
 
       </div>
 
+      <!-- Price history chart — full width, with tab switcher -->
+      {% set hist        = finance.price_history   if finance else [] %}
+      {% set idx_history = finance.indices_history if finance else {} %}
+      <div class="ai-block" style="margin-bottom:16px;padding:20px 22px">
+
+        <!-- Header row: label + price + tabs -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+
+          <!-- Left: stat for active tab -->
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <span id="chart-name" style="font-size:15px;font-weight:800;color:var(--text)">
+              {{ stock.get('ticker') if stock else '—' }}
+            </span>
+            <span id="chart-price" style="font-size:22px;font-weight:800">
+              {{ stock.get('last') if stock else '' }}
+            </span>
+            {% if stock %}
+              <span style="font-size:11px;color:var(--text-muted)">{{ stock.get('currency','') }}</span>
+              {% set chg = stock.get('change_pct') %}
+              {% if chg is not none %}
+                <span id="chart-chg" style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:6px;{% if chg > 0 %}background:rgba(52,211,153,0.12);color:#34d399{% elif chg < 0 %}background:rgba(248,113,113,0.12);color:#f87171{% else %}background:rgba(255,255,255,0.06);color:var(--text-muted){% endif %}">
+                  {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
+                </span>
+              {% endif %}
+            {% endif %}
+          </div>
+
+          <!-- Right: tab pills -->
+          <div id="chart-tabs" style="display:flex;gap:6px;flex-wrap:wrap">
+            {% if stock %}
+              <button class="chart-tab active" data-key="stock" style="padding:5px 14px;border-radius:999px;border:1px solid rgba(124,58,237,0.6);background:rgba(124,58,237,0.18);color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer">
+                {{ stock.get('ticker') }}
+              </button>
+            {% endif %}
+            {% for name in idx_history %}
+              <button class="chart-tab" data-key="{{ name }}" style="padding:5px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer">
+                {{ name }}
+              </button>
+            {% endfor %}
+            {% if not stock and not idx_history %}
+              <span style="font-size:12px;color:var(--text-muted)">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Canvas -->
+        {% if (hist and hist | length > 1) or idx_history %}
+          <div style="position:relative;height:220px">
+            <canvas id="priceChart"></canvas>
+          </div>
+        {% else %}
+          <div style="height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border:1px dashed rgba(255,255,255,0.1);border-radius:10px">
+            <div style="font-size:12px;color:var(--text-muted)">Нет исторических данных</div>
+            <button onclick="triggerRefresh()" class="btn btn-secondary btn-sm">↻ Загрузить</button>
+          </div>
+        {% endif %}
+
+      </div>
+
       <!-- AI Summary banner -->
       {% if ai and ai.summary %}
       <div class="summary-banner">
-        <div class="summary-banner-icon">🤖</div>
+        <div class="summary-banner-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 15h.01M16 15h.01"/></svg></div>
         <div class="summary-banner-text">{{ ai.summary }}</div>
       </div>
       {% endif %}
@@ -321,7 +384,7 @@
 
         <!-- Risk gauge -->
         <div class="ai-block">
-          <div class="blk-title">🎯 Risk Score</div>
+          <div class="blk-title">Risk Score</div>
           {% set rs = ai.risk_score | int %}
           <div style="display:flex;align-items:center;gap:24px">
             <div style="position:relative;width:120px;height:66px;flex-shrink:0">
@@ -360,7 +423,7 @@
 
         <!-- Competitor landscape donut -->
         <div class="ai-block">
-          <div class="blk-title">⚔️ Конкурентный расклад</div>
+          <div class="blk-title">Конкурентный расклад</div>
           {% if ai.competitors %}
             {% set ns = namespace(stronger=0, weaker=0, similar=0) %}
             {% for c in ai.competitors %}
@@ -405,7 +468,7 @@
       <div class="mkt-two-col">
 
         <div class="ai-block">
-          <div class="blk-title">🌍 Позиция на рынке</div>
+          <div class="blk-title">Позиция на рынке</div>
           {% if ai.market_position %}
             <div class="pos-summary">{{ ai.market_position }}</div>
           {% endif %}
@@ -419,7 +482,7 @@
         </div>
 
         <div class="ai-block">
-          <div class="blk-title">⚔️ Конкуренты</div>
+          <div class="blk-title">Конкуренты</div>
           {% if ai.competitors %}
             {% for c in ai.competitors %}
               <div class="comp-item">
@@ -443,7 +506,7 @@
       <div class="mkt-two-col">
 
         <div class="ai-block">
-          <div class="blk-title">⚠️ Риски</div>
+          <div class="blk-title">Риски</div>
           {% for r in ai.market_risks %}
             <div class="risk-row">
               <div class="risk-dot dot-{{ r.severity | default('medium') }}"></div>
@@ -456,10 +519,10 @@
         </div>
 
         <div class="ai-block">
-          <div class="blk-title">🚀 Возможности</div>
+          <div class="blk-title">Возможности</div>
           {% for o in ai.market_opportunities %}
             <div class="opp-row">
-              <span class="opp-icon">✦</span>
+              
               <div class="opp-label">{{ o.title }}</div>
             </div>
           {% else %}
@@ -628,6 +691,137 @@
 </div>
 
 <script>
+// ── Price history chart with tab switcher ──
+(function(){
+  const stockHist    = {{ (finance.price_history or []) | tojson | safe }};
+  const indicesHist  = {{ (finance.indices_history or {}) | tojson | safe }};
+  const stockTicker  = {{ (stock.get('ticker') if stock else '') | tojson | safe }};
+  const stockCurrency= {{ (stock.get('currency','') if stock else '') | tojson | safe }};
+
+  // Build datasets map: key → {labels, closes, currency, name}
+  const datasets = {};
+  if (stockHist.length > 1) {
+    datasets['stock'] = {
+      labels:   stockHist.map(d => d.date.slice(5)),
+      closes:   stockHist.map(d => d.close),
+      currency: stockCurrency,
+      name:     stockTicker,
+      price:    stockHist[stockHist.length - 1]?.close,
+    };
+  }
+  for (const [name, rows] of Object.entries(indicesHist)) {
+    if (rows && rows.length > 1) {
+      datasets[name] = {
+        labels:   rows.map(d => d.date.slice(5)),
+        closes:   rows.map(d => d.close),
+        currency: '',
+        name,
+        price:    rows[rows.length - 1]?.close,
+      };
+    }
+  }
+
+  const ctx = document.getElementById('priceChart');
+  if (!ctx || !Object.keys(datasets).length) return;
+
+  // Determine first active tab
+  const firstKey = Object.keys(datasets)[0];
+
+  function makeDataset(closes) {
+    const isUp = closes[closes.length - 1] >= closes[0];
+    return {
+      data: closes,
+      borderColor:            isUp ? '#34d399' : '#f87171',
+      backgroundColor:        isUp ? 'rgba(52,211,153,0.07)' : 'rgba(248,113,113,0.07)',
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: isUp ? '#34d399' : '#f87171',
+      fill: true,
+      tension: 0.35,
+    };
+  }
+
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels:   datasets[firstKey].labels,
+      datasets: [makeDataset(datasets[firstKey].closes)],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,15,20,0.92)',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: c => ` ${c.raw.toLocaleString('en-US', {minimumFractionDigits: 2})}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#52525b', font: { size: 10 }, maxTicksLimit: 8 },
+          border: { display: false },
+        },
+        y: {
+          position: 'right',
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#52525b', font: { size: 10 },
+            callback: v => v.toLocaleString('en-US', {minimumFractionDigits: 2}) },
+          border: { display: false },
+        }
+      }
+    }
+  });
+
+  // Tab click handler
+  document.querySelectorAll('.chart-tab').forEach(btn => {
+    // Hide tabs for datasets without data
+    const key = btn.dataset.key;
+    if (!datasets[key]) { btn.style.display = 'none'; return; }
+
+    btn.addEventListener('click', () => {
+      const d = datasets[key];
+      // Update chart
+      chart.data.labels = d.labels;
+      chart.data.datasets[0] = makeDataset(d.closes);
+      chart.update('active');
+
+      // Update header stat
+      const nameEl  = document.getElementById('chart-name');
+      const priceEl = document.getElementById('chart-price');
+      const chgEl   = document.getElementById('chart-chg');
+      if (nameEl)  nameEl.textContent  = d.name;
+      if (priceEl) priceEl.textContent = d.price?.toLocaleString('en-US', {minimumFractionDigits: 2}) ?? '';
+      if (chgEl) {
+        const first = d.closes[0], last = d.closes[d.closes.length - 1];
+        const pct = first ? ((last - first) / first * 100) : 0;
+        const sign = pct > 0 ? '+' : '';
+        chgEl.textContent = `${sign}${pct.toFixed(2)}%`;
+        chgEl.style.color = pct > 0 ? '#34d399' : pct < 0 ? '#f87171' : 'var(--text-muted)';
+        chgEl.style.background = pct > 0 ? 'rgba(52,211,153,0.12)' : pct < 0 ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.06)';
+      }
+
+      // Active tab style
+      document.querySelectorAll('.chart-tab').forEach(b => {
+        b.style.borderColor = 'rgba(255,255,255,0.12)';
+        b.style.background  = 'transparent';
+        b.style.color       = 'var(--text-muted)';
+      });
+      btn.style.borderColor = 'rgba(124,58,237,0.6)';
+      btn.style.background  = 'rgba(124,58,237,0.18)';
+      btn.style.color       = '#a78bfa';
+    });
+  });
+})();
+
 {% if ai_analysis %}
 // Risk gauge
 (function(){
@@ -690,27 +884,40 @@
 {% endif %}
 {% endif %}
 
-{% if finance and finance.top_stocks %}
-const peersData = {{ finance.top_stocks | tojson | safe }};
-const labels = peersData.map(s => s.ticker);
-const changes = peersData.map(s => s.change !== null ? parseFloat(s.change.toFixed(2)) : 0);
-const colors = changes.map(v => v > 0 ? 'rgba(22,163,74,0.75)' : v < 0 ? 'rgba(212,64,64,0.75)' : 'rgba(113,113,122,0.5)');
-const borders = changes.map(v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#71717a');
-const ctx = document.getElementById('peersChart');
-if (ctx) {
+{% set _top = finance.top_stocks or finance.trending if finance else [] %}
+{% if _top %}
+(function(){
+  const peersData = {{ _top | tojson | safe }};
+  const labels  = peersData.map(s => s.ticker || s.symbol || '');
+  const changes = peersData.map(s => {
+    const v = s.change_pct !== undefined ? s.change_pct : s.change;
+    return v !== null && v !== undefined ? parseFloat((+v).toFixed(2)) : 0;
+  });
+  const colors  = changes.map(v => v > 0 ? 'rgba(52,211,153,0.25)' : v < 0 ? 'rgba(248,113,113,0.25)' : 'rgba(113,113,122,0.2)');
+  const borders = changes.map(v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#71717a');
+  const ctx = document.getElementById('peersChart');
+  if (!ctx) return;
   new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets: [{ label: '%', data: changes, backgroundColor: colors, borderColor: borders, borderWidth: 1, borderRadius: 4 }] },
+    data: { labels, datasets: [{ label: '%', data: changes, backgroundColor: colors, borderColor: borders, borderWidth: 1.5, borderRadius: 4 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.raw > 0 ? '+' : ''}${c.raw}%` } } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,15,20,0.92)',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          callbacks: { label: c => ` ${c.raw > 0 ? '+' : ''}${c.raw}%` }
+        }
+      },
       scales: {
-        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#a1a1aa', font: { size: 10 }, callback: v => `${v > 0 ? '+' : ''}${v}%` }, border: { display: false } },
-        x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 10, weight: '600' } }, border: { display: false } }
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#52525b', font: { size: 10 }, callback: v => `${v > 0 ? '+' : ''}${v}%` }, border: { display: false } },
+        x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 10, weight: '600' }, maxRotation: 0 }, border: { display: false } }
       }
     }
   });
-}
+})();
 {% endif %}
 
 // ── Polling & Refresh ──

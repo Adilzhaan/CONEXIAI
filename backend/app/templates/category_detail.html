@@ -3,7 +3,7 @@
 
 {% block topbar %}
 <nav class="topbar">
-  <span class="topbar-brand">{{ app_name }}</span>
+  <a href="/dashboard" style="display:block;line-height:0"><img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" /></a>
   <div class="topbar-nav">
     <a href="/companies/{{ company.id }}" class="btn btn-ghost btn-sm">← Overview</a>
     <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-ghost btn-sm">⬇ PDF</a>
@@ -156,11 +156,11 @@
 </style>
 
 {% set cat_meta = [
-  ("media", "📰", "InfoField & Media",   "#93bbff"),
-  ("hr",    "👥", "Human Resources",     "#4ade80"),
-  ("gr",    "⚖️", "Gov. Relations",      "#f87171"),
-  ("pr",    "🌐", "PR Environment",      "#c4b5fd"),
-  ("market","📊", "Market & Industry",   "#fbbf24"),
+  ("media", "", "InfoField & Media",   "#93bbff"),
+  ("hr",    "", "Human Resources",     "#4ade80"),
+  ("gr",    "", "Gov. Relations",      "#f87171"),
+  ("pr",    "", "PR Environment",      "#c4b5fd"),
+  ("market","", "Market & Industry",   "#fbbf24"),
 ] %}
 
 <!-- Category tabs -->
@@ -241,7 +241,7 @@
 {% else %}
   <div class="card">
     <div class="empty-state">
-      <div class="empty-state-icon">🔍</div>
+      <div class="empty-state-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
       <div class="empty-state-title">Нет данных по этой категории</div>
       <div class="empty-state-sub">
         <a href="/companies/{{ company.id }}" style="color: var(--accent)">Запустите анализ</a> на странице компании

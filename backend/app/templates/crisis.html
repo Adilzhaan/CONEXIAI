@@ -7,19 +7,18 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="sidebar-logo-icon">⚡</div>
-        <div>
-          <div class="sidebar-logo-text">{{ app_name }}</div>
-          <div class="sidebar-logo-sub">Risk Intelligence</div>
-        </div>
+        
+        <a href="/dashboard" style="display:block;line-height:0">
+          <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+        </a>
       </div>
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard" class="sidebar-item"><span class="sidebar-item-icon">⊞</span> Command Center</a>
       <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
-      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon">📈</span> Market Analysis</a>
-      <a href="/companies/{{ company.id }}/ci" class="sidebar-item"><span class="sidebar-item-icon">🔍</span> CI Monitor</a>
-      <a href="/companies/{{ company.id }}/crisis" class="sidebar-item active"><span class="sidebar-item-icon">🚨</span> Crisis Center</a>
+      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis</a>
+      <a href="/companies/{{ company.id }}/ci" class="sidebar-item"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor</a>
+      <a href="/companies/{{ company.id }}/crisis" class="sidebar-item active"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Center</a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
     </nav>
@@ -29,7 +28,7 @@
 
     <div class="sidebar-topbar">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">🚨 Crisis Center</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Crisis Center</div>
         <div style="font-size:11px;color:var(--text-muted)">{{ company.name }} — управление кризисными коммуникациями</div>
       </div>
       <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
@@ -242,7 +241,7 @@
 
       {% if not latest or not latest.scenarios %}
         <div class="no-analysis">
-          <div style="font-size:36px;margin-bottom:12px">🚨</div>
+          <div style="margin-bottom:12px"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
           <div style="font-size:15px;font-weight:700;margin-bottom:6px">Нет данных для Crisis Center</div>
           <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Сначала запустите анализ рисков, чтобы получить сценарии</div>
           <a href="/companies/{{ company.id }}" class="btn btn-primary">← Запустить анализ</a>
@@ -251,9 +250,9 @@
       {% else %}
         {% set scenarios = latest.scenarios %}
         {% set sc_meta = {
-          'low':    ('#34d399', 'rgba(52,211,153,0.10)',  'rgba(52,211,153,0.22)',  '🟢'),
-          'medium': ('#fbbf24', 'rgba(217,119,6,0.08)',  'rgba(217,119,6,0.15)',  '🟡'),
-          'high':   ('#f87171', 'rgba(248,113,113,0.10)',  'rgba(248,113,113,0.22)',  '🔴'),
+          'low':    ('#34d399', 'rgba(52,211,153,0.10)',  'rgba(52,211,153,0.22)',  ''),
+          'medium': ('#fbbf24', 'rgba(217,119,6,0.08)',  'rgba(217,119,6,0.15)',  ''),
+          'high':   ('#f87171', 'rgba(248,113,113,0.10)',  'rgba(248,113,113,0.22)',  ''),
         } %}
 
         <!-- Section: Incident cards -->
@@ -269,7 +268,7 @@
               {% set color, bg, glow, emoji = sc_meta[level] %}
               {% set status_label = status_label_map.get(level, 'Мониторинг') %}
               {% set level_label  = level_label_map.get(level, 'Риск') %}
-              {% set sc_icon = '!' if level == 'high' else ('⚡' if level == 'medium' else '✓') %}
+              {% set sc_icon = '!' if level == 'high' else ('·' if level == 'medium' else '·') %}
 
               <div class="incident-card" onclick="scrollToScenario('{{ sc.id }}')">
                 <div class="incident-icon" style="background:{{ bg }};color:{{ color }}">{{ sc_icon }}</div>
@@ -290,10 +289,10 @@
                       {% endif %}
                     {% endfor %}
                     {% if sc.steps and sc.steps[0].deadline %}
-                      <span>🕐 {{ sc.steps[0].deadline }}</span>
+                      <span>{{ sc.steps[0].deadline }}</span>
                     {% endif %}
                     {% if ns.owners %}
-                      <span>👥 {{ ns.owners[:3] | join(' · ') }}</span>
+                      <span>{{ ns.owners[:3] | join(' · ') }}</span>
                     {% endif %}
                     <span>↗ {{ sc.steps | length }} шагов</span>
                   </div>
@@ -339,7 +338,7 @@
                 <div class="sc-badge">{{ emoji }} Сценарий {{ sc.id }} · {{ level }}</div>
                 <div class="sc-title" id="sc-title-{{ sc.id }}">{{ sc.label }}</div>
                 {% if sc.trigger %}
-                  <div class="sc-trigger" id="sc-trigger-{{ sc.id }}">⚡ {{ sc.trigger }}</div>
+                  <div class="sc-trigger" id="sc-trigger-{{ sc.id }}">{{ sc.trigger }}</div>
                 {% endif %}
                 <div class="sc-steps" id="sc-steps-view-{{ sc.id }}">
                   {% for step in sc.steps[:4] %}
@@ -413,11 +412,11 @@
           </div>
           <div class="comm-panel">
             <div class="comm-panel-hdr">
-              <div class="comm-panel-title">✉️ Коммуникации</div>
+              <div class="comm-panel-title">Коммуникации</div>
               <div class="comm-type-tabs">
-                <button class="comm-tab active" data-type="press" onclick="selectCommType('press', this)">📰 Пресс-релиз</button>
-                <button class="comm-tab" data-type="internal" onclick="selectCommType('internal', this)">👥 Сотрудникам</button>
-                <button class="comm-tab" data-type="regulatory" onclick="selectCommType('regulatory', this)">⚖️ Регулятору</button>
+                <button class="comm-tab active" data-type="press" onclick="selectCommType('press', this)">Пресс-релиз</button>
+                <button class="comm-tab" data-type="internal" onclick="selectCommType('internal', this)">Сотрудникам</button>
+                <button class="comm-tab" data-type="regulatory" onclick="selectCommType('regulatory', this)">Регулятору</button>
               </div>
             </div>
             <div class="comm-body">
@@ -518,7 +517,7 @@
       output.value = "Ошибка соединения: " + e.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = "▶ Сгенерировать";
+      btn.textContent = "Сгенерировать";
     }
   }
 
@@ -597,7 +596,7 @@
       // Update the read-only view
       document.getElementById('sc-title-' + scId).textContent = label;
       const triggerEl = document.getElementById('sc-trigger-' + scId);
-      if (triggerEl) triggerEl.textContent = trigger ? '⚡ ' + trigger : '';
+      if (triggerEl) triggerEl.textContent = trigger || '';
 
       const stepsView = document.getElementById('sc-steps-view-' + scId);
       stepsView.innerHTML = steps.slice(0, 4).map((s, i) => `

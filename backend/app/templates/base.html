@@ -93,6 +93,15 @@
       padding: 48px; min-height: 100vh;
     }
     @media(max-width:768px){ .auth-left { display:none; } }
+    /* ── Logo image ── */
+    .logo-img {
+      height: 32px; width: auto; display: block;
+      filter: brightness(0) invert(1);
+      object-fit: contain;
+    }
+    .logo-img-sm { height: 72px; }
+    .logo-img-lg { height: 120px; }
+
     .auth-left-logo {
       font-size: 26px; font-weight: 800; letter-spacing: 0.06em;
       background: linear-gradient(135deg, #a78bfa, #7c3aed);
@@ -503,22 +512,60 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
 
-  <!-- Decorative concentric squircles (from design) -->
+  <!-- Decorative concentric squircles (animated) -->
+  <style>
+    @keyframes sq1 {
+      0%   { transform: rotate(15deg) scale(1); }
+      50%  { transform: rotate(22deg) scale(1.04) translate(18px, -12px); }
+      100% { transform: rotate(15deg) scale(1); }
+    }
+    @keyframes sq2 {
+      0%   { transform: rotate(12deg) scale(1); }
+      50%  { transform: rotate(4deg) scale(0.97) translate(-14px, 16px); }
+      100% { transform: rotate(12deg) scale(1); }
+    }
+    @keyframes sq3 {
+      0%   { transform: rotate(8deg) scale(1); }
+      50%  { transform: rotate(18deg) scale(1.06) translate(10px, 10px); }
+      100% { transform: rotate(8deg) scale(1); }
+    }
+    @keyframes sq4 {
+      0%   { transform: rotate(4deg) scale(1); }
+      50%  { transform: rotate(-6deg) scale(0.95) translate(-8px, -14px); }
+      100% { transform: rotate(4deg) scale(1); }
+    }
+    @keyframes blob1 {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(-40px, 30px) scale(1.1); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    @keyframes blob2 {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(30px, -25px) scale(1.08); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    .sq1 { animation: sq1 18s ease-in-out infinite; }
+    .sq2 { animation: sq2 24s ease-in-out infinite; }
+    .sq3 { animation: sq3 20s ease-in-out infinite; }
+    .sq4 { animation: sq4 15s ease-in-out infinite; }
+    .blob1 { animation: blob1 22s ease-in-out infinite; }
+    .blob2 { animation: blob2 28s ease-in-out infinite; }
+  </style>
   <div aria-hidden="true" style="pointer-events:none;position:fixed;inset:0;z-index:0;overflow:hidden;display:flex;align-items:center;justify-content:center">
-    <div style="position:absolute;width:900px;height:900px;border:1px solid rgba(147,112,219,0.20);border-radius:60px;transform:rotate(15deg)"></div>
-    <div style="position:absolute;width:720px;height:720px;border:1px solid rgba(147,112,219,0.25);border-radius:60px;transform:rotate(12deg)"></div>
-    <div style="position:absolute;width:540px;height:540px;border:1px solid rgba(147,112,219,0.30);border-radius:60px;transform:rotate(8deg)"></div>
-    <div style="position:absolute;width:360px;height:360px;border:1px solid rgba(147,112,219,0.35);border-radius:60px;transform:rotate(4deg)"></div>
+    <div class="sq1" style="position:absolute;width:900px;height:900px;border:1px solid rgba(147,112,219,0.20);border-radius:60px"></div>
+    <div class="sq2" style="position:absolute;width:720px;height:720px;border:1px solid rgba(147,112,219,0.25);border-radius:60px"></div>
+    <div class="sq3" style="position:absolute;width:540px;height:540px;border:1px solid rgba(147,112,219,0.30);border-radius:60px"></div>
+    <div class="sq4" style="position:absolute;width:360px;height:360px;border:1px solid rgba(147,112,219,0.35);border-radius:60px"></div>
     <!-- purple glow blobs -->
-    <div style="position:absolute;top:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(124,58,237,0.12) 0%,transparent 70%);border-radius:50%"></div>
-    <div style="position:absolute;bottom:-10%;left:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(91,33,182,0.10) 0%,transparent 70%);border-radius:50%"></div>
+    <div class="blob1" style="position:absolute;top:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(124,58,237,0.12) 0%,transparent 70%);border-radius:50%"></div>
+    <div class="blob2" style="position:absolute;bottom:-10%;left:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(91,33,182,0.10) 0%,transparent 70%);border-radius:50%"></div>
   </div>
 
   <div id="nprogress-bar"></div>
   <div id="page-overlay">
     <div id="nav-spinner">
       <div class="nav-spinner-ring"></div>
-      <div class="nav-spinner-logo">CONEXIAI</div>
+      <img src="/static/logo.png" class="logo-img" style="height:66px;margin-top:4px" alt="CONEXIAI" />
     </div>
   </div>
 

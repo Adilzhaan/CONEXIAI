@@ -38,7 +38,7 @@ def _build_indexed(items: list[dict], prefix: str, text_key: str, url_key: str, 
 async def analyze_market_position(
     company_name: str,
     stock: dict[str, Any] | None,
-    market_index: dict[str, Any] | None,
+    market_indices: list[dict[str, Any]],
     top_stocks: list[dict[str, Any]],
     news: list[dict[str, Any]],
     api_key: str,
@@ -49,29 +49,27 @@ async def analyze_market_position(
         _chg = stock.get("lasttoprevprice") or stock.get("change")
         _chg_str = f"{_chg:+.2f}%" if _chg is not None else "н/д"
         stock_text = (
-            f"Тикер: {stock.get('ticker')} ({stock.get('source')}) | "
+            f"Тикер: {stock.get('ticker')} ({stock.get('exchange', stock.get('source'))}) | "
             f"Цена: {stock.get('last')} | "
             f"Изменение: {_chg_str} | "
-            f"Объём торгов: {stock.get('voltoday') or 'н/д'}"
+            f"Объём торгов: {stock.get('volume') or 'н/д'}"
         )
     else:
         stock_text = "Компания не торгуется на открытом рынке."
 
-    idx = market_index or {}
-    idx_val = idx.get("currentvalue") or idx.get("lastvalue") or "н/д"
-    idx_chg = idx.get("lasttoprevprice")
-    index_text = (
-        f"IMOEX: {idx_val} | Изменение: {f'{idx_chg:+.2f}%' if idx_chg else 'н/д'}"
-    ) if market_index else "Индекс недоступен."
+    def fmt_index(idx: dict) -> str:
+        chg = idx.get("change_pct")
+        chg_str = f"{chg:+.2f}%" if chg is not None else "н/д"
+        return f"{idx.get('name', idx.get('symbol', ''))}: {idx.get('last') or '—'} | Изм: {chg_str}"
+
+    index_text = "\n".join(fmt_index(i) for i in market_indices) or "Индексы недоступны."
 
     def fmt_stock(s: dict) -> str:
-        chg = s.get("change")
-        vol = s.get("volume_rub") or 0
+        chg = s.get("change_pct") or s.get("change")
         return (
-            f"{s['ticker']:8s} {s.get('name','')[:20]:20s} | "
+            f"{s.get('ticker',''):8s} {s.get('name','')[:20]:20s} | "
             f"Цена: {s.get('last') or '—':>10} | "
-            f"Изм: {f'{chg:+.2f}%' if chg is not None else '—':>8} | "
-            f"Объём: {vol:>16,.0f} ₽"
+            f"Изм: {f'{chg:+.2f}%' if chg is not None else '—':>8}"
         )
 
     leaders_text = "\n".join(fmt_stock(s) for s in top_stocks) or "Данные недоступны."
@@ -84,10 +82,10 @@ async def analyze_market_position(
 ## Биржевые данные компании
 {stock_text}
 
-## Состояние рынка (MOEX)
+## Состояние мировых рынков (KASE / AIX / NYSE / NASDAQ / LSE)
 {index_text}
 
-## Топ ликвидных акций рынка (рыночный контекст и конкуренты)
+## Топ акций рынка (рыночный контекст)
 {leaders_text}
 
 ## Новости по компании и отрасли

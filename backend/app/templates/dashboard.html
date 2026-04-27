@@ -6,7 +6,6 @@
 {% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
 {% set total = admin_rows|length + member_only_rows|length %}
 
-{# Build risk overview across all companies #}
 {% set ns = namespace(high=0, medium=0, low=0, no_data=0) %}
 {% for m in admin_rows %}
   {% set c = m.companies %}
@@ -26,13 +25,9 @@
 <div class="sidebar-layout">
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="sidebar-logo-icon">⚡</div>
-        <div>
-          <div class="sidebar-logo-text">{{ app_name }}</div>
-          <div class="sidebar-logo-sub">Risk Intelligence</div>
-        </div>
-      </div>
+      <a href="/dashboard" style="display:block;line-height:0">
+        <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+      </a>
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard" class="sidebar-item active">
@@ -59,141 +54,172 @@
 
     <div class="sidebar-wrap">
       <style>
-        /* ── Stats row ── */
-        .dash-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
-        @media(max-width:800px){ .dash-stats{grid-template-columns:1fr 1fr;} }
-        .stat-card {
-          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
-          padding:14px 18px; display:flex; align-items:center; gap:12px;
-          backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
-        }
-        .stat-icon { width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0; }
-        .stat-val { font-size:24px; font-weight:800; line-height:1; }
-        .stat-lbl { font-size:10px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
-
         /* ── Alerts banner ── */
         .alerts-banner {
-          background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.22);
+          background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.20);
           border-left:3px solid #f87171; border-radius:var(--radius);
-          padding:14px 18px; margin-bottom:16px;
+          padding:12px 18px; margin-bottom:20px;
           backdrop-filter:blur(20px);
         }
-        .alert-row {
-          display:flex; align-items:center; gap:10px;
-          padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.07);
-          font-size:12px;
-        }
-        .alert-row:last-child { border-bottom:none; }
-        .alert-dot { width:7px;height:7px;border-radius:50%;background:#f87171;flex-shrink:0;animation:ceoPulse 1.8s ease-in-out infinite; }
+        .alert-dot { width:6px;height:6px;border-radius:50%;background:#f87171;flex-shrink:0;animation:ceoPulse 1.8s ease-in-out infinite; }
         @keyframes ceoPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0.5)}50%{box-shadow:0 0 0 5px rgba(248,113,113,0)}}
+
+        /* ── Section header ── */
+        .sec-hdr {
+          display:flex; align-items:center; justify-content:space-between;
+          margin-bottom:8px; padding:0 2px;
+        }
+        .sec-hdr-left { display:flex; align-items:center; gap:8px; }
+        .sec-hdr-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); }
+        .sec-hdr-count {
+          font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px;
+          background:rgba(255,255,255,0.07); color:var(--text-muted);
+          border:1px solid rgba(255,255,255,0.10);
+        }
+
+        /* ── Column header ── */
+        .col-header {
+          display:grid;
+          grid-template-columns: 2.5fr 100px 220px 110px 130px;
+          gap:0;
+          padding:10px 28px;
+          font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+          color:rgba(255,255,255,0.28);
+          border-bottom:1px solid rgba(255,255,255,0.07);
+          background:rgba(255,255,255,0.02);
+        }
+
+        /* ── Company list ── */
+        .co-list {
+          background:rgba(255,255,255,0.03);
+          border:1px solid rgba(255,255,255,0.09);
+          border-radius:var(--radius);
+          overflow:hidden;
+          backdrop-filter:blur(20px);
+          margin-bottom:28px;
+        }
+
+        .co-row {
+          display:grid;
+          grid-template-columns: 2.5fr 100px 220px 110px 130px;
+          gap:0;
+          align-items:center;
+          padding:0 28px;
+          min-height:80px;
+          border-bottom:1px solid rgba(255,255,255,0.06);
+          border-left:3px solid transparent;
+          transition:background 0.15s, border-left-color 0.15s;
+          cursor:default;
+        }
+        .co-row:last-child { border-bottom:none; }
+        .co-row:hover { background:rgba(255,255,255,0.04); }
+        .co-row.risk-high  { border-left-color:#f87171; }
+        .co-row.risk-med   { border-left-color:#fbbf24; }
+        .co-row.risk-low   { border-left-color:#34d399; }
+
+        /* ── Cell: Company ── */
+        .co-cell-company { display:flex; align-items:center; gap:16px; min-width:0; padding:18px 0; }
+        .co-avatar {
+          width:42px; height:42px; border-radius:10px; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center;
+          font-size:16px; font-weight:700; color:#fff;
+        }
+        .co-name { font-size:15px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
+        .co-email { font-size:12px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+        /* ── Cell: Score ── */
+        .co-cell-score { text-align:center; }
+        .co-score-num { font-size:28px; font-weight:800; line-height:1; }
+        .co-score-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; color:var(--text-muted); }
+
+        /* ── Cell: Categories ── */
+        .co-cell-cats { display:flex; flex-wrap:wrap; gap:6px; }
+        .co-cat-chip {
+          font-size:11px; font-weight:700; padding:4px 10px; border-radius:99px;
+          border:1px solid; white-space:nowrap;
+        }
+
+        /* ── Cell: Date ── */
+        .co-cell-date { font-size:12px; color:var(--text-muted); }
+
+        /* ── Cell: Action ── */
+        .co-cell-action { display:flex; justify-content:flex-end; }
+        .co-open-btn {
+          display:inline-flex; align-items:center; gap:6px;
+          font-size:13px; font-weight:600; color:#a78bfa;
+          text-decoration:none; padding:8px 18px; border-radius:999px;
+          background:rgba(124,58,237,0.10); border:1px solid rgba(124,58,237,0.22);
+          transition:background 0.15s, transform 0.15s;
+          white-space:nowrap;
+        }
+        .co-open-btn:hover { background:rgba(124,58,237,0.20); text-decoration:none; transform:translateY(-1px); }
+
+        /* ── Empty ── */
+        .empty-state {
+          background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+          border-radius:var(--radius); padding:56px 24px; text-align:center;
+          backdrop-filter:blur(20px);
+        }
 
         /* ── Add modal ── */
         #addModal { display:none; }
         #addModal.open { display:flex !important; }
 
-        /* ── Company cards ── */
-        .companies-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+        .step-dot {
+          width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+          font-size:11px;font-weight:700;flex-shrink:0;
+          background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.40);
+          transition:all 0.2s;
+        }
+        .step-dot.active { background:var(--accent);border-color:var(--accent);color:#fff; }
+        .step-dot.done   { background:rgba(52,211,153,0.20);border-color:#34d399;color:#34d399; }
+        .step-line { flex:1;height:1px;background:rgba(255,255,255,0.12);transition:background 0.2s; }
+        .step-line.done { background:#34d399; }
 
-        .co-card {
-          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09); border-radius:var(--radius);
-          overflow:hidden; transition:border-color 0.2s,box-shadow 0.2s,transform 0.2s,background 0.2s;
-          display:flex; flex-direction:column; position:relative;
-          backdrop-filter:blur(20px); box-shadow:0 4px 20px rgba(0,0,0,0.15);
+        .modal-field { margin-bottom:14px; }
+        .modal-field:last-child { margin-bottom:0; }
+        .modal-field label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.45);display:block;margin-bottom:6px; }
+        .modal-field input,.modal-field textarea,.modal-field select {
+          width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);
+          background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;
+          transition:border-color 0.15s,box-shadow 0.15s;
         }
-        .co-card:hover {
-          background:rgba(255,255,255,0.08);
-          border-color:rgba(124,58,237,0.30);
-          box-shadow:0 8px 32px rgba(124,58,237,0.20);
-          transform:translateY(-3px);
+        .modal-field input:focus,.modal-field textarea:focus,.modal-field select:focus {
+          border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,0.18);
         }
-        .co-card-risk-bar { height:3px; width:100%; }
+        .modal-field input::placeholder,.modal-field textarea::placeholder { color:rgba(255,255,255,0.22); }
+        .modal-field select option { background:#1a1040; }
+        .modal-row { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+        @media(max-width:480px){.modal-row{grid-template-columns:1fr;}}
 
-        .co-card-header { padding:16px 18px 12px; display:flex; align-items:flex-start; gap:12px; }
-        .co-avatar { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex-shrink:0;color:#fff; }
-        .co-name { font-size:14px; font-weight:700; line-height:1.3; margin-bottom:2px; }
-        .co-email { font-size:11px; color:var(--text-muted); }
+        .comp-item {
+          display:flex;align-items:center;gap:8px;padding:8px 12px;
+          background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;
+          margin-bottom:6px;
+        }
+        .comp-item-name { flex:1;font-size:13px;font-weight:500; }
+        .comp-item-url  { font-size:11px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        .comp-del-btn {
+          width:22px;height:22px;border-radius:6px;border:none;cursor:pointer;
+          background:rgba(248,113,113,0.12);color:#f87171;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+          font-size:14px;line-height:1;
+        }
+        .tag-chip {
+          display:inline-flex;align-items:center;gap:5px;
+          padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;
+          background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;
+        }
+        .tag-chip-del { cursor:pointer;color:rgba(167,139,250,0.60);font-size:14px;line-height:1; }
+        .tag-chip-del:hover { color:#f87171; }
 
-        .co-risk-row {
-          padding:0 18px 12px;
-          display:flex; align-items:center; gap:10px;
+        @media(max-width:900px) {
+          .col-header { display:none; }
+          .co-row { grid-template-columns:1fr auto; grid-template-rows:auto auto; gap:4px; padding:14px 16px; }
+          .co-cell-cats { grid-column:1; }
+          .co-cell-date { display:none; }
+          .co-cell-score { text-align:left; }
         }
-        .co-score-badge {
-          width:48px; height:48px; border-radius:50%; flex-shrink:0;
-          display:flex; align-items:center; justify-content:center;
-          font-size:14px; font-weight:800; color:#fff;
-        }
-        .co-trend { font-size:11px; font-weight:700; }
-        .co-top-cat {
-          flex:1; font-size:11px; color:var(--text-muted);
-          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        }
-        .co-cat-chips { display:flex; gap:5px; padding:0 18px 14px; flex-wrap:wrap; }
-        .co-cat-chip {
-          font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px;
-          border:1px solid; white-space:nowrap;
-        }
-
-        .co-card-footer {
-          margin-top:auto; padding:11px 18px;
-          border-top:1px solid rgba(255,255,255,0.08);
-          display:flex; align-items:center; justify-content:space-between;
-          background:rgba(255,255,255,0.03);
-        }
-        .co-open-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          font-size:12px; font-weight:600; color:#a78bfa;
-          text-decoration:none; padding:5px 14px; border-radius:999px;
-          background:rgba(124,58,237,0.12); border:1px solid rgba(124,58,237,0.25);
-          transition:background 0.15s,transform 0.15s;
-        }
-        .co-open-btn:hover { background:rgba(124,58,237,0.22); text-decoration:none; transform:translateY(-1px); }
-
-        .co-no-data {
-          padding:0 18px 14px;
-          font-size:11px; color:var(--text-muted);
-          display:flex; align-items:center; gap:6px;
-        }
-
-        /* ── Section header ── */
-        .sec-hdr { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
-        .sec-hdr-title { font-size:13px; font-weight:700; }
-        .sec-hdr-count { padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--border);color:var(--text-muted); }
-
-        /* ── Empty ── */
-        .empty-state { background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);padding:48px 24px;text-align:center;backdrop-filter:blur(20px); }
       </style>
-
-      <!-- Stats row -->
-      <div class="dash-stats">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(124,58,237,0.15)">🏢</div>
-          <div>
-            <div class="stat-val">{{ total }}</div>
-            <div class="stat-lbl">Компаний</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(248,113,113,0.12)">🔴</div>
-          <div>
-            <div class="stat-val" style="color:{% if ns.high > 0 %}#f87171{% else %}var(--text){% endif %}">{{ ns.high }}</div>
-            <div class="stat-lbl">Высокий риск</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(251,191,36,0.12)">🟡</div>
-          <div>
-            <div class="stat-val" style="color:{% if ns.medium > 0 %}#fbbf24{% else %}var(--text){% endif %}">{{ ns.medium }}</div>
-            <div class="stat-lbl">Средний риск</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:rgba(52,211,153,0.12)">🟢</div>
-          <div>
-            <div class="stat-val" style="color:{% if ns.low > 0 %}#34d399{% else %}var(--text){% endif %}">{{ ns.low }}</div>
-            <div class="stat-lbl">Низкий риск</div>
-          </div>
-        </div>
-      </div>
 
       <!-- Active Alerts -->
       {% set high_risk_companies = [] %}
@@ -219,15 +245,15 @@
 
       {% if high_risk_companies %}
       <div class="alerts-banner">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f87171;margin-bottom:10px;display:flex;align-items:center;gap:7px">
-          <div class="alert-dot"></div> Активные алерты — {{ high_risk_companies|length }} компани{{ 'я' if high_risk_companies|length == 1 else ('и' if 2 <= high_risk_companies|length <= 4 else 'й') }}
-        </div>
         {% set cat_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f87171;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <div class="alert-dot"></div> Высокий риск — {{ high_risk_companies|length }} компани{{ 'я' if high_risk_companies|length == 1 else ('и' if 2 <= high_risk_companies|length <= 4 else 'й') }}
+        </div>
         {% for c, score, top_cat in high_risk_companies %}
-        <div class="alert-row">
-          <span style="font-weight:700;color:#fff">{{ c.name }}</span>
-          <span style="background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.28);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">{{ score }}/100</span>
-          {% if top_cat %}<span style="color:rgba(255,255,255,0.50)">· {{ cat_labels.get(top_cat, top_cat) }} под угрозой</span>{% endif %}
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:5px 0;{% if not loop.last %}border-bottom:1px solid rgba(255,255,255,0.06);{% endif %}">
+          <span style="font-weight:600;color:var(--text)">{{ c.name }}</span>
+          <span style="background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.25);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">{{ score }}/100</span>
+          {% if top_cat %}<span style="color:rgba(255,255,255,0.40);font-size:11px">{{ cat_labels.get(top_cat, top_cat) }}</span>{% endif %}
           <a href="/companies/{{ c.id }}" style="margin-left:auto;font-size:11px;font-weight:600;color:#a78bfa;text-decoration:none">Открыть →</a>
         </div>
         {% endfor %}
@@ -237,8 +263,6 @@
       <!-- Add company modal -->
       <div id="addModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px">
         <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
-
-          <!-- Modal header -->
           <div style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:flex-start;justify-content:space-between">
             <div>
               <div style="font-size:15px;font-weight:700">Новая компания</div>
@@ -246,8 +270,6 @@
             </div>
             <button onclick="closeAddModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1;padding:2px 4px">×</button>
           </div>
-
-          <!-- Step indicators -->
           <div style="padding:16px 24px 0;display:flex;align-items:center;gap:0">
             <div class="step-dot" id="dot-1" style="background:var(--accent);color:#fff">1</div>
             <div class="step-line" id="line-1"></div>
@@ -255,155 +277,60 @@
             <div class="step-line" id="line-2"></div>
             <div class="step-dot" id="dot-3">3</div>
           </div>
-
-          <style>
-            .step-dot {
-              width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-              font-size:11px;font-weight:700;flex-shrink:0;
-              background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.40);
-              transition:all 0.2s;
-            }
-            .step-dot.active { background:var(--accent);border-color:var(--accent);color:#fff; }
-            .step-dot.done   { background:rgba(52,211,153,0.20);border-color:#34d399;color:#34d399; }
-            .step-line { flex:1;height:1px;background:rgba(255,255,255,0.12);transition:background 0.2s; }
-            .step-line.done { background:#34d399; }
-
-            .modal-field { margin-bottom:14px; }
-            .modal-field:last-child { margin-bottom:0; }
-            .modal-field label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.45);display:block;margin-bottom:6px; }
-            .modal-field input,.modal-field textarea,.modal-field select {
-              width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);
-              background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;
-              transition:border-color 0.15s,box-shadow 0.15s;
-            }
-            .modal-field input:focus,.modal-field textarea:focus,.modal-field select:focus {
-              border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,0.18);
-            }
-            .modal-field input::placeholder,.modal-field textarea::placeholder { color:rgba(255,255,255,0.22); }
-            .modal-field select option { background:#1a1040; }
-            .modal-row { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
-            @media(max-width:480px){.modal-row{grid-template-columns:1fr;}}
-
-            .comp-item {
-              display:flex;align-items:center;gap:8px;padding:8px 12px;
-              background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;
-              margin-bottom:6px;
-            }
-            .comp-item-name { flex:1;font-size:13px;font-weight:500; }
-            .comp-item-url  { font-size:11px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-            .comp-del-btn {
-              width:22px;height:22px;border-radius:6px;border:none;cursor:pointer;
-              background:rgba(248,113,113,0.12);color:#f87171;display:flex;align-items:center;justify-content:center;flex-shrink:0;
-              font-size:14px;line-height:1;
-            }
-            .tag-chip {
-              display:inline-flex;align-items:center;gap:5px;
-              padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;
-              background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;
-            }
-            .tag-chip-del { cursor:pointer;color:rgba(167,139,250,0.60);font-size:14px;line-height:1; }
-            .tag-chip-del:hover { color:#f87171; }
-          </style>
-
-          <!-- Form -->
           <form method="post" action="/companies/create" id="company-form">
             <input type="hidden" name="competitors_json" id="competitors_json" value="[]" />
             <input type="hidden" name="news_sources_json" id="news_sources_json" value="[]" />
-
-            <!-- ── Step 1: Basic info ── -->
             <div id="step-1" style="padding:20px 24px">
               <div class="modal-row">
-                <div class="modal-field">
-                  <label>Название компании *</label>
-                  <input name="name" type="text" placeholder="ТОО «Acme»" required />
-                </div>
-                <div class="modal-field">
-                  <label>Сайт</label>
-                  <input name="website" type="url" placeholder="https://acme.kz" />
-                </div>
+                <div class="modal-field"><label>Название *</label><input name="name" type="text" placeholder="ТОО «Acme»" required /></div>
+                <div class="modal-field"><label>Сайт</label><input name="website" type="url" placeholder="https://acme.kz" /></div>
               </div>
               <div class="modal-row" style="margin-top:12px">
-                <div class="modal-field">
-                  <label>Имя CEO *</label>
-                  <input name="ceo_name" type="text" placeholder="Алибек Сейтов" required />
-                </div>
-                <div class="modal-field">
-                  <label>Email CEO *</label>
-                  <input name="ceo_email" type="email" placeholder="ceo@acme.kz" required />
-                </div>
+                <div class="modal-field"><label>Имя CEO *</label><input name="ceo_name" type="text" placeholder="Алибек Сейтов" required /></div>
+                <div class="modal-field"><label>Email CEO *</label><input name="ceo_email" type="email" placeholder="ceo@acme.kz" required /></div>
               </div>
             </div>
-
-            <!-- ── Step 2: Context ── -->
             <div id="step-2" style="display:none;padding:20px 24px">
               <div class="modal-row">
-                <div class="modal-field">
-                  <label>Локация *</label>
-                  <input name="location" type="text" placeholder="Алматы, Казахстан" required />
-                </div>
+                <div class="modal-field"><label>Локация *</label><input name="location" type="text" placeholder="Алматы, Казахстан" required /></div>
                 <div class="modal-field">
                   <label>Отрасль *</label>
                   <select name="industry" required>
                     <option value="" disabled selected>Выбрать…</option>
-                    <option>Финансы и банкинг</option>
-                    <option>Технологии и IT</option>
-                    <option>Ритейл и e-commerce</option>
-                    <option>Производство</option>
-                    <option>Добывающая промышленность</option>
-                    <option>Строительство и недвижимость</option>
-                    <option>Телеком и медиа</option>
-                    <option>Здравоохранение и фарма</option>
-                    <option>Образование</option>
-                    <option>Логистика и транспорт</option>
-                    <option>Сельское хозяйство</option>
-                    <option>Энергетика</option>
-                    <option>Другое</option>
+                    <option>Финансы и банкинг</option><option>Технологии и IT</option>
+                    <option>Ритейл и e-commerce</option><option>Производство</option>
+                    <option>Добывающая промышленность</option><option>Строительство и недвижимость</option>
+                    <option>Телеком и медиа</option><option>Здравоохранение и фарма</option>
+                    <option>Образование</option><option>Логистика и транспорт</option>
+                    <option>Сельское хозяйство</option><option>Энергетика</option><option>Другое</option>
                   </select>
                 </div>
               </div>
-              <div class="modal-field" style="margin-top:12px">
-                <label>Описание компании</label>
-                <textarea name="description" rows="3" placeholder="Чем занимается компания, её продукты/услуги, целевой рынок…"></textarea>
-              </div>
-              <div class="modal-field" style="margin-top:12px">
-                <label>Рыночный контекст</label>
-                <textarea name="market_info" rows="2" placeholder="Объём рынка, ключевые тренды, регуляторная среда…"></textarea>
-              </div>
+              <div class="modal-field" style="margin-top:12px"><label>Описание</label><textarea name="description" rows="3" placeholder="Продукты, услуги, целевой рынок…"></textarea></div>
+              <div class="modal-field" style="margin-top:12px"><label>Рыночный контекст</label><textarea name="market_info" rows="2" placeholder="Объём рынка, ключевые тренды…"></textarea></div>
             </div>
-
-            <!-- ── Step 3: Competitors + News ── -->
             <div id="step-3" style="display:none;padding:20px 24px">
-              <!-- Competitors -->
-              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.45);margin-bottom:10px">
-                Конкуренты <span style="font-size:10px;font-weight:400;color:var(--text-muted)">(до 5)</span>
-              </div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);margin-bottom:10px">Конкуренты <span style="font-weight:400;text-transform:none">(до 5)</span></div>
               <div id="comp-list"></div>
               <div class="modal-row" id="comp-add-row" style="margin-bottom:10px">
                 <input id="comp-name-input" type="text" placeholder="Название конкурента" style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;width:100%;" />
                 <div style="display:flex;gap:8px">
                   <input id="comp-url-input" type="url" placeholder="https://competitor.kz" style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;flex:1;min-width:0;" />
-                  <button type="button" onclick="addCompetitor()" class="btn btn-secondary btn-sm" style="flex-shrink:0;white-space:nowrap">+ Добавить</button>
+                  <button type="button" onclick="addCompetitor()" class="btn btn-secondary btn-sm" style="flex-shrink:0">+ Добавить</button>
                 </div>
               </div>
-
-              <!-- News sources -->
-              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.45);margin-bottom:10px;margin-top:20px">
-                Источники новостей <span style="font-size:10px;font-weight:400;color:var(--text-muted)">(рекомендуемые)</span>
-              </div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);margin-bottom:10px;margin-top:20px">Источники новостей</div>
               <div id="news-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;margin-bottom:8px"></div>
               <div style="display:flex;gap:8px">
-                <input id="news-input" type="text" placeholder="Например: Forbes Kazakhstan, Kapital.kz…" style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewsTag();}" />
+                <input id="news-input" type="text" placeholder="Forbes Kazakhstan, Kapital.kz…" style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewsTag();}" />
                 <button type="button" onclick="addNewsTag()" class="btn btn-secondary btn-sm" style="flex-shrink:0">+ Добавить</button>
               </div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:6px">AI будет учитывать эти источники при анализе</div>
             </div>
-
-            <!-- Footer -->
             <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;gap:10px">
               <button type="button" id="back-btn" onclick="stepBack()" style="display:none" class="btn btn-ghost btn-sm">← Назад</button>
               <div style="flex:1"></div>
               <button type="button" id="next-btn" onclick="stepNext()" class="btn btn-primary">Далее →</button>
-              <button type="submit" id="create-btn" style="display:none" class="btn btn-primary" id="add-btn">✓ Создать компанию</button>
+              <button type="submit" id="create-btn" style="display:none" class="btn btn-primary">Создать компанию</button>
             </div>
           </form>
         </div>
@@ -411,12 +338,24 @@
 
       <!-- Admin companies -->
       {% if admin_rows %}
-      <div style="margin-bottom:24px">
+      <div style="margin-bottom:28px">
         <div class="sec-hdr">
-          <div class="sec-hdr-title">Мои компании</div>
-          <div class="sec-hdr-count">{{ admin_rows|length }}</div>
+          <div class="sec-hdr-left">
+            <div class="sec-hdr-title">Мои компании</div>
+            <div class="sec-hdr-count">{{ admin_rows|length }}</div>
+          </div>
         </div>
-        <div class="companies-grid">
+
+        <!-- Column headers -->
+        <div class="col-header">
+          <div>Компания</div>
+          <div style="text-align:center">Риск</div>
+          <div>Категории</div>
+          <div>Обновлено</div>
+          <div></div>
+        </div>
+
+        <div class="co-list">
           {% for m in admin_rows %}
             {% set c = m.companies %}
             {% if c %}
@@ -425,40 +364,20 @@
               {% set colors = ['#d44040','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d'] %}
               {% set color = colors[loop.index0 % colors|length] %}
 
-              {# Risk score vars #}
               {% if risk and risk.score is not none %}
                 {% set s = risk.score | int %}
-                {% if s >= 70 %}
-                  {% set risk_color = '#f87171' %}
-                  {% set risk_bg    = 'rgba(248,113,113,0.18)' %}
-                  {% set risk_shadow= 'rgba(248,113,113,0.35)' %}
-                  {% set risk_label = 'Критический' %}
-                {% elif s >= 50 %}
-                  {% set risk_color = '#fb923c' %}
-                  {% set risk_bg    = 'rgba(251,146,60,0.18)' %}
-                  {% set risk_shadow= 'rgba(251,146,60,0.35)' %}
-                  {% set risk_label = 'Высокий' %}
-                {% elif s >= 30 %}
-                  {% set risk_color = '#fbbf24' %}
-                  {% set risk_bg    = 'rgba(251,191,36,0.18)' %}
-                  {% set risk_shadow= 'rgba(251,191,36,0.35)' %}
-                  {% set risk_label = 'Умеренный' %}
+                {% if s >= 65 %}
+                  {% set risk_color = '#f87171' %}{% set row_cls = 'risk-high' %}{% set risk_lbl = 'Высокий' %}
+                {% elif s >= 35 %}
+                  {% set risk_color = '#fbbf24' %}{% set row_cls = 'risk-med' %}{% set risk_lbl = 'Средний' %}
                 {% else %}
-                  {% set risk_color = '#34d399' %}
-                  {% set risk_bg    = 'rgba(52,211,153,0.18)' %}
-                  {% set risk_shadow= 'rgba(52,211,153,0.35)' %}
-                  {% set risk_label = 'Низкий' %}
+                  {% set risk_color = '#34d399' %}{% set row_cls = 'risk-low' %}{% set risk_lbl = 'Низкий' %}
                 {% endif %}
               {% else %}
-                {% set s = none %}
-                {% set risk_color  = 'rgba(255,255,255,0.30)' %}
-                {% set risk_bg     = 'rgba(255,255,255,0.07)' %}
-                {% set risk_shadow = 'transparent' %}
-                {% set risk_label  = '' %}
+                {% set s = none %}{% set risk_color = 'rgba(255,255,255,0.25)' %}{% set row_cls = '' %}{% set risk_lbl = '' %}
               {% endif %}
 
-              {# Top 3 categories by score #}
-              {% set cat_meta = {'media':('#93bbff','📰'),'hr':('#4ade80','👥'),'gr':('#f87171','⚖️'),'pr':('#c084fc','🌐'),'market':('#fbbf24','📊')} %}
+              {% set cat_meta = {'media':('#93bbff','MI'),'hr':('#4ade80','HR'),'gr':('#f87171','GR'),'pr':('#c084fc','PR'),'market':('#fbbf24','MK')} %}
               {% set top_cats = [] %}
               {% if risk and risk.categories %}
                 {% for key, cat in risk.categories.items() %}
@@ -469,51 +388,52 @@
                 {% set top_cats = top_cats | sort(attribute=0, reverse=True) %}
               {% endif %}
 
-              <div class="co-card">
-                <!-- Risk bar at top -->
-                <div class="co-card-risk-bar" style="background:{% if s is not none %}{{ risk_color }}{% else %}var(--border){% endif %}"></div>
-
-                <div class="co-card-header">
+              <div class="co-row {{ row_cls }}">
+                <!-- Company -->
+                <div class="co-cell-company">
                   <div class="co-avatar" style="background:{{ color }}">{{ c.name[0] | upper }}</div>
-                  <div style="flex:1;min-width:0">
+                  <div style="min-width:0">
                     <div class="co-name">{{ c.name }}</div>
                     <div class="co-email">{{ c.ceo_email }}</div>
                   </div>
+                </div>
+
+                <!-- Score -->
+                <div class="co-cell-score">
                   {% if s is not none %}
-                  <div class="co-score-badge"
-                       style="background:{{ risk_bg }};color:{{ risk_color }};box-shadow:0 4px 20px {{ risk_shadow }}">
-                    {{ s }}
-                  </div>
+                    <div class="co-score-num" style="color:{{ risk_color }}">{{ s }}</div>
+                    <div class="co-score-label">{{ risk_lbl }}</div>
+                  {% else %}
+                    <div style="font-size:18px;color:rgba(255,255,255,0.20);font-weight:700">—</div>
                   {% endif %}
                 </div>
 
-                {% if top_cats %}
-                <div class="co-cat-chips">
+                <!-- Categories -->
+                <div class="co-cell-cats">
                   {% for score, key in top_cats[:3] %}
-                    {% set chip_color, chip_icon = cat_meta.get(key, ('#aaa','?')) %}
-                    <span class="co-cat-chip" style="color:{{ chip_color }};border-color:{{ chip_color }};background:{{ chip_color }}1a">
-                      {{ chip_icon }} {{ score }}
+                    {% set chip_color, chip_lbl = cat_meta.get(key, ('#aaa','?')) %}
+                    <span class="co-cat-chip" style="color:{{ chip_color }};border-color:{{ chip_color }}26;background:{{ chip_color }}18">
+                      {{ chip_lbl }} {{ score }}
                     </span>
+                  {% else %}
+                    <span style="font-size:11px;color:rgba(255,255,255,0.25)">Нет данных</span>
                   {% endfor %}
+                </div>
+
+                <!-- Date -->
+                <div class="co-cell-date">
                   {% if snap and snap.last_checked_at %}
-                    <span style="font-size:10px;color:var(--text-muted);margin-left:auto;align-self:center">
-                      🔄 {{ snap.last_checked_at[:10] }}
-                    </span>
+                    {{ snap.last_checked_at[:10] }}
+                  {% else %}
+                    <span style="color:rgba(255,255,255,0.18)">—</span>
                   {% endif %}
                 </div>
-                {% elif not s %}
-                <div class="co-no-data">
-                  <span>—</span> Анализ не запускался
-                </div>
-                {% endif %}
 
-                <div class="co-card-footer">
-                  <div style="display:flex;align-items:center;gap:6px">
-                    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Admin</span>
-                  </div>
+                <!-- Action -->
+                <div class="co-cell-action">
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </a>
                 </div>
               </div>
@@ -523,7 +443,6 @@
       </div>
       {% else %}
       <div class="empty-state" style="margin-bottom:24px">
-        <div style="font-size:40px;margin-bottom:12px">🏢</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:6px">Нет компаний</div>
         <div style="font-size:13px;color:var(--text-muted)">Нажмите «Добавить компанию» чтобы начать</div>
         <a href="/companies/new" class="btn btn-primary btn-sm" style="margin-top:14px">+ Добавить компанию</a>
@@ -534,36 +453,45 @@
       {% if member_only_rows %}
       <div>
         <div class="sec-hdr">
-          <div class="sec-hdr-title">Участник в компаниях</div>
-          <div class="sec-hdr-count">{{ member_only_rows|length }}</div>
+          <div class="sec-hdr-left">
+            <div class="sec-hdr-title">Участник в компаниях</div>
+            <div class="sec-hdr-count">{{ member_only_rows|length }}</div>
+          </div>
+        </div>
+        <div class="col-header">
+          <div>Компания</div>
+          <div></div>
+          <div>Роль</div>
+          <div></div>
+          <div></div>
         </div>
         {% set role_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
-        <div class="companies-grid">
+        <div class="co-list">
           {% for m in member_only_rows %}
             {% set c = m.companies %}
             {% if c %}
               {% set colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
               {% set color = colors[loop.index0 % colors|length] %}
-              <div class="co-card">
-                <div class="co-card-risk-bar" style="background:var(--border)"></div>
-                <div class="co-card-header">
+              <div class="co-row">
+                <div class="co-cell-company">
                   <div class="co-avatar" style="background:{{ color }}">{{ c.name[0] | upper }}</div>
-                  <div style="flex:1;min-width:0">
+                  <div style="min-width:0">
                     <div class="co-name">{{ c.name }}</div>
                     <div class="co-email">{{ c.ceo_email }}</div>
                   </div>
                 </div>
-                <div class="co-cat-chips">
-                  <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.55);border:1px solid rgba(255,255,255,0.12)">👤 Member</span>
+                <div></div>
+                <div class="co-cell-cats">
+                  <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.10)">Member</span>
                   {% if m.role and m.role != 'member' %}
-                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.25)">{{ role_labels.get(m.role, m.role) }}</span>
+                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(167,139,250,0.10);color:#a78bfa;border:1px solid rgba(167,139,250,0.22)">{{ role_labels.get(m.role, m.role) }}</span>
                   {% endif %}
                 </div>
-                <div class="co-card-footer">
-                  <div style="font-size:10px;color:var(--text-muted)">Risk Intelligence</div>
+                <div></div>
+                <div class="co-cell-action">
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </a>
                 </div>
               </div>
@@ -578,7 +506,6 @@
 </div>
 
 <script>
-// ── Modal open/close ──
 function toggleAddForm() { openAddModal(); }
 function openAddModal() {
   document.getElementById('addModal').classList.add('open');
@@ -593,7 +520,6 @@ document.getElementById('addModal').addEventListener('click', function(e) {
   if (e.target === this) closeAddModal();
 });
 
-// ── Steps ──
 let currentStep = 1;
 const stepLabels = ['Основная информация', 'Контекст компании', 'Конкуренты и источники'];
 
@@ -617,7 +543,6 @@ function goToStep(n) {
 }
 
 function stepNext() {
-  // Validate current step required fields
   const step = document.getElementById('step-' + currentStep);
   const required = step.querySelectorAll('[required]');
   for (const f of required) {
@@ -630,7 +555,6 @@ function stepBack() {
   if (currentStep > 1) goToStep(currentStep - 1);
 }
 
-// ── Competitors ──
 let competitors = [];
 function addCompetitor() {
   const name = document.getElementById('comp-name-input').value.trim();
@@ -641,10 +565,7 @@ function addCompetitor() {
   document.getElementById('comp-url-input').value = '';
   renderCompetitors();
 }
-function removeCompetitor(i) {
-  competitors.splice(i, 1);
-  renderCompetitors();
-}
+function removeCompetitor(i) { competitors.splice(i, 1); renderCompetitors(); }
 function renderCompetitors() {
   document.getElementById('competitors_json').value = JSON.stringify(competitors);
   const list = document.getElementById('comp-list');
@@ -657,7 +578,6 @@ function renderCompetitors() {
   document.getElementById('comp-add-row').style.display = competitors.length >= 5 ? 'none' : 'grid';
 }
 
-// ── News sources ──
 let newsSources = [];
 function addNewsTag() {
   const val = document.getElementById('news-input').value.trim();
@@ -666,10 +586,7 @@ function addNewsTag() {
   document.getElementById('news-input').value = '';
   renderNewsTags();
 }
-function removeNewsTag(i) {
-  newsSources.splice(i, 1);
-  renderNewsTags();
-}
+function removeNewsTag(i) { newsSources.splice(i, 1); renderNewsTags(); }
 function renderNewsTags() {
   document.getElementById('news_sources_json').value = JSON.stringify(newsSources);
   const wrap = document.getElementById('news-tags');
@@ -677,7 +594,6 @@ function renderNewsTags() {
     <span class="tag-chip">${t}<span class="tag-chip-del" onclick="removeNewsTag(${i})">×</span></span>`).join('');
 }
 
-// ── Submit ──
 document.getElementById('company-form').addEventListener('submit', function() {
   const btn = document.getElementById('create-btn');
   btn.disabled = true;

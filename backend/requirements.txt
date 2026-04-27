@@ -7,4 +7,5 @@ python-dotenv==1.2.2
 anthropic
 fpdf2
 apscheduler==3.10.4
+yfinance
 
