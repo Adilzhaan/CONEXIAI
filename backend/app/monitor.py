@@ -45,6 +45,7 @@ async def _upsert_snapshot(
     news_hashes: list[str],
     last_score: int | None = None,
     ran_analysis: bool = False,
+    news_items: list[dict] | None = None,
 ) -> None:
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
@@ -58,6 +59,8 @@ async def _upsert_snapshot(
         row["last_run_at"] = now
     if last_score is not None:
         row["last_score"] = last_score
+    if news_items is not None:
+        row["recent_news"] = news_items
 
     try:
         await supabase.rest_upsert_service(
@@ -67,7 +70,19 @@ async def _upsert_snapshot(
             on_conflict="company_id",
         )
     except Exception as e:
-        logger.warning("Failed to upsert snapshot for %s: %s", company_id, e)
+        if news_items is not None and "recent_news" in str(e):
+            row.pop("recent_news", None)
+            try:
+                await supabase.rest_upsert_service(
+                    table="monitoring_snapshots",
+                    service_key=service_key,
+                    rows=[row],
+                    on_conflict="company_id",
+                )
+            except Exception as e2:
+                logger.warning("Failed to upsert snapshot for %s: %s", company_id, e2)
+        else:
+            logger.warning("Failed to upsert snapshot for %s: %s", company_id, e)
 
 
 async def _refresh_market_cache(
@@ -158,6 +173,7 @@ async def check_and_run(
     hh_client,
     finance_client,
     settings,
+    ci_client=None,
 ) -> None:
     from datetime import datetime, timezone
     t0 = datetime.now(timezone.utc)
@@ -186,13 +202,31 @@ async def check_and_run(
     else:
         logger.info("[monitor] No previous snapshot for '%s' — first run", company_name)
 
-    if not _has_new_news(current_hashes, stored_hashes):
-        logger.info("[monitor] ✓ No new news for '%s' — skipping analysis (last run: %s)", company_name, last_run or "never")
-        await _upsert_snapshot(company_id, service_key, supabase, current_hashes)
+    # Build news log with metadata (captured_at, is_new)
+    now_iso = t0.isoformat()
+    new_hashes_set = set(current_hashes) - set(stored_hashes)
+    news_with_meta: list[dict] = []
+    for item in news[:25]:
+        h = hashlib.md5(item["title"].encode()).hexdigest()[:12]
+        news_with_meta.append({
+            "title":       item.get("title", ""),
+            "link":        item.get("link", ""),
+            "source":      item.get("source", ""),
+            "pub_date":    item.get("pub_date", ""),
+            "captured_at": now_iso,
+            "is_new":      h in new_hashes_set,
+            "triggered_analysis": False,
+        })
+
+    new_count = len(new_hashes_set)
+    threshold = getattr(settings, "MONITORING_NEW_ARTICLES_THRESHOLD", 3)
+    if new_count < threshold:
+        logger.info("[monitor] ✓ %d new article(s) for '%s' — below threshold (%d), skipping analysis (last run: %s)",
+                    new_count, company_name, threshold, last_run or "never")
+        await _upsert_snapshot(company_id, service_key, supabase, current_hashes, news_items=news_with_meta)
         return
 
-    new_count = sum(1 for h in current_hashes if h not in set(stored_hashes))
-    logger.info("[monitor] ⚡ %d new article(s) for '%s' — starting full analysis", new_count, company_name)
+    logger.info("[monitor] ⚡ %d new article(s) for '%s' — threshold reached, starting full analysis", new_count, company_name)
 
     # 3. Full analysis (same logic as risks_run)
     try:
@@ -241,17 +275,20 @@ async def check_and_run(
         ai_elapsed = (datetime.now(timezone.utc) - t_ai).total_seconds()
         logger.info("[monitor] ✓ AI analysis done for '%s' in %.1fs, score=%s", company_name, ai_elapsed, analysis.get("score"))
 
-        # Save risk_run using service key (bypasses RLS)
+        # Save risk_run using service key (bypasses RLS).
+        # created_by_user_id uses nil UUID — auth.uid() is NULL with service key.
         await supabase.rest_insert_service(
             table="risk_runs",
             service_key=service_key,
             rows=[{
                 "company_id": company_id,
+                "created_by_user_id": "00000000-0000-0000-0000-000000000000",
                 "status": "done",
                 "score": analysis["score"],
-                "advice": analysis["advice"],
-                "risks": analysis["risks"],
-                "categories": analysis["categories"],
+                "advice": analysis.get("advice"),
+                "risks": analysis.get("risks"),
+                "categories": analysis.get("categories"),
+                "scenarios": analysis.get("scenarios", []),
             }],
         )
 
@@ -265,9 +302,14 @@ async def check_and_run(
                     delta, company_name, prev_score, score,
                 )
 
+        for item in news_with_meta:
+            if item["is_new"]:
+                item["triggered_analysis"] = True
+
         await _upsert_snapshot(
             company_id, service_key, supabase,
             current_hashes, last_score=score, ran_analysis=True,
+            news_items=news_with_meta,
         )
         total_elapsed = (datetime.now(timezone.utc) - t0).total_seconds()
         logger.info("[monitor] ✅ Analysis saved for '%s' | score=%s | total=%.1fs", company_name, score, total_elapsed)
@@ -286,7 +328,7 @@ async def check_and_run(
 
     except Exception as e:
         logger.exception("[monitor] Full analysis failed for '%s': %s", company_name, e)
-        await _upsert_snapshot(company_id, service_key, supabase, current_hashes)
+        await _upsert_snapshot(company_id, service_key, supabase, current_hashes, news_items=news_with_meta)
 
 
 async def run_monitoring_cycle(
@@ -337,6 +379,7 @@ async def run_monitoring_cycle(
                 hh_client=hh_client,
                 finance_client=finance_client,
                 settings=settings,
+                ci_client=ci_client,
             )
             # Small pause between companies to avoid rate limits
             await asyncio.sleep(2)

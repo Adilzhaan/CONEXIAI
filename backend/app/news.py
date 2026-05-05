@@ -188,28 +188,68 @@ async def fetch_gdelt_news(company_name: str, limit: int = 8) -> list[dict[str, 
     return await _fetch_gdelt(company_name, limit)
 
 
-def _relevance_keywords(company_name: str, ceo_name: str = "") -> list[str]:
-    """Keywords that must appear in a title for it to be considered relevant."""
-    kws: list[str] = [w.lower() for w in company_name.split() if len(w) > 2]
+def _build_match_rules(company_name: str, ceo_name: str = "") -> dict:
+    """
+    Build match rules for a company name:
+    - full_phrase: the whole name must appear as a substring (primary check)
+    - all_words: all significant words (len >= 4) must appear (AND logic)
+    - any_words: any significant word — only used as last-resort fallback
+    - ceo_words: CEO name words for separate check
+    """
+    name_lower = company_name.lower().strip()
+    words = [w for w in name_lower.split() if len(w) >= 4]
+
+    rules: dict = {
+        "full_phrase": name_lower,
+        "all_words": words,
+        "any_words": [w for w in name_lower.split() if len(w) >= 3],
+        "ceo_words": [],
+    }
     if ceo_name:
-        kws += [w.lower() for w in ceo_name.split() if len(w) > 2]
-    return kws
+        ceo_words = [w.lower() for w in ceo_name.split() if len(w) >= 4]
+        rules["ceo_words"] = ceo_words
+    return rules
+
+
+def _is_relevant(title: str, link: str, source: str, rules: dict, preferred_lower: list[str]) -> bool:
+    t = title.lower()
+
+    # Preferred source → always include
+    if any(p in source or p in link.lower() for p in preferred_lower):
+        return True
+
+    # Full company name as substring (most reliable)
+    if rules["full_phrase"] and rules["full_phrase"] in t:
+        return True
+
+    # All significant words present (AND logic) — catches "BI Group KZ" etc.
+    all_words = rules["all_words"]
+    if len(all_words) >= 2 and all(w in t for w in all_words):
+        return True
+
+    # Single-word company name → just check that one word (already covered by full_phrase)
+    if len(all_words) == 1 and all_words[0] in t:
+        return True
+
+    # CEO name: all CEO words present
+    ceo = rules["ceo_words"]
+    if len(ceo) >= 2 and all(w in t for w in ceo):
+        return True
+    if len(ceo) == 1 and ceo[0] in t:
+        return True
+
+    return False
 
 
 def _filter_relevant(
     items: list[dict[str, Any]],
-    keywords: list[str],
+    rules: dict,
     preferred_sources: list[str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Split items into (relevant, other). Relevant = title contains any keyword."""
     preferred_lower = [s.lower() for s in preferred_sources]
     relevant, other = [], []
     for item in items:
-        t = item["title"].lower()
-        src = item.get("source", "").lower()
-        is_relevant = any(kw in t for kw in keywords)
-        is_preferred = any(p in src or p in item.get("link", "").lower() for p in preferred_lower)
-        if is_relevant or is_preferred:
+        if _is_relevant(item["title"], item.get("link", ""), item.get("source", ""), rules, preferred_lower):
             relevant.append(item)
         else:
             other.append(item)
@@ -266,8 +306,8 @@ async def fetch_news(
                 all_items.append(item)
 
     # Filter: relevant first, then fill with others if not enough
-    kws = _relevance_keywords(company_name, ceo_name)
-    relevant, other = _filter_relevant(all_items, kws, list(news_sources))
+    rules = _build_match_rules(company_name, ceo_name)
+    relevant, other = _filter_relevant(all_items, rules, list(news_sources))
 
     combined = relevant + other
     return combined[:limit * 2]
@@ -297,8 +337,8 @@ async def fetch_yandex_news(
                 seen.add(key)
                 all_items.append(item)
 
-    kws = _relevance_keywords(company_name, ceo_name)
-    relevant, other = _filter_relevant(all_items, kws, list(news_sources))
+    rules = _build_match_rules(company_name, ceo_name)
+    relevant, other = _filter_relevant(all_items, rules, list(news_sources))
     return (relevant + other)[:limit]
 
 
@@ -330,8 +370,8 @@ async def fetch_regulatory_news(
                 seen.add(key)
                 items.append(item)
 
-    kws = _relevance_keywords(company_name, (co.get("ceo_name") or "").strip())
-    relevant, other = _filter_relevant(items, kws, [])
+    rules = _build_match_rules(company_name, (co.get("ceo_name") or "").strip())
+    relevant, other = _filter_relevant(items, rules, [])
     return (relevant + other)[:limit]
 
 
@@ -362,6 +402,6 @@ async def fetch_market_news(
                 seen.add(key)
                 items.append(item)
 
-    kws = _relevance_keywords(company_name, (co.get("ceo_name") or "").strip())
-    relevant, other = _filter_relevant(items, kws, [])
+    rules = _build_match_rules(company_name, (co.get("ceo_name") or "").strip())
+    relevant, other = _filter_relevant(items, rules, [])
     return (relevant + other)[:limit]

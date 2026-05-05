@@ -56,10 +56,9 @@
       <style>
         /* ── Alerts banner ── */
         .alerts-banner {
-          background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.20);
+          background:rgba(248,113,113,0.11); border:1px solid rgba(248,113,113,0.28);
           border-left:3px solid #f87171; border-radius:var(--radius);
           padding:12px 18px; margin-bottom:20px;
-          backdrop-filter:blur(20px);
         }
         .alert-dot { width:6px;height:6px;border-radius:50%;background:#f87171;flex-shrink:0;animation:ceoPulse 1.8s ease-in-out infinite; }
         @keyframes ceoPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0.5)}50%{box-shadow:0 0 0 5px rgba(248,113,113,0)}}
@@ -91,11 +90,10 @@
 
         /* ── Company list ── */
         .co-list {
-          background:rgba(255,255,255,0.03);
-          border:1px solid rgba(255,255,255,0.09);
+          background:rgba(255,255,255,0.06);
+          border:1px solid rgba(255,255,255,0.12);
           border-radius:var(--radius);
           overflow:hidden;
-          backdrop-filter:blur(20px);
           margin-bottom:28px;
         }
 
@@ -156,9 +154,8 @@
 
         /* ── Empty ── */
         .empty-state {
-          background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+          background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12);
           border-radius:var(--radius); padding:56px 24px; text-align:center;
-          backdrop-filter:blur(20px);
         }
 
         /* ── Add modal ── */
@@ -336,6 +333,316 @@
         </div>
       </div>
 
+      <!-- ══ CEO INTELLIGENCE PANEL ══ -->
+      {% if ceo_view %}
+      <style>
+        /* ── CEO panel ── */
+        .ceo-panel { margin-bottom:28px; }
+
+        /* ── Hero row: score gauge + status + financial ── */
+        .ceo-hero-row {
+          display:grid; grid-template-columns:auto 1fr auto;
+          gap:16px; align-items:stretch; margin-bottom:14px;
+        }
+        @media(max-width:760px){ .ceo-hero-row { grid-template-columns:1fr; } }
+
+        /* ── Gauge card ── */
+        .ceo-gauge-card {
+          background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.13);
+          border-radius:var(--radius); padding:20px 24px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          min-width:160px; position:relative;
+        }
+        .ceo-gauge-ring { position:relative; width:110px; height:110px; }
+        .ceo-gauge-ring svg { transform:rotate(-90deg); }
+        .ceo-gauge-num {
+          position:absolute; inset:0; display:flex; flex-direction:column;
+          align-items:center; justify-content:center;
+        }
+        .ceo-gauge-score { font-size:30px; font-weight:800; line-height:1; }
+        .ceo-gauge-max { font-size:10px; color:var(--text-muted); margin-top:2px; }
+        .ceo-gauge-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-top:10px; }
+        .ceo-delta-badge {
+          display:inline-flex; align-items:center; gap:3px;
+          font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px;
+          margin-top:6px; white-space:nowrap;
+        }
+
+        /* ── Category breakdown card ── */
+        .ceo-cats-card {
+          background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.13);
+          border-radius:var(--radius); padding:18px 22px;
+          display:flex; flex-direction:column; justify-content:center; gap:9px;
+        }
+        .ceo-cats-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:2px; }
+        .cat-bar-row { display:flex; align-items:center; gap:10px; }
+        .cat-bar-label { font-size:10px; font-weight:700; width:28px; color:var(--text-muted); flex-shrink:0; }
+        .cat-bar-track { flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,0.07); overflow:hidden; }
+        .cat-bar-fill { height:100%; border-radius:3px; transition:width .4s; }
+        .cat-bar-score { font-size:11px; font-weight:700; width:28px; text-align:right; flex-shrink:0; }
+        .cat-bar-delta { font-size:10px; font-weight:700; width:32px; text-align:right; flex-shrink:0; }
+
+        /* ── Financial impact card ── */
+        .ceo-finance-card {
+          background:rgba(251,191,36,0.07); border:1px solid rgba(251,191,36,0.22);
+          border-radius:var(--radius); padding:20px 22px;
+          display:flex; flex-direction:column; justify-content:center;
+          min-width:200px;
+        }
+        .ceo-finance-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:rgba(251,191,36,0.70); }
+        .ceo-finance-value { font-size:28px; font-weight:800; color:#fbbf24; line-height:1.1; margin:8px 0 6px; }
+        .ceo-finance-formula {
+          font-size:10px; color:rgba(255,255,255,0.35); line-height:1.7;
+          border-top:1px solid rgba(255,255,255,0.07); padding-top:8px; margin-top:4px;
+        }
+        .ceo-finance-formula span { color:rgba(251,191,36,0.55); font-weight:600; }
+
+        /* ── Status card ── */
+        .status-pill {
+          display:inline-flex; align-items:center; gap:6px;
+          font-size:13px; font-weight:700; padding:6px 14px; border-radius:99px;
+        }
+        .status-pill-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+        /* ── Top risks ── */
+        .top-risks-card {
+          background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.13);
+          border-radius:var(--radius); overflow:hidden; margin-bottom:14px;
+        }
+        .top-risks-hdr {
+          display:grid; grid-template-columns:3fr 100px 110px 80px 90px;
+          padding:9px 20px; font-size:10px; font-weight:700; text-transform:uppercase;
+          letter-spacing:.07em; color:rgba(255,255,255,0.40);
+          border-bottom:1px solid rgba(255,255,255,0.09); background:rgba(255,255,255,0.04);
+        }
+        .top-risk-row {
+          display:grid; grid-template-columns:3fr 100px 110px 80px 90px;
+          padding:12px 20px; align-items:center;
+          border-bottom:1px solid rgba(255,255,255,0.05); transition:background .12s;
+        }
+        .top-risk-row:last-child { border-bottom:none; }
+        .top-risk-row:hover { background:rgba(255,255,255,0.03); }
+        .risk-text { font-size:12px; font-weight:500; color:var(--text); line-height:1.4; }
+        .risk-cat-chip { display:inline-flex; font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+        .prob-bar-wrap { display:flex; align-items:center; gap:7px; }
+        .prob-bar-track { flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,0.08); }
+        .prob-bar-fill  { height:100%; border-radius:3px; }
+        .prob-text { font-size:10px; font-weight:700; color:rgba(255,255,255,0.55); white-space:nowrap; }
+        .impact-text { font-size:12px; font-weight:600; color:#fbbf24; }
+        .growth-badge {
+          display:inline-flex; align-items:center; gap:3px;
+          font-size:10px; font-weight:700; padding:2px 7px; border-radius:99px; white-space:nowrap;
+        }
+
+        /* ── Action panel ── */
+        .action-panel {
+          background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.13);
+          border-radius:var(--radius); overflow:hidden;
+          display:grid; grid-template-columns:1fr 1fr 1fr;
+        }
+        @media(max-width:700px){ .action-panel { grid-template-columns:1fr; } }
+        .ap-col { padding:18px 20px; }
+        .ap-col:not(:last-child) { border-right:1px solid rgba(255,255,255,0.07); }
+        @media(max-width:700px){ .ap-col:not(:last-child) { border-right:none; border-bottom:1px solid rgba(255,255,255,0.07); } }
+        .ap-col-hdr { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+        .ap-col-text { font-size:13px; font-weight:400; color:var(--text); line-height:1.65; }
+
+        @media(max-width:900px) {
+          .top-risks-hdr, .top-risk-row { grid-template-columns:2fr 80px 90px 60px; }
+          .top-risks-hdr > :last-child, .top-risk-row > :last-child { display:none; }
+        }
+        @media(max-width:600px) {
+          .top-risks-hdr, .top-risk-row { grid-template-columns:1fr 70px 80px; }
+          .top-risks-hdr > :nth-child(4), .top-risk-row > :nth-child(4) { display:none; }
+        }
+      </style>
+
+      <div class="ceo-panel">
+        <div class="sec-hdr" style="margin-bottom:14px">
+          <div class="sec-hdr-left">
+            <div class="sec-hdr-title">CEO Dashboard</div>
+            <div class="sec-hdr-count">{{ ceo_view.company_count }} компани{{ 'я' if ceo_view.company_count == 1 else ('и' if 2 <= ceo_view.company_count <= 4 else 'й') }}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim)">{{ ceo_view.primary_company }}</div>
+        </div>
+
+        <!-- ── Hero row ── -->
+        <div class="ceo-hero-row">
+
+          <!-- Gauge: Global Risk Score -->
+          {% set gs = ceo_view.global_score %}
+          {% set cc = ceo_view.crisis_color %}
+          {% set circ = 2 * 3.14159 * 46 %}
+          {% set dash = circ * (1 - gs / 100) %}
+          <div class="ceo-gauge-card">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:12px">Global Risk Score</div>
+            <div class="ceo-gauge-ring">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="10"/>
+                <circle cx="55" cy="55" r="46" fill="none" stroke="{{ cc }}" stroke-width="10"
+                  stroke-dasharray="{{ circ }}" stroke-dashoffset="{{ dash }}"
+                  stroke-linecap="round" opacity="0.85"/>
+              </svg>
+              <div class="ceo-gauge-num">
+                <div class="ceo-gauge-score" style="color:{{ cc }}">{{ gs }}</div>
+                <div class="ceo-gauge-max">/ 100</div>
+              </div>
+            </div>
+            <!-- Status pill -->
+            <div class="status-pill" style="background:{{ cc }}1a;border:1px solid {{ cc }}44;margin-top:10px">
+              <div class="status-pill-dot" style="background:{{ cc }};{% if ceo_view.crisis_status == 'crisis' %}animation:ceoPulse 1.8s ease-in-out infinite{% endif %}"></div>
+              <span style="color:{{ cc }}">{{ ceo_view.crisis_label }}</span>
+            </div>
+            <!-- Delta badge -->
+            {% if ceo_view.global_delta is not none %}
+              {% if ceo_view.global_delta > 0 %}
+                <div class="ceo-delta-badge" style="background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171">
+                  ↑ +{{ ceo_view.global_delta }} vs прошлый
+                </div>
+              {% elif ceo_view.global_delta < 0 %}
+                <div class="ceo-delta-badge" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399">
+                  ↓ {{ ceo_view.global_delta }} vs прошлый
+                </div>
+              {% else %}
+                <div class="ceo-delta-badge" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted)">
+                  → без изменений
+                </div>
+              {% endif %}
+            {% endif %}
+          </div>
+
+          <!-- Category breakdown -->
+          {% set cat_meta2 = [
+            ('pr',    'PR',  '#c084fc'),
+            ('hr',    'HR',  '#4ade80'),
+            ('gr',    'GR',  '#f87171'),
+            ('media', 'MI',  '#93bbff'),
+            ('market','MK',  '#fbbf24'),
+          ] %}
+          <div class="ceo-cats-card">
+            <div class="ceo-cats-title">
+              Формула: Risk = (PR + HR + GR + MI + MK) / 5
+            </div>
+            {% for key, lbl, color in cat_meta2 %}
+              {% set score = ceo_view.cat_scores.get(key) %}
+              {% set gd = ceo_view.growth_map.get(key) %}
+              <div class="cat-bar-row">
+                <div class="cat-bar-label" style="color:{{ color }}">{{ lbl }}</div>
+                <div class="cat-bar-track">
+                  <div class="cat-bar-fill" style="width:{{ score if score else 0 }}%;background:{{ color }};opacity:0.7"></div>
+                </div>
+                <div class="cat-bar-score" style="color:{{ color }}">
+                  {% if score is not none %}{{ score }}{% else %}—{% endif %}
+                </div>
+                <div class="cat-bar-delta">
+                  {% if gd is not none %}
+                    {% if gd > 0 %}
+                      <span style="color:#f87171;font-size:10px;font-weight:700">↑+{{ gd }}</span>
+                    {% elif gd < 0 %}
+                      <span style="color:#34d399;font-size:10px;font-weight:700">↓{{ gd }}</span>
+                    {% else %}
+                      <span style="color:rgba(255,255,255,0.25);font-size:10px">→</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- Financial Impact -->
+          <div class="ceo-finance-card">
+            <div class="ceo-finance-label">Потенциальные потери</div>
+            <div class="ceo-finance-value">${{ "{:,.0f}".format(ceo_view.potential_loss) }}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.40);margin-bottom:8px">при реализации рисков</div>
+            <div class="ceo-finance-formula">
+              Impact = Sentiment × Reach × Sector<br>
+              = <span>{{ ceo_view.sentiment_factor }}</span>
+              × <span>{{ "{:,.0f}".format(ceo_view.reach_factor) }}</span>
+              × <span>{{ ceo_view.sector_mult }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Top 5 Risks ── -->
+        {% if ceo_view.top_risks %}
+        <div class="top-risks-card">
+          <div class="sec-hdr" style="padding:12px 20px;margin:0;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <div class="sec-hdr-left">
+              <div class="sec-hdr-title">Топ рисков</div>
+              <div class="sec-hdr-count">{{ ceo_view.top_risks|length }}</div>
+            </div>
+            <div style="font-size:10px;color:var(--text-dim)">приоритет по вероятности × влиянию</div>
+          </div>
+          <div class="top-risks-hdr">
+            <div>Риск</div><div>Вероятность</div><div>Потери</div><div>Тренд</div><div>Категория</div>
+          </div>
+          {% set cat_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c084fc','market':'#fbbf24'} %}
+          {% for r in ceo_view.top_risks %}
+          {% set cc2 = cat_colors.get(r.cat_key, '#a78bfa') %}
+          <div class="top-risk-row">
+            <div>
+              <div class="risk-text">{{ r.text }}</div>
+              {% if r.company %}<div style="font-size:10px;color:var(--text-dim);margin-top:3px">{{ r.company }}</div>{% endif %}
+            </div>
+            <div>
+              <div class="prob-bar-wrap">
+                <div class="prob-bar-track"><div class="prob-bar-fill" style="width:{{ r.probability }}%;background:{{ cc2 }}"></div></div>
+                <span class="prob-text">{{ r.probability }}%</span>
+              </div>
+            </div>
+            <div class="impact-text">${{ "{:,.0f}".format(r.impact) }}</div>
+            <div>
+              {% if r.growth is not none %}
+                {% if r.growth > 5 %}
+                  <span class="growth-badge" style="background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171">↑ Растёт</span>
+                {% elif r.growth < -5 %}
+                  <span class="growth-badge" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399">↓ Снижается</span>
+                {% else %}
+                  <span class="growth-badge" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10);color:var(--text-muted)">→ Стабильно</span>
+                {% endif %}
+              {% else %}
+                <span style="font-size:10px;color:rgba(255,255,255,0.20)">—</span>
+              {% endif %}
+            </div>
+            <div>
+              <span class="risk-cat-chip" style="color:{{ cc2 }};background:{{ cc2 }}18;border:1px solid {{ cc2 }}33">{{ r.category }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- ── Action Panel ── -->
+        {% if ceo_view.advice or ceo_view.dont_text or ceo_view.result_text %}
+        <div class="action-panel">
+          <div class="ap-col">
+            <div class="ap-col-hdr" style="color:#34d399">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Что делать сейчас
+            </div>
+            <div class="ap-col-text">{{ ceo_view.advice or "Провести полный аудит рисков и обновить антикризисные протоколы" }}</div>
+          </div>
+          <div class="ap-col">
+            <div class="ap-col-hdr" style="color:#f87171">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Чего не делать
+            </div>
+            <div class="ap-col-text">{{ ceo_view.dont_text }}</div>
+          </div>
+          <div class="ap-col">
+            <div class="ap-col-hdr" style="color:#a78bfa">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+              Ожидаемый результат
+            </div>
+            <div class="ap-col-text">{{ ceo_view.result_text }}</div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endif %}
+      <!-- ══ END CEO PANEL ══ -->
+
       <!-- Admin companies -->
       {% if admin_rows %}
       <div style="margin-bottom:28px">
@@ -496,6 +803,86 @@
                 </div>
               </div>
             {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- News Feed -->
+      {% if dashboard_news %}
+      <div style="margin-top:32px">
+        <div class="sec-hdr">
+          <div class="sec-hdr-left">
+            <div class="sec-hdr-title">Лента новостей</div>
+            <div class="sec-hdr-count">{{ dashboard_news|length }}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim)">Из системы мониторинга · обновляется каждые 15 мин</div>
+        </div>
+
+        <style>
+          .dash-news-list {
+            background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+            border-radius:var(--radius); overflow:hidden;
+          }
+          .dash-news-item {
+            display:flex; align-items:flex-start; gap:14px;
+            padding:13px 20px; border-bottom:1px solid rgba(255,255,255,0.06);
+            transition:background .15s;
+          }
+          .dash-news-item:last-child { border-bottom:none; }
+          .dash-news-item:hover { background:rgba(255,255,255,0.03); }
+          .dash-news-co {
+            width:28px; height:28px; border-radius:7px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            font-size:11px; font-weight:800; color:#fff; margin-top:2px;
+          }
+          .dash-news-body { flex:1; min-width:0; }
+          .dash-news-title {
+            font-size:13px; font-weight:500; color:var(--text);
+            text-decoration:none; line-height:1.45; display:block; margin-bottom:4px;
+          }
+          .dash-news-title:hover { color:#a78bfa; }
+          .dash-news-meta {
+            display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+            font-size:11px; color:var(--text-muted);
+          }
+          .dash-news-right {
+            flex-shrink:0; text-align:right; font-size:11px;
+            color:var(--text-dim); white-space:nowrap;
+          }
+        </style>
+
+        {% set co_colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
+        {% set seen_cos = namespace(ids=[]) %}
+
+        <div class="dash-news-list">
+          {% for n in dashboard_news %}
+            {% set co_idx = (seen_cos.ids.index(n.company_id) if n.company_id in seen_cos.ids else seen_cos.ids|length) %}
+            {% if n.company_id not in seen_cos.ids %}{% set _ = seen_cos.ids.append(n.company_id) %}{% endif %}
+            {% set co_color = co_colors[co_idx % co_colors|length] %}
+            <div class="dash-news-item">
+              <div class="dash-news-co" style="background:{{ co_color }}" title="{{ n.company_name }}">
+                {{ n.company_name[0] | upper if n.company_name else '?' }}
+              </div>
+              <div class="dash-news-body">
+                <a href="{{ n.link }}" target="_blank" rel="noopener" class="dash-news-title">{{ n.title }}</a>
+                <div class="dash-news-meta">
+                  {% if n.triggered_analysis %}
+                    <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.28);color:#34d399;font-size:10px;font-weight:700">✓ Запустил анализ</span>
+                  {% elif n.is_new %}
+                    <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.28);color:#a78bfa;font-size:10px;font-weight:700">★ Новое</span>
+                  {% endif %}
+                  <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);color:rgba(255,255,255,0.40)">{{ n.company_name }}</span>
+                  {% if n.source %}<span>·</span><span>{{ n.source }}</span>{% endif %}
+                  {% if n.pub_date %}<span>·</span><span>{{ n.pub_date }}</span>{% endif %}
+                </div>
+              </div>
+              {% if n.captured_at %}
+              <div class="dash-news-right">
+                в системе<br>{{ n.captured_at[:16] | replace('T',' ') }}
+              </div>
+              {% endif %}
+            </div>
           {% endfor %}
         </div>
       </div>

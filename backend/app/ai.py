@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 import anthropic
@@ -7,6 +8,24 @@ import anthropic
 logger = logging.getLogger("conexiai")
 
 _client: anthropic.AsyncAnthropic | None = None
+
+
+def _parse_json(text: str) -> Any:
+    """Extract and parse JSON from Claude's response, tolerating common formatting issues."""
+    text = text.strip()
+    # Strip markdown code fences
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
+        text = text.strip()
+    # Extract first {...} block in case there's surrounding prose
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        text = text[start:end + 1]
+    # Remove trailing commas before } or ]  (invalid in JSON, common in Claude output)
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return json.loads(text)
 
 
 def get_client(api_key: str) -> anthropic.AsyncAnthropic:
@@ -135,11 +154,7 @@ async def analyze_market_position(
             if hasattr(block, "text"):
                 text = block.text
                 break
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
-        return json.loads(text)
+        return _parse_json(text)
     except Exception as e:
         logger.exception("Market AI analysis failed for %s", company_name)
         return {
@@ -418,12 +433,7 @@ async def analyze_company_risks(
                 text = block.text
                 break
 
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
-
-        result = json.loads(text)
+        result = _parse_json(text)
         cats_raw = result.get("categories", {})
 
         categories = {}

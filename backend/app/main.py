@@ -7,7 +7,7 @@ from urllib.parse import quote
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -26,6 +26,11 @@ from . import ci as ci_client
 from . import gr_sources as gr_client
 from .pdf import generate_report
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger("conexiai")
 
 
@@ -58,8 +63,8 @@ def _pkce_pair() -> tuple[str, str]:
 async def lifespan(_app: FastAPI):
     scheduler = AsyncIOScheduler()
     if settings.MONITORING_ENABLED:
-        scheduler.add_job(
-            lambda: asyncio.ensure_future(monitor_client.run_monitoring_cycle(
+        async def _run_cycle():
+            await monitor_client.run_monitoring_cycle(
                 supabase=supabase,
                 news_client=news_client,
                 ai_client=ai_client,
@@ -68,13 +73,17 @@ async def lifespan(_app: FastAPI):
                 finance_client=finance_client,
                 settings=settings,
                 ci_client=ci_client,
-            )),
+            )
+        from datetime import datetime
+        scheduler.add_job(
+            _run_cycle,
             trigger="interval",
-            hours=settings.MONITORING_INTERVAL_HOURS,
+            minutes=settings.MONITORING_INTERVAL_MINUTES,
             id="smart_monitor",
             replace_existing=True,
+            next_run_time=datetime.now(),
         )
-        logger.info("Smart monitor scheduler started (every %dh)", settings.MONITORING_INTERVAL_HOURS)
+        logger.info("Smart monitor scheduler started (every %d min, first run: immediate)", settings.MONITORING_INTERVAL_MINUTES)
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)
@@ -331,6 +340,153 @@ async def auth_callback(req: Request, code: str | None = None, error: str | None
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
 
+_SECTOR_MULTIPLIERS = {
+    "финансы": 8.0, "банкинг": 8.0, "добывающая": 10.0, "нефть": 10.0,
+    "энергетика": 7.0, "строительство": 4.0, "недвижимость": 4.0,
+    "технологии": 3.0, "it": 3.0, "телеком": 5.0, "медиа": 3.0,
+    "ритейл": 3.0, "логистика": 3.0, "здравоохранение": 4.0,
+    "фарма": 5.0, "сельское": 2.0, "образование": 1.5,
+}
+_CAT_LABELS = {
+    "media": "InfoField & Media", "hr": "Human Resources",
+    "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
+}
+_CAT_DONT = {
+    "media":  "Не замалчивать негативные публикации и не игнорировать запросы СМИ",
+    "hr":     "Не проводить массовых сокращений и не игнорировать внутреннее недовольство",
+    "gr":     "Не вступать в открытый конфликт с регуляторами и госструктурами",
+    "pr":     "Не давать публичных комментариев без согласования антикризисной стратегии",
+    "market": "Не принимать крупных инвестиционных решений без пересмотра рисков",
+}
+_CAT_RESULT = {
+    "media":  "Снижение репутационного давления и рост доверия аудитории",
+    "hr":     "Стабилизация команды и удержание ключевых сотрудников",
+    "gr":     "Нормализация отношений с государством и снижение регуляторных рисков",
+    "pr":     "Восстановление публичного имиджа и доверия партнёров",
+    "market": "Защита рыночной позиции и снижение финансовых потерь",
+}
+
+
+def _compute_ceo_view(
+    risk_map: dict,
+    name_map: dict[str, str],
+    industry_map: dict[str, str],
+    prev_risk_map: dict | None = None,
+) -> dict | None:
+    scores = [(cid, r["score"]) for cid, r in risk_map.items() if r.get("score") is not None]
+    if not scores:
+        return None
+
+    global_score = round(sum(s for _, s in scores) / len(scores))
+
+    if global_score >= 65:
+        crisis_status, crisis_color, crisis_label = "crisis", "#f87171", "Crisis"
+    elif global_score >= 35:
+        crisis_status, crisis_color, crisis_label = "warning", "#fbbf24", "Warning"
+    else:
+        crisis_status, crisis_color, crisis_label = "normal", "#34d399", "Normal"
+
+    # Sector multiplier from highest-risk company industry
+    primary_cid = max(scores, key=lambda x: x[1])[0]
+    industry = industry_map.get(primary_cid, "")
+    sector_mult = 1.5
+    for kw, mult in _SECTOR_MULTIPLIERS.items():
+        if kw in industry:
+            sector_mult = mult
+            break
+
+    # Financial Impact: sentiment × reach × sector_multiplier
+    max_score = max(s for _, s in scores)
+    sentiment_factor = round(max_score / 100, 2)
+    reach_factor = round(1_000_000 * (1 + max_score / 50))  # estimated audience reach
+    potential_loss = round(sentiment_factor * reach_factor * sector_mult)
+
+    # Category breakdown for primary company
+    primary_risk = risk_map[primary_cid]
+    cat_scores: dict[str, int | None] = {}
+    for cat_key in ("pr", "hr", "gr", "media", "market"):
+        cat_data = (primary_risk.get("categories") or {}).get(cat_key)
+        if isinstance(cat_data, dict) and cat_data.get("score") is not None:
+            cat_scores[cat_key] = int(cat_data["score"])
+        else:
+            cat_scores[cat_key] = None
+
+    # Growth rate vs previous run
+    prev_primary = (prev_risk_map or {}).get(primary_cid, {})
+    prev_cats = (prev_primary.get("categories") or {}) if prev_primary else {}
+    growth_map: dict[str, int | None] = {}
+    for cat_key in ("pr", "hr", "gr", "media", "market"):
+        curr = cat_scores.get(cat_key)
+        prev_cat = prev_cats.get(cat_key)
+        if curr is not None and isinstance(prev_cat, dict) and prev_cat.get("score") is not None:
+            growth_map[cat_key] = curr - int(prev_cat["score"])
+        else:
+            growth_map[cat_key] = None
+
+    # Global delta vs previous
+    prev_scores = [(cid, r.get("score")) for cid, r in (prev_risk_map or {}).items() if r.get("score") is not None]
+    prev_global = round(sum(s for _, s in prev_scores) / len(prev_scores)) if prev_scores else None
+    global_delta = (global_score - prev_global) if prev_global is not None else None
+
+    # Top 5 risks from all categories across all companies
+    all_risks: list[dict] = []
+    for cid, r in risk_map.items():
+        cats = r.get("categories") or {}
+        for cat_key, cat in cats.items():
+            if not isinstance(cat, dict):
+                continue
+            cat_score = int(cat.get("score") or 0)
+            gd = growth_map.get(cat_key)
+            for risk in (cat.get("risks") or []):
+                text = (risk.get("text") if isinstance(risk, dict) else str(risk) or "").strip()
+                if not text:
+                    continue
+                all_risks.append({
+                    "text": text,
+                    "category": _CAT_LABELS.get(cat_key, cat_key),
+                    "cat_key": cat_key,
+                    "probability": min(99, round(cat_score * 0.92)),
+                    "cat_score": cat_score,
+                    "impact": round((cat_score / 100) * potential_loss / 5),
+                    "growth": gd,
+                    "company": name_map.get(cid, ""),
+                })
+    all_risks.sort(key=lambda x: x["cat_score"], reverse=True)
+    top_risks = all_risks[:5]
+
+    # Action plan from highest-risk company
+    advice = (primary_risk.get("advice") or "").strip()
+
+    # Top 2 risk categories for "don't" and "result"
+    cats_sorted = sorted(
+        ((k, v) for k, v in (primary_risk.get("categories") or {}).items() if isinstance(v, dict)),
+        key=lambda kv: int(kv[1].get("score") or 0), reverse=True
+    )
+    top_cat_key = cats_sorted[0][0] if cats_sorted else "pr"
+    dont_text = _CAT_DONT.get(top_cat_key, "Не принимать поспешных решений без данных")
+    result_text = _CAT_RESULT.get(top_cat_key, "Снижение общего уровня риска и стабилизация позиций")
+
+    return {
+        "global_score": global_score,
+        "global_delta": global_delta,
+        "crisis_status": crisis_status,
+        "crisis_color": crisis_color,
+        "crisis_label": crisis_label,
+        "potential_loss": potential_loss,
+        "sentiment_factor": sentiment_factor,
+        "reach_factor": reach_factor,
+        "sector_mult": sector_mult,
+        "cat_scores": cat_scores,
+        "growth_map": growth_map,
+        "top_risks": top_risks,
+        "advice": advice,
+        "dont_text": dont_text,
+        "result_text": result_text,
+        "company_count": len(scores),
+        "primary_company": name_map.get(primary_cid, ""),
+    }
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(req: Request):
     user = await get_current_user(req)
@@ -347,7 +503,7 @@ async def dashboard(req: Request):
         member_rows = await supabase.rest_select(
             table="company_members",
             access_token=effective_token,
-            select="id,role,status,company_id,companies(id,name,ceo_email,created_at)",
+            select="id,role,status,company_id,companies(id,name,ceo_email,industry,created_at)",
             order_by="joined_at.desc",
             query_params={"user_id": f"eq.{user.get('id')}", "status": "eq.active"},
         )
@@ -358,13 +514,14 @@ async def dashboard(req: Request):
             return resp
         member_rows = []
 
-    # Fetch latest risk score + top category for each company
+    # Fetch latest risk score + categories + advice for each company
     company_ids = [
         m["companies"]["id"]
         for m in member_rows
         if m.get("companies") and m["companies"].get("id")
     ]
     risk_map: dict[str, dict] = {}
+    prev_risk_map: dict[str, dict] = {}
     snapshot_map: dict[str, dict] = {}
 
     if company_ids and settings.SUPABASE_SERVICE_KEY:
@@ -374,21 +531,27 @@ async def dashboard(req: Request):
                 supabase.rest_select_service(
                     table="risk_runs",
                     service_key=settings.SUPABASE_SERVICE_KEY,
-                    select="company_id,score,categories,created_at",
+                    select="company_id,score,categories,advice,created_at",
                     query_params={"company_id": ids_filter, "order": "created_at.desc"},
                 ),
                 supabase.rest_select_service(
                     table="monitoring_snapshots",
                     service_key=settings.SUPABASE_SERVICE_KEY,
-                    select="company_id,last_checked_at,last_score",
+                    select="company_id,last_checked_at,last_score,recent_news",
                     query_params={"company_id": ids_filter},
                 ),
             )
-            # Keep only latest risk_run per company
+            prev_risk_map: dict[str, dict] = {}
+            seen_cids: set[str] = set()
             for r in risk_rows:
                 cid = r.get("company_id")
-                if cid and cid not in risk_map:
+                if not cid:
+                    continue
+                if cid not in risk_map:
                     risk_map[cid] = r
+                    seen_cids.add(cid)
+                elif cid not in prev_risk_map:
+                    prev_risk_map[cid] = r
             for s in snap_rows:
                 cid = s.get("company_id")
                 if cid:
@@ -396,10 +559,33 @@ async def dashboard(req: Request):
         except Exception as e:
             logger.warning("Dashboard risk fetch failed: %s", e)
 
+    # Build name/industry maps
+    name_map: dict[str, str] = {}
+    industry_map: dict[str, str] = {}
+    for m in member_rows:
+        c = m.get("companies")
+        if c and c.get("id"):
+            name_map[c["id"]] = c.get("name", "")
+            industry_map[c["id"]] = (c.get("industry") or "").lower()
+
+    # Compute CEO view (aggregated risk intelligence)
+    ceo_view = _compute_ceo_view(risk_map, name_map, industry_map, prev_risk_map)
+
+    # Build combined news feed from monitoring snapshots
+    dashboard_news: list[dict] = []
+    for s in snapshot_map.values():
+        cid = s.get("company_id")
+        for item in (s.get("recent_news") or []):
+            dashboard_news.append({**item, "company_id": cid, "company_name": name_map.get(cid, "")})
+    dashboard_news.sort(key=lambda x: x.get("captured_at", ""), reverse=True)
+    dashboard_news = dashboard_news[:40]
+
     ctx = {
         "member_rows": member_rows,
         "risk_map": risk_map,
         "snapshot_map": snapshot_map,
+        "ceo_view": ceo_view,
+        "dashboard_news": dashboard_news,
         "user_id": user.get("id"),
         "app_name": settings.APP_NAME,
     }
@@ -555,27 +741,43 @@ async def company_detail(req: Request, company_id: str):
             rows = await supabase.rest_select_service(
                 table="monitoring_snapshots",
                 service_key=settings.SUPABASE_SERVICE_KEY,
-                select="last_checked_at,last_run_at,last_score",
+                select="last_checked_at,last_run_at,last_score,recent_news",
                 query_params={"company_id": f"eq.{company_id}"},
             )
             return rows[0] if rows else None
         except Exception:
             return None
 
+    async def _get_employees():
+        try:
+            return await supabase.rest_select(
+                table="employees",
+                access_token=effective_token,
+                select="id,full_name,email,position,department,photo_url",
+                order_by="created_at.desc",
+                query_params={"company_id": f"eq.{company_id}"},
+            )
+        except Exception:
+            # photo_url column may not exist yet — fallback without it
+            try:
+                return await supabase.rest_select(
+                    table="employees",
+                    access_token=effective_token,
+                    select="id,full_name,email,position,department",
+                    order_by="created_at.desc",
+                    query_params={"company_id": f"eq.{company_id}"},
+                )
+            except Exception:
+                return []
+
     company_rows, employees, risk_runs, emails_rows, members, user_role, monitor_snapshot = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
-            select="id,name,ceo_email,created_at",
+            select="id,name,ceo_email,industry,created_at",
             query_params={"id": f"eq.{company_id}"},
         ),
-        supabase.rest_select(
-            table="employees",
-            access_token=effective_token,
-            select="id,full_name,email,position,department",
-            order_by="created_at.desc",
-            query_params={"company_id": f"eq.{company_id}"},
-        ),
+        _get_employees(),
         supabase.rest_select(
             table="risk_runs",
             access_token=effective_token,
@@ -601,6 +803,26 @@ async def company_detail(req: Request, company_id: str):
     msg = req.query_params.get("msg")
     error = req.query_params.get("error")
 
+    # Compute financial impact metrics for Risk Overview
+    latest_run = risk_runs[0] if risk_runs else None
+    risk_impact: dict = {}
+    if latest_run and latest_run.get("score") is not None:
+        score = int(latest_run["score"])
+        industry_str = (company.get("industry") or "").lower()
+        sect_mult = 1.5
+        for kw, mult in _SECTOR_MULTIPLIERS.items():
+            if kw in industry_str:
+                sect_mult = mult
+                break
+        sentiment_f = round(score / 100, 2)
+        reach_f = round(1_000_000 * (1 + score / 50))
+        risk_impact = {
+            "potential_loss": round(sentiment_f * reach_f * sect_mult),
+            "sentiment_factor": sentiment_f,
+            "reach_factor": reach_f,
+            "sector_mult": sect_mult,
+        }
+
     return templates.TemplateResponse(
         req, "company_detail.html",
         {
@@ -614,6 +836,7 @@ async def company_detail(req: Request, company_id: str):
             "is_admin": user_role == "admin",
             "finance": finance_data,
             "monitor_snapshot": monitor_snapshot,
+            "risk_impact": risk_impact,
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
@@ -1002,7 +1225,7 @@ async def employees_create(
 
     effective_token = getattr(req.state, "new_access_token", None) or access_token
 
-    employee = await supabase.rest_insert(
+    await supabase.rest_insert(
         table="employees",
         access_token=effective_token,
         row={
@@ -1014,6 +1237,58 @@ async def employees_create(
         },
     )
     return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
+
+
+@app.post("/employees/{employee_id}/photo")
+async def employee_upload_photo(
+    req: Request,
+    employee_id: str,
+    photo: UploadFile = File(...),
+):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    data = await photo.read()
+    if len(data) > 5 * 1024 * 1024:
+        return Response("File too large (max 5 MB)", status_code=400)
+
+    mime = photo.content_type or "image/jpeg"
+    b64 = base64.b64encode(data).decode()
+    data_url = f"data:{mime};base64,{b64}"
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    # Fetch company_id first (needed for redirect even on error)
+    rows = await supabase.rest_select(
+        table="employees",
+        access_token=effective_token,
+        select="company_id",
+        query_params={"id": f"eq.{employee_id}"},
+    )
+    company_id = rows[0]["company_id"] if rows else ""
+
+    if not settings.SUPABASE_SERVICE_KEY:
+        return RedirectResponse(
+            url=f"/companies/{company_id}?tab=team&error=no_service_key",
+            status_code=302,
+        )
+
+    try:
+        await supabase.rest_update_service(
+            f"rest/v1/employees?id=eq.{employee_id}",
+            settings.SUPABASE_SERVICE_KEY,
+            {"photo_url": data_url},
+        )
+    except Exception as e:
+        logger.error("Photo upload failed for employee %s: %s", employee_id, e)
+        return RedirectResponse(
+            url=f"/companies/{company_id}?tab=team&error=photo_upload_failed",
+            status_code=302,
+        )
+
+    return RedirectResponse(url=f"/companies/{company_id}?tab=team", status_code=302)
 
 
 @app.get("/monitor/status")
@@ -1053,6 +1328,24 @@ async def monitor_status():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/monitor/run")
+async def monitor_run_now():
+    """Manually trigger one monitoring cycle for all companies."""
+    if not settings.SUPABASE_SERVICE_KEY:
+        return {"error": "SUPABASE_SERVICE_KEY not configured"}
+    asyncio.ensure_future(monitor_client.run_monitoring_cycle(
+        supabase=supabase,
+        news_client=news_client,
+        ai_client=ai_client,
+        apify_client=apify_client,
+        hh_client=hh_client,
+        finance_client=finance_client,
+        settings=settings,
+        ci_client=ci_client,
+    ))
+    return {"status": "started", "message": "Monitoring cycle started in background"}
 
 
 @app.post("/risks/run")
@@ -1589,7 +1882,7 @@ async def crisis_page(req: Request, company_id: str):
 
     effective_token = getattr(req.state, "new_access_token", None) or access_token
 
-    company_rows, risk_runs = await asyncio.gather(
+    company_rows, risk_runs, employees, members = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -1604,6 +1897,18 @@ async def crisis_page(req: Request, company_id: str):
             query_params={"company_id": f"eq.{company_id}"},
             limit=1,
         ),
+        supabase.rest_select(
+            table="employees",
+            access_token=effective_token,
+            select="id,full_name,email,position,department",
+            query_params={"company_id": f"eq.{company_id}"},
+        ),
+        supabase.rest_select(
+            table="company_members",
+            access_token=effective_token,
+            select="id,invited_email,role,status",
+            query_params={"company_id": f"eq.{company_id}", "status": "eq.active"},
+        ),
     )
 
     company = company_rows[0] if company_rows else None
@@ -1617,6 +1922,8 @@ async def crisis_page(req: Request, company_id: str):
         {
             "company": company,
             "latest": latest,
+            "employees": employees,
+            "members": members,
             "app_name": settings.APP_NAME,
         },
     )
@@ -1636,6 +1943,96 @@ async def save_scenarios(req: Request, company_id: str, run_id: str):
     scenarios = body.get("scenarios")
     if not isinstance(scenarios, list):
         return JSONResponse({"error": "invalid payload"}, status_code=400)
+
+    await supabase.rest_update_raw(
+        path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}&company_id=eq.{company_id}",
+        access_token=effective_token,
+        patch={"scenarios": scenarios},
+        returning="minimal",
+    )
+    return JSONResponse({"ok": True})
+
+
+@app.post("/companies/{company_id}/crisis/delegate")
+async def crisis_delegate(
+    req: Request,
+    company_id: str,
+    run_id: str = Form(...),
+    scenario_id: str = Form(...),
+    step_index: int = Form(...),
+    assignee_name: str = Form(...),
+    assignee_email: str = Form(""),
+    note: str = Form(""),
+):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    rows = await supabase.rest_select(
+        table="risk_runs",
+        access_token=effective_token,
+        select="scenarios",
+        query_params={"id": f"eq.{run_id}"},
+    )
+    if not rows:
+        return JSONResponse({"error": "run not found"}, status_code=404)
+
+    scenarios = rows[0].get("scenarios") or []
+    for sc in scenarios:
+        if str(sc.get("id")) == str(scenario_id):
+            steps = sc.get("steps") or []
+            if 0 <= step_index < len(steps):
+                steps[step_index]["delegated_to"] = assignee_name
+                steps[step_index]["delegated_email"] = assignee_email
+                if note:
+                    steps[step_index]["delegate_note"] = note
+            break
+
+    await supabase.rest_update_raw(
+        path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}&company_id=eq.{company_id}",
+        access_token=effective_token,
+        patch={"scenarios": scenarios},
+        returning="minimal",
+    )
+    return JSONResponse({"ok": True, "assignee": assignee_name})
+
+
+@app.post("/companies/{company_id}/crisis/complete")
+async def crisis_complete(
+    req: Request,
+    company_id: str,
+    run_id: str = Form(...),
+    scenario_id: str = Form(...),
+    step_index: int = Form(...),
+):
+    from fastapi.responses import JSONResponse
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    rows = await supabase.rest_select(
+        table="risk_runs",
+        access_token=effective_token,
+        select="scenarios",
+        query_params={"id": f"eq.{run_id}"},
+    )
+    if not rows:
+        return JSONResponse({"error": "run not found"}, status_code=404)
+
+    scenarios = rows[0].get("scenarios") or []
+    for sc in scenarios:
+        if str(sc.get("id")) == str(scenario_id):
+            steps = sc.get("steps") or []
+            if 0 <= step_index < len(steps):
+                steps[step_index]["completed"] = True
+            break
 
     await supabase.rest_update_raw(
         path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}&company_id=eq.{company_id}",

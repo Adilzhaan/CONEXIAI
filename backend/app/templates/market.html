@@ -28,7 +28,7 @@
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor
       </a>
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
-        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Center
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
       </a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item">
@@ -313,6 +313,203 @@
         </div>
 
       </div>
+
+      <!-- ══ EXTENDED MARKET METRICS ══ -->
+      <style>
+        .mkt-ext-grid {
+          display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;
+        }
+        @media(max-width:900px){ .mkt-ext-grid { grid-template-columns:repeat(2,1fr); } }
+        @media(max-width:560px){ .mkt-ext-grid { grid-template-columns:1fr; } }
+
+        .mkt-ext-card {
+          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10);
+          border-radius:var(--radius); padding:16px 18px; position:relative; overflow:hidden;
+          transition:border-color .15s;
+        }
+        .mkt-ext-card:hover { border-color:rgba(255,255,255,0.18); }
+        .mkt-ext-card::before {
+          content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+          background:var(--mc,rgba(255,255,255,0.15));
+        }
+        .mkt-ext-lbl {
+          font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+          color:rgba(255,255,255,0.38); margin-bottom:7px; display:flex; align-items:center; gap:5px;
+        }
+        .mkt-ext-val { font-size:24px; font-weight:800; line-height:1; margin-bottom:4px; }
+        .mkt-ext-sub { font-size:11px; color:rgba(255,255,255,0.32); line-height:1.4; }
+
+        .mkt-ext-bar { height:5px; border-radius:3px; background:rgba(255,255,255,0.07); overflow:hidden; margin:6px 0 4px; }
+        .mkt-ext-bar-fill { height:100%; border-radius:3px; }
+
+        .mkt-sentiment-pill {
+          display:inline-flex; align-items:center; gap:5px;
+          font-size:12px; font-weight:700; padding:4px 12px; border-radius:99px; margin-bottom:5px;
+        }
+        .mkt-news-impact-row { display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap; }
+        .mkt-news-chip {
+          font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap;
+        }
+      </style>
+
+      {% if ai %}
+        {% set rs = ai.risk_score | int if ai.risk_score is not none else 50 %}
+        {% set trend = ai.trend | default('neutral') %}
+
+        <!-- Compute derived metrics -->
+        {% set stock_chg = (finance.stock.get('lasttoprevprice') or finance.stock.get('change') or 0) | float if finance and finance.stock else 0 %}
+
+        <!-- Demand Trends -->
+        {% if trend == 'bullish' or stock_chg > 1 %}
+          {% set demand_arrow = '↑' %}{% set demand_label = 'Растёт'    %}{% set demand_color = '#34d399' %}{% set demand_pct = [100, (50 + rs * 0.3) | int] | min %}
+          {% set demand_sub   = 'Интерес к сектору увеличивается' %}
+        {% elif trend == 'bearish' or stock_chg < -1 %}
+          {% set demand_arrow = '↓' %}{% set demand_label = 'Снижается' %}{% set demand_color = '#f87171' %}{% set demand_pct = [99, (rs * 0.7) | int] | min %}
+          {% set demand_sub   = 'Спрос замедляется' %}
+        {% else %}
+          {% set demand_arrow = '→' %}{% set demand_label = 'Стабильно' %}{% set demand_color = '#fbbf24' %}{% set demand_pct = 55 %}
+          {% set demand_sub   = 'Боковая динамика спроса' %}
+        {% endif %}
+
+        <!-- Brand Strength: inverse of risk, boosted by bullish signals -->
+        {% set brand_raw   = [100, 100 - rs + (15 if trend == 'bullish' else -10 if trend == 'bearish' else 0)] | min %}
+        {% set brand_score = [0, brand_raw] | max %}
+        {% if brand_score >= 65 %}{% set brand_lbl = 'Сильный' %}{% set brand_color = '#34d399' %}
+        {% elif brand_score >= 40 %}{% set brand_lbl = 'Средний' %}{% set brand_color = '#fbbf24' %}
+        {% else %}{% set brand_lbl = 'Слабый' %}{% set brand_color = '#f87171' %}{% endif %}
+
+        <!-- Market Sentiment -->
+        {% if rs < 35 %}
+          {% set sent_label = 'Позитивный' %}{% set sent_color = '#34d399' %}{% set sent_icon = '↑' %}
+        {% elif rs < 60 %}
+          {% set sent_label = 'Осторожный' %}{% set sent_color = '#fbbf24' %}{% set sent_icon = '→' %}
+        {% else %}
+          {% set sent_label = 'Негативный' %}{% set sent_color = '#f87171' %}{% set sent_icon = '↓' %}
+        {% endif %}
+
+        <!-- Investor Sentiment: based on stock change + indices -->
+        {% set _idxns = namespace(avg=0, count=0) %}
+        {% if finance and finance.market_indices %}
+          {% for idx in finance.market_indices %}
+            {% if idx.get('change_pct') is not none %}
+              {% set _idxns.avg = _idxns.avg + idx.get('change_pct') | float %}
+              {% set _idxns.count = _idxns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% set idx_avg = (_idxns.avg / _idxns.count) if _idxns.count > 0 else 0 %}
+        {% set inv_signal = stock_chg * 0.6 + idx_avg * 0.4 %}
+        {% if inv_signal > 0.5 %}
+          {% set inv_label = 'Позитивный' %}{% set inv_color = '#34d399' %}{% set inv_icon = '▲' %}
+        {% elif inv_signal < -0.5 %}
+          {% set inv_label = 'Негативный' %}{% set inv_color = '#f87171' %}{% set inv_icon = '▼' %}
+        {% else %}
+          {% set inv_label = 'Нейтральный' %}{% set inv_color = '#fbbf24' %}{% set inv_icon = '■' %}
+        {% endif %}
+
+        <!-- Capital Risk -->
+        {% set cap_risk_score = (rs * 0.85) | int %}
+        {% set cap_loss_est = (cap_risk_score / 100 * 25) | round(1) %}
+        {% if cap_risk_score >= 65 %}{% set cap_color = '#f87171' %}
+        {% elif cap_risk_score >= 35 %}{% set cap_color = '#fbbf24' %}
+        {% else %}{% set cap_color = '#34d399' %}{% endif %}
+
+        <!-- News Impact -->
+        {% set news_count = company_news | length if company_news else 0 %}
+        {% if rs >= 65 %}
+          {% set news_impact_lbl = 'Высокий' %}{% set news_impact_color = '#f87171' %}
+          {% set news_impact_sub = 'Новости давят на оценку' %}
+        {% elif rs >= 35 %}
+          {% set news_impact_lbl = 'Умеренный' %}{% set news_impact_color = '#fbbf24' %}
+          {% set news_impact_sub = 'Нейтральный медиафон' %}
+        {% else %}
+          {% set news_impact_lbl = 'Минимальный' %}{% set news_impact_color = '#34d399' %}
+          {% set news_impact_sub = 'Позитивное освещение' %}
+        {% endif %}
+
+        <div class="mkt-ext-grid">
+
+          <!-- Demand Trends -->
+          <div class="mkt-ext-card" style="--mc:{{ demand_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ demand_color }}" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+              Demand Trends
+            </div>
+            <div class="mkt-ext-val" style="color:{{ demand_color }}">{{ demand_arrow }} {{ demand_label }}</div>
+            <div class="mkt-ext-bar">
+              <div class="mkt-ext-bar-fill" style="width:{{ demand_pct }}%;background:{{ demand_color }};opacity:0.75"></div>
+            </div>
+            <div class="mkt-ext-sub">{{ demand_sub }}</div>
+          </div>
+
+          <!-- Brand Strength -->
+          <div class="mkt-ext-card" style="--mc:{{ brand_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ brand_color }}" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+              Brand Strength
+            </div>
+            <div class="mkt-ext-val" style="color:{{ brand_color }}">{{ brand_score }}<span style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.28)">/100</span></div>
+            <div class="mkt-ext-bar">
+              <div class="mkt-ext-bar-fill" style="width:{{ brand_score }}%;background:{{ brand_color }};opacity:0.75"></div>
+            </div>
+            <div class="mkt-ext-sub">Узнаваемость: <span style="color:{{ brand_color }};font-weight:600">{{ brand_lbl }}</span></div>
+          </div>
+
+          <!-- Market Sentiment -->
+          <div class="mkt-ext-card" style="--mc:{{ sent_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ sent_color }}" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              Market Sentiment
+            </div>
+            <div class="mkt-sentiment-pill" style="background:{{ sent_color }}1a;border:1px solid {{ sent_color }}44">
+              <span style="font-size:14px">{{ sent_icon }}</span>
+              <span style="color:{{ sent_color }}">{{ sent_label }}</span>
+            </div>
+            <div class="mkt-ext-sub">Настроение рынка · риск {{ rs }}/100</div>
+          </div>
+
+          <!-- Investor Sentiment -->
+          <div class="mkt-ext-card" style="--mc:{{ inv_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ inv_color }}" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+              Investor Sentiment
+            </div>
+            <div class="mkt-ext-val" style="color:{{ inv_color }}">{{ inv_icon }} {{ inv_label }}</div>
+            <div class="mkt-ext-sub">
+              Акция: {% if stock_chg > 0 %}+{% endif %}{{ "%.2f"|format(stock_chg) }}% ·
+              Индексы: {% if idx_avg > 0 %}+{% endif %}{{ "%.2f"|format(idx_avg) }}%
+            </div>
+          </div>
+
+          <!-- Capital Risk -->
+          <div class="mkt-ext-card" style="--mc:{{ cap_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ cap_color }}" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+              Capital Risk
+            </div>
+            <div class="mkt-ext-val" style="color:{{ cap_color }}">{{ cap_risk_score }}<span style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.28)">/100</span></div>
+            <div class="mkt-ext-bar">
+              <div class="mkt-ext-bar-fill" style="width:{{ cap_risk_score }}%;background:linear-gradient(90deg,{{ cap_color }}88,{{ cap_color }})"></div>
+            </div>
+            <div class="mkt-ext-sub">Риск снижения оценки ≈ {{ cap_loss_est }}%</div>
+          </div>
+
+          <!-- News Impact on Valuation -->
+          <div class="mkt-ext-card" style="--mc:{{ news_impact_color }}">
+            <div class="mkt-ext-lbl">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ news_impact_color }}" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              News Impact on Valuation
+            </div>
+            <div class="mkt-ext-val" style="color:{{ news_impact_color }}">{{ news_impact_lbl }}</div>
+            <div class="mkt-news-impact-row">
+              <span class="mkt-news-chip" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.50)">{{ news_count }} новостей</span>
+              <span class="mkt-news-chip" style="background:{{ news_impact_color }}18;border:1px solid {{ news_impact_color }}33;color:{{ news_impact_color }}">{{ news_impact_sub }}</span>
+            </div>
+          </div>
+
+        </div>
+      {% endif %}
+      <!-- ══ END EXTENDED METRICS ══ -->
 
       <!-- Price history chart — full width, with tab switcher -->
       {% set hist        = finance.price_history   if finance else [] %}
