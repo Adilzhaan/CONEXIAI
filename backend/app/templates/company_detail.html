@@ -565,8 +565,62 @@
       {% if msg == 'invited' %}<div class="alert alert-success" style="margin:16px 32px 0"><span class="alert-icon">✓</span> Приглашение отправлено.</div>{% endif %}
       {% if error == 'webhook_failed' %}<div class="alert alert-error" style="margin:16px 32px 0"><span class="alert-icon">✕</span> Ошибка вебхука.</div>{% endif %}
 
+      <!-- ══ RISK CATEGORIES NAV ══ -->
+      {% set cat_meta_top = [
+        ("media", "InfoField & Media",  "#93bbff", "rgba(147,187,255,0.12)"),
+        ("hr",    "Human Resources",    "#4ade80", "rgba(52,211,153,0.10)"),
+        ("gr",    "Gov. Relations",     "#f87171", "rgba(248,113,113,0.12)"),
+        ("pr",    "PR Environment",     "#c084fc", "rgba(124,58,237,0.1)"),
+        ("market","Market & Industry",  "#fbbf24", "rgba(217,119,6,0.1)"),
+      ] %}
+      {% if cats %}
+      <style>
+        .rcat-nav { padding:16px 32px 0; display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+        @media(max-width:1000px){ .rcat-nav { grid-template-columns:repeat(3,1fr); } }
+        @media(max-width:640px) { .rcat-nav { grid-template-columns:repeat(2,1fr); padding:12px 16px 0; } }
+      </style>
+      <div class="rcat-nav">
+        {% for key, label, color, bg in cat_meta_top %}
+          {% set score = cats[key].score if cats[key] else none %}
+          {% set risks = cats[key].risks if cats[key] else [] %}
+          {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
+          {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
+          {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
+          <a href="/companies/{{ company.id }}/category/{{ key }}"
+             style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
+                    background:{{ bg }};border:1px solid {{ color }}26;border-left:3px solid {{ color }};
+                    border-radius:var(--radius);text-decoration:none;color:inherit;
+                    transition:box-shadow .15s,transform .15s;position:relative;overflow:hidden"
+             onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)';this.style.transform='translateY(-2px)'"
+             onmouseout="this.style.boxShadow='';this.style.transform=''">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+              <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">{{ label }}</div>
+              {% if trend is not none %}
+                <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:99px;
+                  {% if trend > 0 %}background:rgba(248,113,113,0.12);color:#f87171
+                  {% elif trend < 0 %}background:rgba(52,211,153,0.10);color:#34d399
+                  {% else %}background:rgba(255,255,255,0.06);color:var(--text-muted){% endif %}">
+                  {% if trend > 0 %}↑+{{ trend }}{% elif trend < 0 %}↓{{ trend }}{% else %}→{% endif %}
+                </span>
+              {% endif %}
+            </div>
+            <div style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
+              {{ score if score is not none else '—' }}
+            </div>
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07);overflow:hidden">
+              <div style="height:100%;border-radius:2px;background:{{ color }};opacity:0.7;width:{{ score if score is not none else 0 }}%"></div>
+            </div>
+            {% if desc %}
+              <div style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">{{ desc[:55] }}{% if desc|length > 55 %}…{% endif %}</div>
+            {% endif %}
+          </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <!-- ══ END RISK CATEGORIES NAV ══ -->
+
       <!-- Tab nav -->
-      <div class="cd-tabs">
+      <div class="cd-tabs" style="margin-top:16px">
         <button class="cd-tab active" onclick="showTab('overview', this)">
           ◎ Обзор
         </button>
@@ -586,6 +640,9 @@
           Мониторинг
           {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
           {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
+        </button>
+        <button class="cd-tab" onclick="showTab('social', this)">
+          Соцсети
         </button>
       </div>
 
@@ -862,7 +919,7 @@
                   {% set growth = (cscore - prev_cscore) if prev_cscore is not none else none %}
                   {% for risk in (cats[key].risks or [])[:2] %}
                     {% set rtext = risk.text if risk is mapping else risk %}
-                    {% if rtext %}
+                    {% if rtext and not rtext.startswith('Анализ недоступен') and 'Error code:' not in rtext %}
                       {% set prob = [99, (cscore * 0.92) | int] | min %}
                       {% set impact = ((cscore / 100) * (risk_impact.potential_loss if risk_impact else 500000) / 5) | int %}
                       {% set _ = all_risks_ns.items.append({'text': rtext, 'cat_key': key, 'cat_label': cat_labels_ro[key], 'color': color, 'prob': prob, 'impact': impact, 'growth': growth, 'cscore': cscore}) %}
@@ -968,56 +1025,6 @@
           </div>
         {% endif %}
 
-        <!-- ══ SECTION 2: Risk Categories ══ -->
-        {% set cat_meta = [
-          ("media", "", "InfoField & Media",  "#93bbff", "rgba(147,187,255,0.12)"),
-          ("hr",    "", "Human Resources",    "#16a34a", "rgba(52,211,153,0.10)"),
-          ("gr",    "", "Gov. Relations",     "#d44040", "rgba(248,113,113,0.12)"),
-          ("pr",    "", "PR Environment",     "#7c3aed", "rgba(124,58,237,0.1)"),
-          ("market","", "Market & Industry",  "#d97706", "rgba(217,119,6,0.1)"),
-        ] %}
-
-        {% if cats %}
-        <div class="ri-section">
-          <div class="ri-sec-hdr">
-            <div class="ri-sec-title">
-              <div class="ri-sec-title-icon">◈</div> Risk Categories
-            </div>
-            <div style="font-size:11px;color:var(--text-muted)">{{ cat_meta|length }} категории</div>
-          </div>
-          <div class="cat-grid">
-            {% for key, icon, label, color, bg in cat_meta %}
-              {% set score = cats[key].score if cats and cats[key] else none %}
-              {% set risks = cats[key].risks if cats and cats[key] else [] %}
-              {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
-              {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
-              {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
-              <a class="cat-card" href="/companies/{{ company.id }}/category/{{ key }}" style="--cc:{{ color }};--cc-bg:{{ bg }}">
-                <div class="cat-icon-wrap">{{ icon }}</div>
-                <div class="cat-body">
-                  <div class="cat-name">
-                    {{ label }}
-                    {% if trend is not none %}
-                      <span class="cat-trend" style="{% if trend > 0 %}background:rgba(248,113,113,0.12);color:#d44040{% elif trend < 0 %}background:rgba(52,211,153,0.10);color:#34d399{% else %}background:rgba(0,0,0,0.05);color:var(--text-muted){% endif %}">
-                        {% if trend > 0 %}↗ +{{ trend }}{% elif trend < 0 %}↘ {{ trend }}{% else %}—{% endif %}
-                      </span>
-                    {% endif %}
-                  </div>
-                  {% if desc %}
-                    <div class="cat-desc">{{ desc[:80] }}{% if desc|length > 80 %}…{% endif %}</div>
-                  {% endif %}
-                </div>
-                <div class="cat-score-wrap">
-                  <div class="cat-score">{{ score if score is not none else '—' }}</div>
-                  {% if score is not none %}
-                    <div class="cat-bar"><div class="cat-bar-fill" style="width:{{ score }}%"></div></div>
-                  {% endif %}
-                </div>
-              </a>
-            {% endfor %}
-          </div>
-        </div>
-        {% endif %}
 
         <!-- ══ SECTION 3: AI Intelligence ══ -->
         {% if (latest and latest.advice) or (latest and latest.scenarios) %}
@@ -1252,21 +1259,40 @@
             {% endif %}
           </div>
 
-          <!-- ─── Соцсети (запускается при полном анализе) ─── -->
-          <div class="mon-sec-hdr">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            Соцсети
-            <span style="background:rgba(255,255,255,0.05);color:var(--text-dim);font-size:10px;padding:1px 8px;border-radius:999px;font-weight:400;text-transform:none;letter-spacing:0">запускается при полном анализе</span>
-          </div>
-          <div class="mon-feed">
-            <div id="social-feed">
-              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.2;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                Данные соцсетей загружаются при запуске полного анализа рисков
-              </div>
-            </div>
-          </div>
+        </div>
+      </div>
 
+      <!-- ══ SOCIAL TAB ══ -->
+      <div class="cd-panel" id="tab-social">
+        <div class="panel-hdr">
+          <div class="panel-hdr-title">Соцсети</div>
+          <button onclick="loadSocial()" id="social-refresh-btn" class="btn btn-primary btn-sm">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Запустить сканирование
+          </button>
+        </div>
+
+        <!-- Account inputs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);display:block;margin-bottom:5px">📸 Instagram аккаунт</label>
+            <input id="social-instagram-url" type="text" placeholder="username или https://instagram.com/..."
+              style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);color:#fff;font-size:12px;outline:none;font-family:inherit"
+              onfocus="this.style.borderColor='#e1306c'" onblur="this.style.borderColor='rgba(255,255,255,0.10)'"
+              oninput="saveSocialAccounts()" />
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);display:block;margin-bottom:5px">🎵 TikTok · 🧵 Threads · ▶️ YouTube</label>
+            <div style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);font-size:11px;color:var(--text-muted)">Поиск по названию компании автоматически</div>
+          </div>
+        </div>
+
+        <div id="social-feed">
+          <div class="empty-box">
+            <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
+            <div class="empty-box-title">Данных пока нет</div>
+            <div class="empty-box-sub">Нажмите «Запустить сканирование» — займёт 1–3 минуты</div>
+          </div>
         </div>
       </div>
 
@@ -1512,9 +1538,15 @@
       <!-- ══ SIGNALS TAB ══ -->
       <div class="cd-panel" id="tab-signals">
 
+        <style>
+          .conf-opt { display:inline-flex;align-items:center;cursor:pointer;padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);font-size:12px;color:rgba(255,255,255,0.60);transition:all .15s;user-select:none; }
+          .conf-opt input[type=radio] { display:none; }
+          .conf-opt:has(input:checked) { border-color:#7c3aed;background:rgba(124,58,237,0.18);color:#fff; }
+          .conf-opt:hover { border-color:rgba(255,255,255,0.28);color:#fff; }
+        </style>
         <!-- Signal modal -->
         <div id="signalModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px">
-          <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:480px;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
+          <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
             <div style="padding:22px 24px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between">
               <div>
                 <div style="font-size:15px;font-weight:700">Новый сигнал</div>
@@ -1547,6 +1579,41 @@
                     style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;resize:vertical;transition:border-color .15s,box-shadow .15s"
                     onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
                     onblur="this.style.borderColor='';this.style.boxShadow=''"></textarea>
+                </div>
+                <!-- Confidence questions -->
+                <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:14px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.30)">Оценка достоверности</div>
+                  <div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Вы уверены, что информация соответствует действительности?</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <label class="conf-opt"><input type="radio" name="certainty" value="confident"><span>Да, уверен</span></label>
+                      <label class="conf-opt"><input type="radio" name="certainty" value="uncertain"><span>Нет</span></label>
+                      <label class="conf-opt"><input type="radio" name="certainty" value="unknown" checked><span>Не знаю</span></label>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Подтверждается ли это другими сотрудниками или фактами?</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="yes"><span>Да</span></label>
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="no"><span>Нет</span></label>
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="unknown" checked><span>Не знаю</span></label>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Источник информации:</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <label class="conf-opt"><input type="radio" name="source_type" value="experience"><span>Личный опыт</span></label>
+                      <label class="conf-opt"><input type="radio" name="source_type" value="observation" checked><span>Наблюдение</span></label>
+                      <label class="conf-opt"><input type="radio" name="source_type" value="rumor"><span>Слухи / предположение</span></label>
+                    </div>
+                  </div>
+                  <div id="conf-preview" style="padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px">
+                    <div id="conf-score-circle" style="min-width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid #fbbf24;background:rgba(251,191,36,0.12);color:#fbbf24">35</div>
+                    <div>
+                      <div id="conf-score-label" style="font-size:12px;font-weight:600;color:#fbbf24">Частично подтверждено</div>
+                      <div style="font-size:11px;color:var(--text-muted)">Индекс достоверности сигнала</div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:10px">
@@ -1582,6 +1649,13 @@
                     {% else %}<span class="badge" style="font-size:10px">{{ em.position }}</span>{% endif %}
                   {% endif %}
                   {% if em.from_email %}<span style="font-size:12px;color:var(--text-muted)">{{ em.from_email }}</span>{% endif %}
+                  {% if em.confidence_score is not none %}
+                    {% set cs = em.confidence_score | int %}
+                    {% if cs >= 70 %}{% set _cc = '#4ade80' %}{% set _cl = 'Подтверждено' %}
+                    {% elif cs >= 40 %}{% set _cc = '#fbbf24' %}{% set _cl = 'Частично' %}
+                    {% else %}{% set _cc = '#f87171' %}{% set _cl = 'Непроверено' %}{% endif %}
+                    <span style="font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid {{ _cc }}44;background:{{ _cc }}18;color:{{ _cc }};font-weight:600;white-space:nowrap">{{ _cl }} · {{ cs }}</span>
+                  {% endif %}
                   <span style="font-size:11px;color:var(--text-muted);margin-left:auto">{{ em.created_at[:10] if em.created_at else '' }}</span>
                 </div>
                 <div class="signal-text">{{ em.text[:300] }}{% if em.text|length > 300 %}…{% endif %}</div>
@@ -1905,17 +1979,72 @@ document.getElementById('signal-btn') && document.getElementById('signal-form').
   btn.innerHTML = '<span class="spinner"></span> Отправляем…';
 });
 
+// ── Confidence Score preview ──
+(function() {
+  const CERTAINTY  = {confident: 40, uncertain: 0, unknown: 15};
+  const CONFIRMED  = {yes: 35, no: 0, unknown: 10};
+  const SOURCE     = {experience: 25, observation: 15, rumor: 5};
+  function updateConfPreview() {
+    const form = document.getElementById('signal-form');
+    if (!form) return;
+    const c  = form.querySelector('[name=certainty]:checked');
+    const cf = form.querySelector('[name=confirmed_by_others]:checked');
+    const s  = form.querySelector('[name=source_type]:checked');
+    const score = (c  ? (CERTAINTY[c.value]  ?? 15) : 15)
+                + (cf ? (CONFIRMED[cf.value]  ?? 10) : 10)
+                + (s  ? (SOURCE[s.value]      ?? 10) : 10);
+    const circle = document.getElementById('conf-score-circle');
+    const label  = document.getElementById('conf-score-label');
+    if (!circle || !label) return;
+    let color, text;
+    if (score >= 70)      { color = '#4ade80'; text = 'Подтверждено'; }
+    else if (score >= 40) { color = '#fbbf24'; text = 'Частично подтверждено'; }
+    else                  { color = '#f87171'; text = 'Непроверено'; }
+    circle.textContent     = score;
+    circle.style.color     = color;
+    circle.style.borderColor = color;
+    circle.style.background  = color + '18';
+    label.textContent = text;
+    label.style.color = color;
+  }
+  document.addEventListener('change', function(e) {
+    if (['certainty','confirmed_by_others','source_type'].includes(e.target.name)) updateConfPreview();
+  });
+  updateConfPreview();
+})();
+
 // ── Social feed ──
+const _SOCIAL_LS_KEY = 'social_accounts_{{ company.id }}';
+
+function saveSocialAccounts() {
+  const ig = document.getElementById('social-instagram-url');
+  if (ig) localStorage.setItem(_SOCIAL_LS_KEY, JSON.stringify({ instagram_url: ig.value.trim() }));
+}
+
+function loadSocialAccounts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(_SOCIAL_LS_KEY) || '{}');
+    const ig = document.getElementById('social-instagram-url');
+    if (ig && saved.instagram_url) ig.value = saved.instagram_url;
+  } catch(e) {}
+}
+
 async function loadSocial() {
   const feed = document.getElementById('social-feed');
   const btn  = document.getElementById('social-refresh-btn');
   if (!feed) return;
 
+  const igVal = (document.getElementById('social-instagram-url')?.value || '').trim();
+  saveSocialAccounts();
+
+  const params = new URLSearchParams();
+  if (igVal) params.set('instagram_url', igVal);
+
   feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>Сканируем соцсети…</div>`;
   if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
 
   try {
-    const r = await fetch(`/companies/{{ company.id }}/social`);
+    const r = await fetch(`/companies/{{ company.id }}/social?${params}`);
     const data = await r.json();
     const posts = data.posts || [];
 
@@ -2071,5 +2200,6 @@ async function doCleanup(mode, value) {
     alert('Ошибка при очистке. Попробуйте снова.');
   }
 }
+loadSocialAccounts();
 </script>
 {% endblock %}

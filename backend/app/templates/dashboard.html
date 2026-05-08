@@ -218,44 +218,6 @@
         }
       </style>
 
-      <!-- Active Alerts -->
-      {% set high_risk_companies = [] %}
-      {% for m in admin_rows %}
-        {% set c = m.companies %}
-        {% if c %}
-          {% set risk = risk_map.get(c.id) %}
-          {% if risk and risk.score is not none and risk.score | int >= 65 %}
-            {% set cats = risk.categories %}
-            {% set top_cat = namespace(name='', score=0) %}
-            {% if cats %}
-              {% for key, cat in cats.items() %}
-                {% if cat.score is not none and cat.score | int > top_cat.score %}
-                  {% set top_cat.score = cat.score | int %}
-                  {% set top_cat.name = key %}
-                {% endif %}
-              {% endfor %}
-            {% endif %}
-            {% set _ = high_risk_companies.append((c, risk.score | int, top_cat.name)) %}
-          {% endif %}
-        {% endif %}
-      {% endfor %}
-
-      {% if high_risk_companies %}
-      <div class="alerts-banner">
-        {% set cat_labels = {'media':'InfoField & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry'} %}
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f87171;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <div class="alert-dot"></div> Высокий риск — {{ high_risk_companies|length }} компани{{ 'я' if high_risk_companies|length == 1 else ('и' if 2 <= high_risk_companies|length <= 4 else 'й') }}
-        </div>
-        {% for c, score, top_cat in high_risk_companies %}
-        <div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:5px 0;{% if not loop.last %}border-bottom:1px solid rgba(255,255,255,0.06);{% endif %}">
-          <span style="font-weight:600;color:var(--text)">{{ c.name }}</span>
-          <span style="background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.25);padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">{{ score }}/100</span>
-          {% if top_cat %}<span style="color:rgba(255,255,255,0.40);font-size:11px">{{ cat_labels.get(top_cat, top_cat) }}</span>{% endif %}
-          <a href="/companies/{{ c.id }}" style="margin-left:auto;font-size:11px;font-weight:600;color:#a78bfa;text-decoration:none">Открыть →</a>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
 
       <!-- Add company modal -->
       <div id="addModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px">
@@ -334,7 +296,7 @@
       </div>
 
       <!-- ══ CEO INTELLIGENCE PANEL ══ -->
-      {% if ceo_view %}
+      {% if false %}
       <style>
         /* ── CEO panel ── */
         .ceo-panel { margin-bottom:28px; }
@@ -808,85 +770,6 @@
       </div>
       {% endif %}
 
-      <!-- News Feed -->
-      {% if dashboard_news %}
-      <div style="margin-top:32px">
-        <div class="sec-hdr">
-          <div class="sec-hdr-left">
-            <div class="sec-hdr-title">Лента новостей</div>
-            <div class="sec-hdr-count">{{ dashboard_news|length }}</div>
-          </div>
-          <div style="font-size:11px;color:var(--text-dim)">Из системы мониторинга · обновляется каждые 15 мин</div>
-        </div>
-
-        <style>
-          .dash-news-list {
-            background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
-            border-radius:var(--radius); overflow:hidden;
-          }
-          .dash-news-item {
-            display:flex; align-items:flex-start; gap:14px;
-            padding:13px 20px; border-bottom:1px solid rgba(255,255,255,0.06);
-            transition:background .15s;
-          }
-          .dash-news-item:last-child { border-bottom:none; }
-          .dash-news-item:hover { background:rgba(255,255,255,0.03); }
-          .dash-news-co {
-            width:28px; height:28px; border-radius:7px; flex-shrink:0;
-            display:flex; align-items:center; justify-content:center;
-            font-size:11px; font-weight:800; color:#fff; margin-top:2px;
-          }
-          .dash-news-body { flex:1; min-width:0; }
-          .dash-news-title {
-            font-size:13px; font-weight:500; color:var(--text);
-            text-decoration:none; line-height:1.45; display:block; margin-bottom:4px;
-          }
-          .dash-news-title:hover { color:#a78bfa; }
-          .dash-news-meta {
-            display:flex; align-items:center; gap:6px; flex-wrap:wrap;
-            font-size:11px; color:var(--text-muted);
-          }
-          .dash-news-right {
-            flex-shrink:0; text-align:right; font-size:11px;
-            color:var(--text-dim); white-space:nowrap;
-          }
-        </style>
-
-        {% set co_colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
-        {% set seen_cos = namespace(ids=[]) %}
-
-        <div class="dash-news-list">
-          {% for n in dashboard_news %}
-            {% set co_idx = (seen_cos.ids.index(n.company_id) if n.company_id in seen_cos.ids else seen_cos.ids|length) %}
-            {% if n.company_id not in seen_cos.ids %}{% set _ = seen_cos.ids.append(n.company_id) %}{% endif %}
-            {% set co_color = co_colors[co_idx % co_colors|length] %}
-            <div class="dash-news-item">
-              <div class="dash-news-co" style="background:{{ co_color }}" title="{{ n.company_name }}">
-                {{ n.company_name[0] | upper if n.company_name else '?' }}
-              </div>
-              <div class="dash-news-body">
-                <a href="{{ n.link }}" target="_blank" rel="noopener" class="dash-news-title">{{ n.title }}</a>
-                <div class="dash-news-meta">
-                  {% if n.triggered_analysis %}
-                    <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.28);color:#34d399;font-size:10px;font-weight:700">✓ Запустил анализ</span>
-                  {% elif n.is_new %}
-                    <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.28);color:#a78bfa;font-size:10px;font-weight:700">★ Новое</span>
-                  {% endif %}
-                  <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);color:rgba(255,255,255,0.40)">{{ n.company_name }}</span>
-                  {% if n.source %}<span>·</span><span>{{ n.source }}</span>{% endif %}
-                  {% if n.pub_date %}<span>·</span><span>{{ n.pub_date }}</span>{% endif %}
-                </div>
-              </div>
-              {% if n.captured_at %}
-              <div class="dash-news-right">
-                в системе<br>{{ n.captured_at[:16] | replace('T',' ') }}
-              </div>
-              {% endif %}
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
 
     </div>
   </div>

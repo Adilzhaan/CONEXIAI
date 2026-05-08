@@ -38,7 +38,7 @@ class Settings:
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     # Monitoring
-    MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "true").lower() == "true"
+    MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "false").lower() == "true"
     MONITORING_INTERVAL_MINUTES: int = int(os.getenv("MONITORING_INTERVAL_MINUTES", "15"))
     MONITORING_NEW_ARTICLES_THRESHOLD: int = int(os.getenv("MONITORING_NEW_ARTICLES_THRESHOLD", "3"))
 

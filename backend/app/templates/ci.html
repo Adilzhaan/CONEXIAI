@@ -102,6 +102,20 @@
         @media(max-width:800px){.ci-three{grid-template-columns:1fr;}}
         .ci-block { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:0 4px 20px rgba(0,0,0,0.15); }
         .ci-block-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; }
+
+        /* CI Metrics strip */
+        .ci-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+        @media(max-width:900px){ .ci-metrics { grid-template-columns:repeat(2,1fr); } }
+        @media(max-width:520px){ .ci-metrics { grid-template-columns:1fr; } }
+        .ci-metric-card { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:0 4px 20px rgba(0,0,0,0.15); position:relative; overflow:hidden; }
+        .ci-metric-label { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; }
+        .ci-metric-value { font-size:26px; font-weight:800; line-height:1; }
+        .ci-metric-sub { font-size:11px; color:var(--text-muted); margin-top:5px; }
+        .ci-metric-bar { height:3px; border-radius:999px; background:rgba(255,255,255,0.08); margin-top:10px; overflow:hidden; }
+        .ci-metric-bar-fill { height:100%; border-radius:999px; transition:width .6s ease; }
+        .ci-metric-dots { display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+        .ci-metric-dot-row { display:flex; align-items:flex-start; gap:6px; font-size:11px; color:rgba(255,255,255,0.65); line-height:1.35; }
+        .ci-metric-dot-row::before { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; margin-top:4px; flex-shrink:0; }
       </style>
 
       <div class="ci-grid">
@@ -179,6 +193,89 @@
 
           {% elif report %}
           {% set ai = report.ai %}
+
+          {# ── Derive CI metrics from AI data ── #}
+          {% if ai %}
+          {% set _cns = namespace(growing=0,stable=0,declining=0,ht=0,mt=0,lt=0) %}
+          {% for comp in (ai.competitors or []) %}
+            {% if comp.activity == 'growing' %}{% set _cns.growing = _cns.growing + 1 %}
+            {% elif comp.activity == 'declining' %}{% set _cns.declining = _cns.declining + 1 %}
+            {% else %}{% set _cns.stable = _cns.stable + 1 %}{% endif %}
+            {% if comp.threat == 'high' %}{% set _cns.ht = _cns.ht + 1 %}
+            {% elif comp.threat == 'medium' %}{% set _cns.mt = _cns.mt + 1 %}
+            {% else %}{% set _cns.lt = _cns.lt + 1 %}{% endif %}
+          {% endfor %}
+          {% set _tc = (ai.competitors or []) | length %}
+          {% set _act_score = ((_cns.growing * 100 + _cns.stable * 50 + _cns.declining * 10) / _tc) | round | int if _tc > 0 else 0 %}
+          {% if _act_score >= 70 %}{% set _act_color = '#f87171' %}{% set _act_lbl = 'Высокая' %}
+          {% elif _act_score >= 40 %}{% set _act_color = '#fbbf24' %}{% set _act_lbl = 'Умеренная' %}
+          {% else %}{% set _act_color = '#4ade80' %}{% set _act_lbl = 'Низкая' %}{% endif %}
+          {% if ai.threat_level == 'high' %}{% set _tbase = 78 %}{% elif ai.threat_level == 'medium' %}{% set _tbase = 44 %}{% else %}{% set _tbase = 14 %}{% endif %}
+          {% set _tidx = [100, _tbase + _cns.ht * 12 + _cns.mt * 5] | min %}
+          {% if _tidx >= 70 %}{% set _ti_color = '#f87171' %}{% elif _tidx >= 40 %}{% set _ti_color = '#fbbf24' %}{% else %}{% set _ti_color = '#4ade80' %}{% endif %}
+          {% set _opps = (ai.opportunities or []) | length %}
+          {% if _cns.growing > _cns.declining %}{% set _mkt_arrow = '↑' %}{% set _mkt_lbl = 'Рост активности' %}{% set _mkt_color = '#f87171' %}
+          {% elif _cns.declining > _cns.growing %}{% set _mkt_arrow = '↓' %}{% set _mkt_lbl = 'Сжатие' %}{% set _mkt_color = '#4ade80' %}
+          {% else %}{% set _mkt_arrow = '→' %}{% set _mkt_lbl = 'Стабильно' %}{% set _mkt_color = '#fbbf24' %}{% endif %}
+
+          <!-- CI Metrics Strip -->
+          <div class="ci-metrics">
+
+            <!-- Competitor Activity Score -->
+            <div class="ci-metric-card" style="border-top:2px solid {{ _act_color }}">
+              <div class="ci-metric-label">Competitor Activity</div>
+              <div class="ci-metric-value" style="color:{{ _act_color }}">{{ _act_score }}</div>
+              <div class="ci-metric-sub">{{ _act_lbl }} · из 100</div>
+              <div class="ci-metric-bar"><div class="ci-metric-bar-fill" style="width:{{ _act_score }}%;background:{{ _act_color }}"></div></div>
+              <div style="display:flex;gap:8px;margin-top:8px;font-size:10px;color:var(--text-muted)">
+                {% if _cns.growing > 0 %}<span style="color:#f87171">↑ {{ _cns.growing }} растёт</span>{% endif %}
+                {% if _cns.stable > 0 %}<span style="color:#fbbf24">→ {{ _cns.stable }} стабильно</span>{% endif %}
+                {% if _cns.declining > 0 %}<span style="color:#4ade80">↓ {{ _cns.declining }} снижается</span>{% endif %}
+              </div>
+            </div>
+
+            <!-- Market Movement -->
+            <div class="ci-metric-card" style="border-top:2px solid {{ _mkt_color }}">
+              <div class="ci-metric-label">Market Movement</div>
+              <div class="ci-metric-value" style="color:{{ _mkt_color }}">{{ _mkt_arrow }}</div>
+              <div class="ci-metric-sub">{{ _mkt_lbl }}</div>
+              {% if ai.summary %}
+              <div style="font-size:11px;color:rgba(255,255,255,0.50);margin-top:8px;line-height:1.4">{{ ai.summary[:90] }}{% if ai.summary|length > 90 %}…{% endif %}</div>
+              {% endif %}
+            </div>
+
+            <!-- Threat Index -->
+            <div class="ci-metric-card" style="border-top:2px solid {{ _ti_color }}">
+              <div class="ci-metric-label">Threat Index</div>
+              <div style="display:flex;align-items:baseline;gap:4px">
+                <div class="ci-metric-value" style="color:{{ _ti_color }}">{{ _tidx }}</div>
+                <div style="font-size:12px;color:var(--text-muted)">/100</div>
+              </div>
+              <div class="ci-metric-sub">
+                {% if _tidx >= 70 %}Высокая угроза{% elif _tidx >= 40 %}Умеренная угроза{% else %}Низкая угроза{% endif %}
+              </div>
+              <div class="ci-metric-bar"><div class="ci-metric-bar-fill" style="width:{{ _tidx }}%;background:{{ _ti_color }}"></div></div>
+              <div style="display:flex;gap:8px;margin-top:8px;font-size:10px;color:var(--text-muted)">
+                {% if _cns.ht > 0 %}<span style="color:#f87171">● {{ _cns.ht }} высок.</span>{% endif %}
+                {% if _cns.mt > 0 %}<span style="color:#fbbf24">● {{ _cns.mt }} средн.</span>{% endif %}
+                {% if _cns.lt > 0 %}<span style="color:#4ade80">● {{ _cns.lt }} низк.</span>{% endif %}
+              </div>
+            </div>
+
+            <!-- Opportunity Signals -->
+            <div class="ci-metric-card" style="border-top:2px solid #a78bfa">
+              <div class="ci-metric-label">Opportunity Signals</div>
+              <div class="ci-metric-value" style="color:#a78bfa">{{ _opps }}</div>
+              <div class="ci-metric-sub">{% if _opps == 1 %}возможность{% elif _opps in [2,3,4] %}возможности{% else %}возможностей{% endif %} выявлено</div>
+              <div class="ci-metric-dots">
+                {% for opp in (ai.opportunities or [])[:3] %}
+                  <div class="ci-metric-dot-row" style="color:#a78bfa">{{ opp }}</div>
+                {% endfor %}
+              </div>
+            </div>
+
+          </div>
+          {% endif %}{# end ai metrics #}
 
           <!-- Summary -->
           {% if ai and ai.summary %}

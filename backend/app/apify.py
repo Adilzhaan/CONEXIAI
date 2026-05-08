@@ -1,12 +1,9 @@
 """
 Apify social media scrapers.
-- Instagram  : apify~instagram-hashtag-scraper
+- Instagram  : apify~instagram-post-scraper (by account URL)
 - TikTok     : clockworks~tiktok-scraper
-- Threads    : watcher.data~search-threads-by-keywords
+- Threads    : igview-owner~threads-search-scraper
 - YouTube    : streamers~youtube-scraper
-
-All scrapers apply a relevance filter — only posts that mention
-the company name (or its keywords) are returned.
 """
 import asyncio
 import logging
@@ -22,9 +19,9 @@ _http = httpx.AsyncClient(timeout=180)
 
 APIFY_BASE = "https://api.apify.com/v2/acts"
 
-ACTOR_INSTAGRAM = "apify~instagram-hashtag-scraper"
+ACTOR_INSTAGRAM = "apify~instagram-post-scraper"
 ACTOR_TIKTOK    = "clockworks~tiktok-scraper"
-ACTOR_THREADS   = "watcher.data~search-threads-by-keywords"
+ACTOR_THREADS   = "igview-owner~threads-search-scraper"
 ACTOR_YOUTUBE   = "streamers~youtube-scraper"
 
 
@@ -60,43 +57,38 @@ def _is_relevant(text: str, keywords: list[str]) -> bool:
 async def fetch_instagram_posts(
     company_name: str,
     token: str,
-    limit: int = 30,
+    limit: int = 24,
+    instagram_url: str | None = None,
 ) -> list[dict[str, Any]]:
-    if not token:
+    """Scrape Instagram posts by account URL. Skipped if no URL provided."""
+    if not token or not instagram_url:
         return []
-
-    kws = _keywords(company_name)
-    clean = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9]", "", company_name).lower()
-    extra = [re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9]", "", w).lower() for w in kws if len(w) >= 4]
-    hashtags = list(dict.fromkeys([clean] + extra))
-    hashtags = [h for h in hashtags if h][:5]
 
     url = f"{APIFY_BASE}/{ACTOR_INSTAGRAM}/run-sync-get-dataset-items?token={token}"
     payload = {
-        "hashtags":      hashtags,
-        "keywordSearch": False,
-        "resultsLimit":  limit,
-        "resultsType":   "posts",
+        "username":        [instagram_url],
+        "resultsLimit":    limit,
+        "dataDetailLevel": "basicData",
+        "skipPinnedPosts": False,
     }
 
     try:
         r = await _http.post(url, json=payload)
         r.raise_for_status()
         items: list[dict] = r.json()
-        relevant = []
+        posts = []
         for item in items:
-            caption = item.get("caption") or item.get("text") or ""
-            if _is_relevant(caption, kws):
-                relevant.append({
-                    "url":      item.get("url") or item.get("shortCode", ""),
-                    "text":     caption[:500],
-                    "author":   item.get("ownerUsername") or item.get("username", ""),
-                    "likes":    item.get("likesCount") or item.get("likesNumber", 0),
-                    "comments": item.get("commentsCount", 0),
-                    "platform": "instagram",
-                })
-        logger.info("Instagram: %d total → %d relevant for '%s'", len(items), len(relevant), company_name)
-        return relevant
+            caption = (item.get("caption") or item.get("text") or "").strip()
+            posts.append({
+                "url":      item.get("url") or f"https://www.instagram.com/p/{item.get('shortCode', '')}",
+                "text":     caption[:500],
+                "author":   item.get("ownerUsername") or item.get("username", ""),
+                "likes":    item.get("likesCount") or item.get("likesNumber", 0),
+                "comments": item.get("commentsCount", 0),
+                "platform": "instagram",
+            })
+        logger.info("Instagram: %d posts from '%s'", len(posts), instagram_url)
+        return posts
     except Exception as e:
         logger.warning("Instagram scraper failed: %s", e)
         return []
@@ -164,7 +156,7 @@ async def fetch_tiktok_posts(
 async def fetch_threads_posts(
     company_name: str,
     token: str,
-    max_posts: int = 30,
+    max_posts: int = 20,
 ) -> list[dict[str, Any]]:
     if not token:
         return []
@@ -172,9 +164,9 @@ async def fetch_threads_posts(
     kws = _keywords(company_name)
     url = f"{APIFY_BASE}/{ACTOR_THREADS}/run-sync-get-dataset-items?token={token}"
     payload = {
-        "keywords":           [company_name],
-        "sortByRecent":       True,
-        "proxyConfiguration": {"useApifyProxy": False},
+        "searchQuery": company_name,
+        "maxPosts":    max_posts,
+        "sort":        "top",
     }
 
     try:
@@ -184,16 +176,16 @@ async def fetch_threads_posts(
         relevant = []
         for item in items:
             text = (
-                item.get("captionText") or item.get("text") or
+                item.get("text") or item.get("caption") or
                 item.get("content") or item.get("body") or ""
             )
             if _is_relevant(text, kws):
                 relevant.append({
-                    "postId":      item.get("postId", ""),
-                    "postUrl":     item.get("postUrl") or item.get("url", ""),
-                    "username":    item.get("username") or item.get("author", ""),
-                    "captionText": text[:500],
-                    "platform":    "threads",
+                    "postUrl":  item.get("url") or item.get("postUrl", ""),
+                    "username": item.get("username") or item.get("author", ""),
+                    "text":     text[:500],
+                    "likes":    item.get("likeCount") or item.get("likes", 0),
+                    "platform": "threads",
                 })
         logger.info("Threads: %d total → %d relevant for '%s'", len(items), len(relevant), company_name)
         return relevant
@@ -270,11 +262,13 @@ async def fetch_youtube_videos(
 async def fetch_all_social(
     company_name: str,
     token: str,
-    limit: int = 30,
+    limit: int = 20,
+    instagram_url: str | None = None,
+    tiktok_url: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Run all 4 scrapers in parallel and return combined dict."""
+    """Run scrapers in parallel. Instagram/TikTok only run if account URL provided."""
     instagram, tiktok, threads, youtube = await asyncio.gather(
-        fetch_instagram_posts(company_name, token, limit),
+        fetch_instagram_posts(company_name, token, limit, instagram_url=instagram_url),
         fetch_tiktok_posts(company_name, token, limit),
         fetch_threads_posts(company_name, token, limit),
         fetch_youtube_videos(company_name, token, limit),

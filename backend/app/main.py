@@ -26,6 +26,8 @@ from . import ci as ci_client
 from . import gr_sources as gr_client
 from .pdf import generate_report
 
+_EMPTY_SOCIAL = {"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -439,7 +441,7 @@ def _compute_ceo_view(
             gd = growth_map.get(cat_key)
             for risk in (cat.get("risks") or []):
                 text = (risk.get("text") if isinstance(risk, dict) else str(risk) or "").strip()
-                if not text:
+                if not text or text.startswith("Анализ недоступен") or "Error code:" in text or "authentication_error" in text:
                     continue
                 all_risks.append({
                     "text": text,
@@ -693,7 +695,7 @@ async def company_detail(req: Request, company_id: str):
             return await supabase.rest_select(
                 table="emails",
                 access_token=effective_token,
-                select="id,from_email,position,text,created_at",
+                select="*",
                 order_by="created_at.desc",
                 query_params={"company_id": f"eq.{company_id}"},
             )
@@ -922,6 +924,10 @@ async def company_social(req: Request, company_id: str):
 
     company_name = company_rows[0]["name"]
 
+    # Optional social account handles passed from frontend (stored in localStorage)
+    instagram_url = req.query_params.get("instagram_url", "").strip()
+    tiktok_url    = req.query_params.get("tiktok_url", "").strip()
+
     if not settings.APIFY_TOKEN:
         return {"posts": [], "message": "Apify не настроен"}
 
@@ -929,7 +935,9 @@ async def company_social(req: Request, company_id: str):
         social_data = await apify_client.fetch_all_social(
             company_name=company_name,
             token=settings.APIFY_TOKEN,
-            limit=10,
+            limit=20,
+            instagram_url=instagram_url or None,
+            tiktok_url=tiktok_url or None,
         )
     except Exception as e:
         return {"posts": [], "message": str(e)}
@@ -1379,12 +1387,14 @@ async def risks_run(
     company_name = company_profile.get("name", "")
 
     # 2) Параллельно тянем все источники данных
+    # Соцсети в анализ не включаем — запускаются только вручную через кнопку
+    social_data = _EMPTY_SOCIAL
+
     (
-        social_data, news, yandex_news, vacancies,
+        news, yandex_news, vacancies,
         regulatory_news, market_news, gr_news, emails_rows,
         finance_data,
     ) = await asyncio.gather(
-        asyncio.sleep(0, result={"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}),
         news_client.fetch_news(company_name, limit=12, company=company_profile),
         news_client.fetch_yandex_news(company_name, limit=8, company=company_profile),
         hh_client.fetch_vacancies(company_name, limit=10),
@@ -1404,6 +1414,12 @@ async def risks_run(
     # Разбиваем social по платформам
     threads_posts = social_data.get("threads", [])
 
+    # Фильтруем сигналы с низким confidence score (< 40) из AI-анализа
+    reliable_emails = [
+        e for e in emails_rows
+        if e.get("confidence_score") is None or (e.get("confidence_score") or 0) >= 40
+    ]
+
     # Сортируем emails по типу должности; неклассифицированные попадают во все категории
     def _emails_by_type(emails: list[dict], keywords: list[str]) -> list[dict]:
         kw = [k.lower() for k in keywords]
@@ -1413,15 +1429,15 @@ async def risks_run(
         seen = {id(e) for e in matched}
         return matched + [e for e in unmatched if id(e) not in seen]
 
-    hr_emails = _emails_by_type(emails_rows, ["hr", "кадр", "персонал", "human"])
-    pr_emails = _emails_by_type(emails_rows, ["pr", "маркетинг", "marketing", "коммуникац", "медиа"])
-    gr_emails = _emails_by_type(emails_rows, ["gr", "юрид", "legal", "compliance", "регулятор", "government"])
+    hr_emails = _emails_by_type(reliable_emails, ["hr", "кадр", "персонал", "human"])
+    pr_emails = _emails_by_type(reliable_emails, ["pr", "маркетинг", "marketing", "коммуникац", "медиа"])
+    gr_emails = _emails_by_type(reliable_emails, ["gr", "юрид", "legal", "compliance", "регулятор", "government"])
 
     # Emails с нераспознанной должностью — добавляем отдельным блоком
     classified = set()
     for lst in (hr_emails, pr_emails, gr_emails):
         classified.update(id(e) for e in lst)
-    other_emails = [e for e in emails_rows if id(e) not in classified and (e.get("position") or "").strip()]
+    other_emails = [e for e in reliable_emails if id(e) not in classified and (e.get("position") or "").strip()]
     # Добавляем other_emails во все три категории чтобы Claude сам решил куда отнести
     hr_emails = hr_emails + other_emails
     pr_emails = pr_emails + other_emails
@@ -1682,7 +1698,7 @@ async def api_emails(req: Request, company_id: str):
         rows = await supabase.rest_select(
             table="emails",
             access_token=effective_token,
-            select="id,from_email,position,text,created_at",
+            select="*",
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         )
@@ -1699,11 +1715,19 @@ async def emails_add(
     from_email: str = Form(""),
     position: str = Form(""),
     text: str = Form(...),
+    certainty: str = Form("unknown"),
+    confirmed_by_others: str = Form("unknown"),
+    source_type: str = Form("observation"),
 ):
     user = await get_current_user(req)
     access_token, _ = _get_tokens(req)
     if not user or not access_token:
         return RedirectResponse(url="/login", status_code=302)
+
+    certainty_score = {"confident": 40, "uncertain": 0, "unknown": 15}.get(certainty, 15)
+    confirmed_score = {"yes": 35, "no": 0, "unknown": 10}.get(confirmed_by_others, 10)
+    source_score = {"experience": 25, "observation": 15, "rumor": 5}.get(source_type, 10)
+    confidence_score = certainty_score + confirmed_score + source_score
 
     await supabase.rest_insert(
         table="emails",
@@ -1713,6 +1737,10 @@ async def emails_add(
             "from_email": from_email,
             "position": position,
             "text": text,
+            "certainty": certainty,
+            "confirmed_by_others": confirmed_by_others,
+            "source_type": source_type,
+            "confidence_score": confidence_score,
         },
     )
     return RedirectResponse(url=f"/companies/{company_id}?msg=email_added", status_code=302)

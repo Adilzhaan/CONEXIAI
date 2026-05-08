@@ -188,54 +188,52 @@ async def fetch_gdelt_news(company_name: str, limit: int = 8) -> list[dict[str, 
     return await _fetch_gdelt(company_name, limit)
 
 
+import re as _re
+
 def _build_match_rules(company_name: str, ceo_name: str = "") -> dict:
-    """
-    Build match rules for a company name:
-    - full_phrase: the whole name must appear as a substring (primary check)
-    - all_words: all significant words (len >= 4) must appear (AND logic)
-    - any_words: any significant word — only used as last-resort fallback
-    - ceo_words: CEO name words for separate check
-    """
     name_lower = company_name.lower().strip()
-    words = [w for w in name_lower.split() if len(w) >= 4]
+    # Significant words: 4+ chars, skip generic stop words
+    _stop = {"group", "corp", "company", "limited", "holding", "казахстан", "kazakhstan"}
+    words = [w for w in name_lower.split() if len(w) >= 4 and w not in _stop]
+    all_words_incl_short = [w for w in name_lower.split() if len(w) >= 3]
 
     rules: dict = {
         "full_phrase": name_lower,
         "all_words": words,
-        "any_words": [w for w in name_lower.split() if len(w) >= 3],
+        "all_words_incl_short": all_words_incl_short,
         "ceo_words": [],
     }
     if ceo_name:
-        ceo_words = [w.lower() for w in ceo_name.split() if len(w) >= 4]
-        rules["ceo_words"] = ceo_words
+        rules["ceo_words"] = [w.lower() for w in ceo_name.split() if len(w) >= 4]
     return rules
+
+
+def _word_in_text(word: str, text: str) -> bool:
+    """Check word appears as whole word (not substring of another word)."""
+    return bool(_re.search(r'(?<![а-яёa-z])' + _re.escape(word) + r'(?![а-яёa-z])', text))
 
 
 def _is_relevant(title: str, link: str, source: str, rules: dict, preferred_lower: list[str]) -> bool:
     t = title.lower()
 
-    # Preferred source → always include
-    if any(p in source or p in link.lower() for p in preferred_lower):
-        return True
-
-    # Full company name as substring (most reliable)
+    # Full company name as exact phrase
     if rules["full_phrase"] and rules["full_phrase"] in t:
         return True
 
-    # All significant words present (AND logic) — catches "BI Group KZ" etc.
+    # All significant words present as whole words (AND logic)
     all_words = rules["all_words"]
-    if len(all_words) >= 2 and all(w in t for w in all_words):
+    if len(all_words) >= 2 and all(_word_in_text(w, t) for w in all_words):
         return True
 
-    # Single-word company name → just check that one word (already covered by full_phrase)
-    if len(all_words) == 1 and all_words[0] in t:
-        return True
+    # Single unique word name → whole-word check only
+    if len(all_words) == 1 and _word_in_text(all_words[0], t):
+        # Extra guard: skip if title is very generic (< 30 chars, no company context)
+        if len(t) > 25:
+            return True
 
-    # CEO name: all CEO words present
+    # CEO name: all words present as whole words
     ceo = rules["ceo_words"]
-    if len(ceo) >= 2 and all(w in t for w in ceo):
-        return True
-    if len(ceo) == 1 and ceo[0] in t:
+    if len(ceo) >= 2 and all(_word_in_text(w, t) for w in ceo):
         return True
 
     return False
@@ -244,16 +242,13 @@ def _is_relevant(title: str, link: str, source: str, rules: dict, preferred_lowe
 def _filter_relevant(
     items: list[dict[str, Any]],
     rules: dict,
-    preferred_sources: list[str],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    preferred_lower = [s.lower() for s in preferred_sources]
-    relevant, other = [], []
-    for item in items:
-        if _is_relevant(item["title"], item.get("link", ""), item.get("source", ""), rules, preferred_lower):
-            relevant.append(item)
-        else:
-            other.append(item)
-    return relevant, other
+    preferred_sources: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return only relevant items — no fallback to irrelevant ones."""
+    return [
+        item for item in items
+        if _is_relevant(item["title"], item.get("link", ""), item.get("source", ""), rules, preferred_sources or [])
+    ]
 
 
 async def fetch_news(
@@ -305,12 +300,9 @@ async def fetch_news(
                 seen.add(key)
                 all_items.append(item)
 
-    # Filter: relevant first, then fill with others if not enough
     rules = _build_match_rules(company_name, ceo_name)
-    relevant, other = _filter_relevant(all_items, rules, list(news_sources))
-
-    combined = relevant + other
-    return combined[:limit * 2]
+    relevant = _filter_relevant(all_items, rules, list(news_sources))
+    return relevant[:limit * 2]
 
 
 async def fetch_yandex_news(
@@ -338,8 +330,8 @@ async def fetch_yandex_news(
                 all_items.append(item)
 
     rules = _build_match_rules(company_name, ceo_name)
-    relevant, other = _filter_relevant(all_items, rules, list(news_sources))
-    return (relevant + other)[:limit]
+    relevant = _filter_relevant(all_items, rules, list(news_sources))
+    return relevant[:limit]
 
 
 async def fetch_regulatory_news(
@@ -371,8 +363,8 @@ async def fetch_regulatory_news(
                 items.append(item)
 
     rules = _build_match_rules(company_name, (co.get("ceo_name") or "").strip())
-    relevant, other = _filter_relevant(items, rules, [])
-    return (relevant + other)[:limit]
+    relevant = _filter_relevant(items, rules)
+    return relevant[:limit]
 
 
 async def fetch_market_news(
@@ -403,5 +395,5 @@ async def fetch_market_news(
                 items.append(item)
 
     rules = _build_match_rules(company_name, (co.get("ceo_name") or "").strip())
-    relevant, other = _filter_relevant(items, rules, [])
-    return (relevant + other)[:limit]
+    relevant = _filter_relevant(items, rules)
+    return relevant[:limit]
