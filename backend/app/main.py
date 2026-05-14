@@ -685,6 +685,15 @@ async def signal_page(req: Request):
 
 @app.get("/companies/{company_id}", response_class=HTMLResponse)
 async def company_detail(req: Request, company_id: str):
+    try:
+        return await _company_detail_inner(req, company_id)
+    except Exception:
+        import traceback
+        logger.error("company_detail ERROR:\n%s", traceback.format_exc())
+        raise
+
+
+async def _company_detail_inner(req: Request, company_id: str):
     user = await get_current_user(req)
     access_token, _ = _get_tokens(req)
     if not user or not access_token:
