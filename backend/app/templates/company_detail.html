@@ -20,17 +20,8 @@
       </div>
     </div>
     <nav class="sidebar-nav">
-      <a href="/dashboard" class="sidebar-item">
-        <span class="sidebar-item-icon">⊞</span> Command Center
-      </a>
       <a href="/companies/{{ company.id }}" class="sidebar-item active">
         <span class="sidebar-item-icon">◎</span> Risk Intelligence
-      </a>
-      <a href="/companies/{{ company.id }}/market" class="sidebar-item">
-        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis
-      </a>
-      <a href="/companies/{{ company.id }}/ci" class="sidebar-item">
-        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor
       </a>
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
@@ -47,34 +38,40 @@
 
     <!-- Topbar -->
     <div class="sidebar-topbar">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
-          {{ company.name[0] | upper }}
-        </div>
-        <div>
-          <div style="font-size:14px;font-weight:700">{{ company.name }}</div>
-          <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px">
-            {{ company.ceo_email }}
-            <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;display:inline-block"></span>
-            <span>Live</span>
-            {% if monitor_snapshot %}
-              <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
-              <span title="Последняя проверка новостей">
-                Проверено:
-                <span style="color:var(--text)">{{ monitor_snapshot.last_checked_at[:16] | replace('T',' ') if monitor_snapshot.last_checked_at else '—' }}</span>
-              </span>
-              {% if latest %}
-                <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
-                <span title="Последний анализ рисков">
-                  Анализ:
-                  <span style="color:var(--text)">{{ latest.created_at[:16] | replace('T',' ') }}</span>
-                </span>
+      <div class="co-switcher" id="coSwitcher">
+        <button class="co-switcher-btn" onclick="toggleCoDropdown(event)">
+          <div class="co-avatar">{{ company.name[0] | upper }}</div>
+          <div class="co-switcher-info">
+            <div class="co-switcher-name">{{ company.name }}</div>
+            <div class="co-switcher-sub">
+              {% if monitor_snapshot %}
+                Проверено: {{ monitor_snapshot.last_checked_at[:10] | replace('T',' ') if monitor_snapshot.last_checked_at else '—' }}
+              {% else %}
+                Мониторинг не запущен
               {% endif %}
-            {% else %}
-              <span style="width:1px;height:10px;background:var(--border);display:inline-block"></span>
-              <span style="color:var(--text-dim)">Мониторинг ещё не запускался</span>
-            {% endif %}
+            </div>
           </div>
+          <svg class="co-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="co-dropdown">
+          <div class="co-drop-item current">
+            <div class="co-avatar" style="width:22px;height:22px;font-size:10px;border-radius:6px">{{ company.name[0] | upper }}</div>
+            {{ company.name }}
+          </div>
+          {% if all_companies %}
+            <div class="co-drop-divider"></div>
+            {% for c in all_companies %}
+              <a href="/companies/{{ c.id }}" class="co-drop-item">
+                <div class="co-avatar" style="width:22px;height:22px;font-size:10px;border-radius:6px;background:linear-gradient(135deg,#4f46e5,#7c3aed)">{{ c.name[0] | upper }}</div>
+                {{ c.name }}
+              </a>
+            {% endfor %}
+          {% endif %}
+          <div class="co-drop-divider"></div>
+          <a href="/dashboard" class="co-drop-item co-drop-cc">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Command Center
+          </a>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -92,6 +89,43 @@
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
       <style>
+        /* ── Company switcher dropdown ── */
+        .co-switcher { position:relative; }
+        .co-switcher-btn {
+          display:flex; align-items:center; gap:10px; padding:6px 10px 6px 6px;
+          border-radius:10px; border:1px solid var(--border); background:var(--surface);
+          cursor:pointer; transition:background 0.15s, border-color 0.15s;
+        }
+        .co-switcher-btn:hover { background:var(--surface-hover); border-color:rgba(255,255,255,0.15); }
+        .co-avatar {
+          width:32px; height:32px; border-radius:9px; flex-shrink:0;
+          background:linear-gradient(135deg,#7c3aed,#5b21b6);
+          display:flex; align-items:center; justify-content:center;
+          font-size:14px; font-weight:800; color:#fff;
+        }
+        .co-switcher-info { text-align:left; line-height:1.2; }
+        .co-switcher-name { font-size:13px; font-weight:700; color:var(--text); }
+        .co-switcher-sub { font-size:10px; color:var(--text-muted); }
+        .co-chevron { color:var(--text-muted); transition:transform 0.2s; flex-shrink:0; }
+        .co-switcher.open .co-chevron { transform:rotate(180deg); }
+        .co-dropdown {
+          display:none; position:absolute; top:calc(100% + 6px); left:0; min-width:220px;
+          background:rgba(18,19,38,0.97); border:1px solid var(--border);
+          border-radius:12px; padding:6px; z-index:200;
+          box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(16px);
+        }
+        .co-switcher.open .co-dropdown { display:block; }
+        .co-drop-item {
+          display:flex; align-items:center; gap:9px; padding:8px 10px;
+          border-radius:8px; font-size:13px; color:var(--text-muted);
+          text-decoration:none; cursor:pointer; transition:background 0.12s, color 0.12s;
+        }
+        .co-drop-item:hover { background:var(--surface-hover); color:var(--text); }
+        .co-drop-item.current { color:var(--text); font-weight:600; pointer-events:none; }
+        .co-drop-divider { height:1px; background:var(--border); margin:4px 0; }
+        .co-drop-cc { color:var(--accent); }
+        .co-drop-cc:hover { background:var(--accent-light); color:var(--accent); }
+
         /* ── Tabs ── */
         .cd-tabs {
           display:flex; gap:0; border-bottom:1px solid var(--border);
@@ -641,9 +675,17 @@
           {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
           {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
         </button>
-        <button class="cd-tab" onclick="showTab('social', this)">
-          Соцсети
+        <button class="cd-tab" onclick="showTab('market', this)">
+          Рынок
         </button>
+        <button class="cd-tab" onclick="showTab('ci', this)">
+          CI Monitor
+        </button>
+        {% if is_admin %}
+        <button class="cd-tab" onclick="showTab('integrations', this)">
+          Интеграции
+        </button>
+        {% endif %}
       </div>
 
       <!-- ══ OVERVIEW TAB ══ -->
@@ -1191,35 +1233,13 @@
           <div class="mon-sec-hdr">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
             Текущие новости
-            {% if company_news %}<span>{{ company_news|length }}</span>{% endif %}
+            <span id="news-count"></span>
           </div>
-          <div class="mon-feed">
-            {% if company_news %}
-              {% for n in company_news %}
-                <div class="mon-item">
-                  <div class="mon-icon mon-icon-known" style="font-size:11px">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
-                  </div>
-                  <div class="mon-body">
-                    <a href="{{ n.link }}" target="_blank" rel="noopener" class="mon-title">{{ n.title }}</a>
-                    <div class="mon-meta">
-                      {% set src = n.source or '' %}
-                      {% if 'reddit' in src.lower() %}
-                        <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">
-                          <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="10"/><path fill="#fff" d="M16.67 10a1.46 1.46 0 0 0-2.47-1 7.12 7.12 0 0 0-3.85-1.23l.65-3.08 2.13.45a1 1 0 1 0 .14-.61l-2.38-.5a.19.19 0 0 0-.22.14l-.73 3.44a7.14 7.14 0 0 0-3.89 1.23 1.46 1.46 0 1 0-1.61 2.39 2.87 2.87 0 0 0 0 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 0 0 0-.44 1.46 1.46 0 0 0 .57-1.17zm-10 1a1 1 0 1 1 1 1 1 1 0 0 1-1-1zm5.58 2.65a3.56 3.56 0 0 1-2.25.65 3.56 3.56 0 0 1-2.25-.65.19.19 0 0 1 .27-.27 3.2 3.2 0 0 0 2 .54 3.2 3.2 0 0 0 2-.54.19.19 0 0 1 .27.27zm-.16-1.65a1 1 0 1 1 1-1 1 1 0 0 1-1 1z"/></svg>
-                          {{ src }}
-                        </span>
-                      {% elif src %}
-                        <span class="mon-badge mon-badge-src">{{ src }}</span>
-                      {% endif %}
-                      {% if n.pub_date %}<span>·</span><span>{{ n.pub_date }}</span>{% endif %}
-                    </div>
-                  </div>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Новостей не найдено</div>
-            {% endif %}
+          <div class="mon-feed" id="live-news-feed">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="width:18px;height:18px;border:2px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
+              Загружаем новости…
+            </div>
           </div>
 
           <!-- ─── Monitor log ─── -->
@@ -1262,39 +1282,6 @@
         </div>
       </div>
 
-      <!-- ══ SOCIAL TAB ══ -->
-      <div class="cd-panel" id="tab-social">
-        <div class="panel-hdr">
-          <div class="panel-hdr-title">Соцсети</div>
-          <button onclick="loadSocial()" id="social-refresh-btn" class="btn btn-primary btn-sm">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Запустить сканирование
-          </button>
-        </div>
-
-        <!-- Account inputs -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div>
-            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);display:block;margin-bottom:5px">📸 Instagram аккаунт</label>
-            <input id="social-instagram-url" type="text" placeholder="username или https://instagram.com/..."
-              style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);color:#fff;font-size:12px;outline:none;font-family:inherit"
-              onfocus="this.style.borderColor='#e1306c'" onblur="this.style.borderColor='rgba(255,255,255,0.10)'"
-              oninput="saveSocialAccounts()" />
-          </div>
-          <div>
-            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);display:block;margin-bottom:5px">🎵 TikTok · 🧵 Threads · ▶️ YouTube</label>
-            <div style="padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);font-size:11px;color:var(--text-muted)">Поиск по названию компании автоматически</div>
-          </div>
-        </div>
-
-        <div id="social-feed">
-          <div class="empty-box">
-            <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
-            <div class="empty-box-title">Данных пока нет</div>
-            <div class="empty-box-sub">Нажмите «Запустить сканирование» — займёт 1–3 минуты</div>
-          </div>
-        </div>
-      </div>
 
       <!-- ══ TEAM TAB ══ -->
       <div class="cd-panel" id="tab-team">
@@ -1796,17 +1783,167 @@
 
       </div>{# end history #}
 
+      <!-- ══ INTEGRATIONS TAB ══ -->
+      <div class="cd-panel" id="tab-integrations">
+      <style>
+        .int-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:20px; padding:28px; }
+        .int-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; }
+        .int-card-hdr { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+        .int-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+        .int-title { font-size:14px; font-weight:700; }
+        .int-subtitle { font-size:11px; color:var(--text-muted); margin-top:1px; }
+        .int-field { margin-bottom:12px; }
+        .int-field label { display:block; font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:4px; letter-spacing:0.04em; text-transform:uppercase; }
+        .int-field input { width:100%; padding:8px 12px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; font-family:inherit; }
+        .int-field input:focus { outline:none; border-color:var(--accent); }
+        .int-save-btn { width:100%; padding:9px; border-radius:8px; border:none; background:var(--accent); color:#fff; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s; }
+        .int-save-btn:hover { background:var(--accent-hover); }
+        .int-status { font-size:11px; margin-top:8px; text-align:center; min-height:16px; }
+        .int-enabled { display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13px; color:var(--text-muted); }
+        .int-enabled input[type=checkbox] { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; }
+      </style>
+      <div style="padding:20px 28px 0; font-size:13px; color:var(--text-muted)">
+        Подключите каналы чтобы AI-агент мог выполнять антикризисные действия автоматически.
+      </div>
+      <div class="int-grid">
+
+        <!-- Telegram -->
+        <div class="int-card">
+          <div class="int-card-hdr">
+            <div class="int-icon" style="background:rgba(0,136,204,0.15)">✈️</div>
+            <div>
+              <div class="int-title">Telegram</div>
+              <div class="int-subtitle">Уведомления в чат или группу</div>
+            </div>
+          </div>
+          <div class="int-field">
+            <label>Bot Token</label>
+            <input type="password" id="tg-token" placeholder="1234567890:AAH..." />
+          </div>
+          <div class="int-field">
+            <label>Chat ID</label>
+            <input type="text" id="tg-chat" placeholder="-100123456789 или @username" />
+          </div>
+          <div class="int-enabled">
+            <input type="checkbox" id="tg-enabled" checked />
+            <label for="tg-enabled">Включить</label>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="int-save-btn" onclick="saveIntegration('telegram')">Сохранить</button>
+            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('telegram')">Тест</button>
+          </div>
+          <div class="int-status" id="tg-status"></div>
+        </div>
+
+        <!-- Slack -->
+        <div class="int-card">
+          <div class="int-card-hdr">
+            <div class="int-icon" style="background:rgba(74,21,75,0.20)">💬</div>
+            <div>
+              <div class="int-title">Slack</div>
+              <div class="int-subtitle">Incoming Webhook → канал команды</div>
+            </div>
+          </div>
+          <div class="int-field">
+            <label>Webhook URL</label>
+            <input type="password" id="slack-webhook" placeholder="https://hooks.slack.com/services/..." />
+          </div>
+          <div class="int-field">
+            <label>Канал (необязательно)</label>
+            <input type="text" id="slack-channel" placeholder="#crisis-alerts" />
+          </div>
+          <div class="int-enabled">
+            <input type="checkbox" id="slack-enabled" checked />
+            <label for="slack-enabled">Включить</label>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="int-save-btn" onclick="saveIntegration('slack')">Сохранить</button>
+            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('slack')">Тест</button>
+          </div>
+          <div class="int-status" id="slack-status"></div>
+        </div>
+
+        <!-- Email -->
+        <div class="int-card">
+          <div class="int-card-hdr">
+            <div class="int-icon" style="background:rgba(52,211,153,0.12)">📧</div>
+            <div>
+              <div class="int-title">Email (SMTP)</div>
+              <div class="int-subtitle">Gmail App Password или корп. SMTP</div>
+            </div>
+          </div>
+          <div class="int-field">
+            <label>Email отправителя</label>
+            <input type="email" id="email-user" placeholder="you@gmail.com" />
+          </div>
+          <div class="int-field">
+            <label>App Password / SMTP пароль</label>
+            <input type="password" id="email-pass" placeholder="xxxx xxxx xxxx xxxx" />
+          </div>
+          <div class="int-field">
+            <label>Email получателя по умолчанию</label>
+            <input type="email" id="email-to" placeholder="ceo@company.com" />
+          </div>
+          <div class="int-field">
+            <label>SMTP хост (необязательно)</label>
+            <input type="text" id="email-host" placeholder="smtp.gmail.com" />
+          </div>
+          <div class="int-enabled">
+            <input type="checkbox" id="email-enabled" checked />
+            <label for="email-enabled">Включить</label>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="int-save-btn" onclick="saveIntegration('email')">Сохранить</button>
+            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('email')">Тест</button>
+          </div>
+          <div class="int-status" id="email-status"></div>
+        </div>
+
+      </div>
+      </div>{# end integrations #}
+
+      <!-- ══ MARKET TAB ══ -->
+      <div class="cd-panel" id="tab-market">
+        <iframe id="market-iframe"
+                style="width:100%;border:none;min-height:calc(100vh - 120px);display:block"
+                src="about:blank"
+                data-src="/companies/{{ company.id }}/market?embed=1">
+        </iframe>
+      </div>
+
+      <!-- ══ CI TAB ══ -->
+      <div class="cd-panel" id="tab-ci">
+        <iframe id="ci-iframe"
+                style="width:100%;border:none;min-height:calc(100vh - 120px);display:block"
+                src="about:blank"
+                data-src="/companies/{{ company.id }}/ci?embed=1">
+        </iframe>
+      </div>
+
     </div>
   </div>
 </div>
 
 <script>
 // ── Tabs ──
+const _iframeLoaded = {};
+const _tabLoaded = {};
 function showTab(name, btn) {
   document.querySelectorAll('.cd-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.cd-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
+  // Lazy-load iframe tabs on first open
+  const iframe = document.querySelector(`#tab-${name} iframe[data-src]`);
+  if (iframe && !_iframeLoaded[name]) {
+    _iframeLoaded[name] = true;
+    iframe.src = iframe.dataset.src;
+  }
+  // Load integrations on first open
+  if (name === 'integrations' && !_tabLoaded.integrations) {
+    _tabLoaded.integrations = true;
+    loadIntegrations();
+  }
 }
 
 const riskRuns = {{ risk_runs | tojson | safe }};
@@ -2201,5 +2338,141 @@ async function doCleanup(mode, value) {
   }
 }
 loadSocialAccounts();
+
+// ── Integrations ──
+async function testIntegration(provider) {
+  const statusEl = document.getElementById(`${provider === 'telegram' ? 'tg' : provider}-status`);
+  statusEl.style.color = 'var(--text-muted)';
+  statusEl.textContent = 'Отправляем тест…';
+  try {
+    const fd = new FormData();
+    fd.append('provider', provider);
+    const r = await fetch('/companies/{{ company.id }}/integrations/test', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.style.color = '#34d399';
+      statusEl.textContent = '✓ Сообщение отправлено!';
+    } else {
+      statusEl.style.color = '#f87171';
+      statusEl.textContent = 'Ошибка: ' + (data.error || 'unknown');
+    }
+  } catch(e) {
+    statusEl.style.color = '#f87171';
+    statusEl.textContent = 'Ошибка сети';
+  }
+}
+
+async function saveIntegration(provider) {
+  let config = {};
+  let enabled = true;
+  if (provider === 'telegram') {
+    config = { token: document.getElementById('tg-token').value.trim(), chat_id: document.getElementById('tg-chat').value.trim() };
+    enabled = document.getElementById('tg-enabled').checked;
+  } else if (provider === 'slack') {
+    config = { webhook_url: document.getElementById('slack-webhook').value.trim(), channel: document.getElementById('slack-channel').value.trim() };
+    enabled = document.getElementById('slack-enabled').checked;
+  } else if (provider === 'email') {
+    config = {
+      smtp_user: document.getElementById('email-user').value.trim(),
+      smtp_password: document.getElementById('email-pass').value.trim(),
+      default_to: document.getElementById('email-to').value.trim(),
+      smtp_host: document.getElementById('email-host').value.trim() || 'smtp.gmail.com',
+      smtp_port: 587,
+    };
+    enabled = document.getElementById('email-enabled').checked;
+  }
+  const statusEl = document.getElementById(`${provider === 'telegram' ? 'tg' : provider}-status`);
+  statusEl.style.color = 'var(--text-muted)';
+  statusEl.textContent = 'Сохраняем…';
+  try {
+    const fd = new FormData();
+    fd.append('provider', provider);
+    fd.append('config_json', JSON.stringify(config));
+    fd.append('enabled', enabled ? 'true' : 'false');
+    const r = await fetch('/companies/{{ company.id }}/integrations/save', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.style.color = '#34d399';
+      statusEl.textContent = '✓ Сохранено';
+    } else {
+      statusEl.style.color = '#f87171';
+      statusEl.textContent = 'Ошибка: ' + (data.error || 'unknown');
+    }
+  } catch(e) {
+    statusEl.style.color = '#f87171';
+    statusEl.textContent = 'Ошибка сети';
+  }
+}
+
+// Load saved integrations into fields on tab open
+async function loadIntegrations() {
+  try {
+    const r = await fetch('/companies/{{ company.id }}/integrations');
+    const data = await r.json();
+    for (const item of (data.integrations || [])) {
+      const cfg = item.config || {};
+      if (item.provider === 'telegram') {
+        if (cfg.token) document.getElementById('tg-token').value = cfg.token;
+        if (cfg.chat_id) document.getElementById('tg-chat').value = cfg.chat_id;
+        document.getElementById('tg-enabled').checked = item.enabled !== false;
+      } else if (item.provider === 'slack') {
+        if (cfg.webhook_url) document.getElementById('slack-webhook').value = cfg.webhook_url;
+        if (cfg.channel) document.getElementById('slack-channel').value = cfg.channel;
+        document.getElementById('slack-enabled').checked = item.enabled !== false;
+      } else if (item.provider === 'email') {
+        if (cfg.smtp_user) document.getElementById('email-user').value = cfg.smtp_user;
+        if (cfg.smtp_password) document.getElementById('email-pass').value = cfg.smtp_password;
+        if (cfg.default_to) document.getElementById('email-to').value = cfg.default_to;
+        if (cfg.smtp_host) document.getElementById('email-host').value = cfg.smtp_host;
+        document.getElementById('email-enabled').checked = item.enabled !== false;
+      }
+    }
+  } catch(e) {}
+}
+
+// Company switcher dropdown
+function toggleCoDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('coSwitcher').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+  document.getElementById('coSwitcher')?.classList.remove('open');
+});
+
+// Lazy-load news after page renders
+(async function loadLiveNews() {
+  const feed = document.getElementById('live-news-feed');
+  const countEl = document.getElementById('news-count');
+  if (!feed) return;
+  try {
+    const res = await fetch('/companies/{{ company.id }}/news');
+    const data = await res.json();
+    const items = data.news || [];
+    if (countEl) countEl.textContent = items.length || '';
+    if (!items.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Новостей не найдено</div>';
+      return;
+    }
+    feed.innerHTML = items.map(n => {
+      const src = n.source || '';
+      const isReddit = src.toLowerCase().includes('reddit');
+      const srcBadge = isReddit
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">${src}</span>`
+        : src ? `<span class="mon-badge mon-badge-src">${src}</span>` : '';
+      const date = n.pub_date ? `<span>·</span><span>${n.pub_date}</span>` : '';
+      return `<div class="mon-item">
+        <div class="mon-icon mon-icon-known" style="font-size:11px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
+        </div>
+        <div class="mon-body">
+          <a href="${n.link}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+          <div class="mon-meta">${srcBadge}${date}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    feed.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Ошибка загрузки новостей</div>';
+  }
+})();
 </script>
 {% endblock %}

@@ -11,10 +11,7 @@
       </a>
     </div>
     <nav class="sidebar-nav">
-      <a href="/dashboard" class="sidebar-item"><span class="sidebar-item-icon">⊞</span> Command Center</a>
       <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
-      <a href="/companies/{{ company.id }}/market" class="sidebar-item"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis</a>
-      <a href="/companies/{{ company.id }}/ci" class="sidebar-item"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor</a>
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item active"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center</a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
@@ -328,7 +325,7 @@
                       </span>
                     {% endif %}
                   </div>
-                  <div style="display:flex;gap:6px;flex-shrink:0">
+                  <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
                     <button class="delegate-btn {% if a.delegated_to %}done{% endif %}"
                             id="del-btn-{{ a.sc_id }}-{{ a.step_idx }}"
                             onclick="openDelegate('{{ a.sc_id }}', {{ a.step_idx }}, {{ a.action | tojson }})">
@@ -340,6 +337,13 @@
                             onclick="markComplete('{{ a.sc_id }}', {{ a.step_idx }}, this)">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                       {% if a.completed %}Выполнено{% else %}Выполнено{% endif %}
+                    </button>
+                    <button class="delegate-btn"
+                            id="agent-btn-{{ a.sc_id }}-{{ a.step_idx }}"
+                            onclick="runAgentStep('{{ a.sc_id }}', {{ a.step_idx }}, this)"
+                            title="Выполнить этот шаг через AI-агента">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+                      Агент
                     </button>
                   </div>
                 </div>
@@ -465,6 +469,20 @@
                 <span style="font-size:11px;color:var(--text-muted)" id="gen-meta"></span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- ══ AGENT LOG MODAL ══ -->
+        <div class="delegate-modal-overlay" id="agentLogModal" onclick="if(event.target===this)closeAgentLog()">
+          <div class="delegate-modal" style="max-width:480px">
+            <div class="delegate-modal-hdr">
+              <div>
+                <div class="delegate-modal-title">Лог выполнения агента</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Что сделал AI-агент</div>
+              </div>
+              <button onclick="closeAgentLog()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">×</button>
+            </div>
+            <div id="agent-log-body" style="padding:4px 0;max-height:400px;overflow-y:auto"></div>
           </div>
         </div>
 
@@ -661,6 +679,57 @@
       }
     } catch (e) { /* silent */ }
     finally { btn.disabled = false; }
+  }
+
+  // ── Agent execution ──
+  async function runAgentStep(scId, stepIdx, btn) {
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Выполняю…';
+
+    try {
+      const fd = new FormData();
+      fd.append('scenario_id', scId);
+      fd.append('step_index', stepIdx);
+      const res = await fetch(`/companies/${companyId}/crisis/agent/execute`, { method: 'POST', body: fd });
+      const data = await res.json();
+      showAgentLog([data]);
+    } catch(e) {
+      showAgentLog([{status:'error', logs:[{tool:'none', error: e.message}]}]);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+
+  function showAgentLog(results) {
+    let html = '';
+    for (const r of results) {
+      const step = r.step ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${r.step.action || ''}</div>` : '';
+      for (const log of (r.logs || [])) {
+        const ok = log.status !== 'error';
+        const icon = log.tool === 'send_telegram' ? '✈️' : log.tool === 'send_slack' ? '💬' : log.tool === 'send_email' ? '📧' : '📋';
+        const color = ok ? '#34d399' : '#f87171';
+        const summary = log.result?.summary || log.result?.to || log.result?.platform || log.error || '';
+        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
+          <span style="font-size:18px;flex-shrink:0">${icon}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:${color}">${ok ? '✓' : '✗'} ${log.tool}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${summary}</div>
+            ${log.input?.message ? `<div style="font-size:11px;color:var(--text);margin-top:4px;padding:6px 10px;background:rgba(255,255,255,0.05);border-radius:6px;line-height:1.5">${log.input.message.slice(0,300)}</div>` : ''}
+            ${log.input?.subject ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Тема: ${log.input.subject}</div>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+    document.getElementById('agent-log-body').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-muted)">Нет данных</div>';
+    document.getElementById('agentLogModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeAgentLog() {
+    document.getElementById('agentLogModal').classList.remove('open');
+    document.body.style.overflow = '';
   }
 
   // ── Scenario selector ──

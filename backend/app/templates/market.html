@@ -2,22 +2,19 @@
 {% block title %}Investment Market Analysis — {{ company.name }} — {{ app_name }}{% endblock %}
 
 {% block body %}
-<div class="sidebar-layout">
+{% if not embed %}<div class="sidebar-layout">
 
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div style="display:flex;align-items:center;gap:10px">
-        
+
         <a href="/dashboard" style="display:block;line-height:0">
           <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
         </a>
       </div>
     </div>
     <nav class="sidebar-nav">
-      <a href="/dashboard" class="sidebar-item">
-        <span class="sidebar-item-icon">⊞</span> Command Center
-      </a>
       <a href="/companies/{{ company.id }}" class="sidebar-item">
         <span class="sidebar-item-icon">◎</span> Risk Intelligence
       </a>
@@ -75,8 +72,9 @@
         <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
       </div>
     </div>
+  {% endif %}{# /embed topbar+sidebar #}
 
-    <div class="sidebar-wrap">
+    <div class="sidebar-wrap" {% if embed %}style="padding:24px 28px"{% endif %}>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
       <style>
@@ -1171,4 +1169,8 @@ if (IS_LOADING) {
   pollForData(30);
 }
 </script>
+{% if not embed %}
+  </div>{# sidebar-content #}
+</div>{# sidebar-layout #}
+{% endif %}
 {% endblock %}
