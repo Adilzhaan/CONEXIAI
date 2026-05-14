@@ -762,7 +762,6 @@ async def company_detail(req: Request, company_id: str):
                 query_params={"company_id": f"eq.{company_id}"},
             )
         except Exception:
-            # photo_url column may not exist yet — fallback without it
             try:
                 return await supabase.rest_select(
                     table="employees",
@@ -770,6 +769,28 @@ async def company_detail(req: Request, company_id: str):
                     select="id,full_name,email,position,department",
                     order_by="created_at.desc",
                     query_params={"company_id": f"eq.{company_id}"},
+                )
+            except Exception:
+                return []
+
+    async def _safe_risk_runs(token: str, cid: str):
+        try:
+            return await supabase.rest_select(
+                table="risk_runs",
+                access_token=token,
+                select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts",
+                order_by="created_at.desc",
+                query_params={"company_id": f"eq.{cid}"},
+            )
+        except Exception:
+            # social_posts column may not exist yet — fallback without it
+            try:
+                return await supabase.rest_select(
+                    table="risk_runs",
+                    access_token=token,
+                    select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios",
+                    order_by="created_at.desc",
+                    query_params={"company_id": f"eq.{cid}"},
                 )
             except Exception:
                 return []
@@ -788,13 +809,7 @@ async def company_detail(req: Request, company_id: str):
             order_by="name.asc",
         ),
         _get_employees(),
-        supabase.rest_select(
-            table="risk_runs",
-            access_token=effective_token,
-            select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts",
-            order_by="created_at.desc",
-            query_params={"company_id": f"eq.{company_id}"},
-        ),
+        _safe_risk_runs(effective_token, company_id),  # noqa: E501
         _safe_emails(),
         _safe_members(),
         _get_user_role(),
