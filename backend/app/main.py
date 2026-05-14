@@ -791,7 +791,7 @@ async def company_detail(req: Request, company_id: str):
         supabase.rest_select(
             table="risk_runs",
             access_token=effective_token,
-            select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios",
+            select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts",
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         ),
@@ -959,20 +959,26 @@ async def company_social(req: Request, company_id: str):
     company_name = company_rows[0]["name"]
 
     # Optional social account handles passed from frontend (stored in localStorage)
-    instagram_url = req.query_params.get("instagram_url", "").strip()
-    tiktok_url    = req.query_params.get("tiktok_url", "").strip()
+    instagram_url   = req.query_params.get("instagram_url", "").strip()
+    tiktok_url      = req.query_params.get("tiktok_url", "").strip()
+    platform_filter = req.query_params.get("platform", "").strip()  # e.g. "threads"
 
     if not settings.APIFY_TOKEN:
         return {"posts": [], "message": "Apify не настроен"}
 
     try:
-        social_data = await apify_client.fetch_all_social(
-            company_name=company_name,
-            token=settings.APIFY_TOKEN,
-            limit=20,
-            instagram_url=instagram_url or None,
-            tiktok_url=tiktok_url or None,
-        )
+        if platform_filter == "threads":
+            social_data = {"threads": await apify_client.fetch_threads_posts(
+                company_name, settings.APIFY_TOKEN, max_posts=20
+            )}
+        else:
+            social_data = await apify_client.fetch_all_social(
+                company_name=company_name,
+                token=settings.APIFY_TOKEN,
+                limit=20,
+                instagram_url=instagram_url or None,
+                tiktok_url=tiktok_url or None,
+            )
     except Exception as e:
         return {"posts": [], "message": str(e)}
 
@@ -1509,18 +1515,40 @@ async def risks_run(
         api_key=settings.ANTHROPIC_API_KEY,
     )
 
-    # 4) Сохраняем один финальный risk_run
+    # 4) Сохраняем один финальный risk_run (включая social_posts)
+    platform_map_save = {
+        "threads":   "Threads",
+        "instagram": "Instagram",
+        "tiktok":    "TikTok",
+        "youtube":   "YouTube",
+    }
+    all_social_posts = []
+    for platform, label in platform_map_save.items():
+        for p in social_data.get(platform, []):
+            text   = (p.get("text") or p.get("captionText") or p.get("title") or "").strip()
+            url    = (p.get("postUrl") or p.get("url") or "").strip()
+            author = (p.get("username") or p.get("author") or "").strip()
+            if text or url:
+                all_social_posts.append({
+                    "platform": platform,
+                    "label":    label,
+                    "author":   author,
+                    "text":     text[:400],
+                    "url":      url,
+                })
+
     await supabase.rest_insert(
         table="risk_runs",
         access_token=effective_token,
         row={
-            "company_id": company_id,
-            "status": "done",
-            "score": analysis["score"],
-            "advice": analysis["advice"],
-            "risks": analysis["risks"],
-            "categories": analysis["categories"],
-            "scenarios": analysis.get("scenarios", []),
+            "company_id":   company_id,
+            "status":       "done",
+            "score":        analysis["score"],
+            "advice":       analysis["advice"],
+            "risks":        analysis["risks"],
+            "categories":   analysis["categories"],
+            "scenarios":    analysis.get("scenarios", []),
+            "social_posts": all_social_posts,
         },
     )
 

@@ -98,7 +98,7 @@ async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, 
 
 async def _fetch_reddit(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
     """Search Reddit via Atom RSS feed — no auth required."""
-    query = company_name.replace('"', '').strip()
+    query = f'"{company_name.strip()}"'  # exact phrase search
     _NS = "http://www.w3.org/2005/Atom"
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -190,18 +190,33 @@ async def fetch_gdelt_news(company_name: str, limit: int = 8) -> list[dict[str, 
 
 import re as _re
 
-def _build_match_rules(company_name: str, ceo_name: str = "") -> dict:
+_GENERIC_WORDS = {"corp", "company", "limited", "holding", "казахстан", "kazakhstan", "llc", "ltd", "group", "груп"}
+
+
+def _build_match_rules(company_name: str, ceo_name: str = "", industry: str = "", location: str = "") -> dict:
     name_lower = company_name.lower().strip()
-    # Significant words: 4+ chars, skip generic stop words
-    _stop = {"group", "corp", "company", "limited", "holding", "казахстан", "kazakhstan"}
-    words = [w for w in name_lower.split() if len(w) >= 4 and w not in _stop]
-    all_words_incl_short = [w for w in name_lower.split() if len(w) >= 3]
+    parts = name_lower.split()
+
+    # Strong words: 4+ chars, not generic — used for AND-match
+    strong_words = [w for w in parts if len(w) >= 4 and w not in _GENERIC_WORDS]
+
+    # Context keywords from industry and location — used to disambiguate short names
+    context_words: list[str] = []
+    for field in (industry, location):
+        for w in field.lower().split():
+            cleaned = _re.sub(r"[^a-zа-яёa-z0-9]", "", w)
+            if len(cleaned) >= 4:
+                context_words.append(cleaned)
+
+    # Name is "weak" if it has no strong unique words (e.g. "BI Group", "AI Corp")
+    is_weak_name = len(strong_words) == 0
 
     rules: dict = {
-        "full_phrase": name_lower,
-        "all_words": words,
-        "all_words_incl_short": all_words_incl_short,
-        "ceo_words": [],
+        "full_phrase":    name_lower,
+        "strong_words":   strong_words,
+        "is_weak_name":   is_weak_name,
+        "context_words":  list(dict.fromkeys(context_words)),  # deduplicated
+        "ceo_words":      [],
     }
     if ceo_name:
         rules["ceo_words"] = [w.lower() for w in ceo_name.split() if len(w) >= 4]
@@ -215,21 +230,29 @@ def _word_in_text(word: str, text: str) -> bool:
 
 def _is_relevant(title: str, link: str, source: str, rules: dict, preferred_lower: list[str]) -> bool:
     t = title.lower()
+    phrase_match = rules["full_phrase"] and rules["full_phrase"] in t
 
-    # Full company name as exact phrase
-    if rules["full_phrase"] and rules["full_phrase"] in t:
+    # Weak name (e.g. "BI Group"): require exact phrase + at least one context word from industry/location
+    if rules["is_weak_name"]:
+        if not phrase_match:
+            return False
+        context = rules["context_words"]
+        if context and not any(w in t for w in context):
+            return False
         return True
 
-    # All significant words present as whole words (AND logic)
-    all_words = rules["all_words"]
-    if len(all_words) >= 2 and all(_word_in_text(w, t) for w in all_words):
+    # Strong name: exact phrase match is sufficient
+    if phrase_match:
         return True
 
-    # Single unique word name → whole-word check only
-    if len(all_words) == 1 and _word_in_text(all_words[0], t):
-        # Extra guard: skip if title is very generic (< 30 chars, no company context)
-        if len(t) > 25:
-            return True
+    # All strong words present as whole words — AND logic
+    strong = rules["strong_words"]
+    if len(strong) >= 2 and all(_word_in_text(w, t) for w in strong):
+        return True
+
+    # Single strong word — whole-word check with length guard
+    if len(strong) == 1 and _word_in_text(strong[0], t) and len(t) > 25:
+        return True
 
     # CEO name: all words present as whole words
     ceo = rules["ceo_words"]
@@ -284,7 +307,7 @@ async def fetch_news(
     tasks = [_fetch_by_query(q, limit) for q in queries]
     tasks += [
         _fetch_yahoo(exact_query, limit),
-        _fetch_gdelt(company_name, limit),
+        _fetch_gdelt(f'"{company_name}"', limit),
         _fetch_reddit(company_name, limit),
         gr_client.fetch_gr_news(company_name, categories=["media_kz", "media_global"], relevance_filter=True),
     ]
@@ -300,7 +323,8 @@ async def fetch_news(
                 seen.add(key)
                 all_items.append(item)
 
-    rules = _build_match_rules(company_name, ceo_name)
+    industry = (co.get("industry") or "").strip()
+    rules = _build_match_rules(company_name, ceo_name, industry=industry, location=location)
     relevant = _filter_relevant(all_items, rules, list(news_sources))
     return relevant[:limit * 2]
 
@@ -311,7 +335,9 @@ async def fetch_yandex_news(
     company: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     co = company or {}
-    ceo_name = (co.get("ceo_name") or "").strip()
+    ceo_name     = (co.get("ceo_name")  or "").strip()
+    industry     = (co.get("industry")  or "").strip()
+    location     = (co.get("location")  or "").strip()
     news_sources = co.get("news_sources") or []
 
     import asyncio
@@ -329,7 +355,7 @@ async def fetch_yandex_news(
                 seen.add(key)
                 all_items.append(item)
 
-    rules = _build_match_rules(company_name, ceo_name)
+    rules = _build_match_rules(company_name, ceo_name, industry=industry, location=location)
     relevant = _filter_relevant(all_items, rules, list(news_sources))
     return relevant[:limit]
 

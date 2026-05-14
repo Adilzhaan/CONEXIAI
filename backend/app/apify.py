@@ -34,9 +34,8 @@ async def close() -> None:
 # ──────────────────────────────────────────────
 
 def _keywords(company_name: str) -> list[str]:
-    """Extract meaningful keywords from company name (3+ chars, lowercase)."""
-    words = re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]{3,}", company_name)
-    # Add the full name too for exact match
+    """Extract meaningful keywords from company name (2+ chars, lowercase)."""
+    words = re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]{2,}", company_name)
     kw = [w.lower() for w in words]
     kw.append(company_name.lower())
     return list(dict.fromkeys(kw))  # deduplicate, preserve order
@@ -161,11 +160,10 @@ async def fetch_threads_posts(
     if not token:
         return []
 
-    kws = _keywords(company_name)
     url = f"{APIFY_BASE}/{ACTOR_THREADS}/run-sync-get-dataset-items?token={token}"
     payload = {
         "searchQuery": company_name,
-        "maxPosts":    max_posts,
+        "maxPosts":    max(max_posts, 10),  # minimum 10 required by actor
         "sort":        "top",
     }
 
@@ -173,22 +171,22 @@ async def fetch_threads_posts(
         r = await _http.post(url, json=payload)
         r.raise_for_status()
         items: list[dict] = r.json()
-        relevant = []
+        posts = []
         for item in items:
-            text = (
-                item.get("text") or item.get("caption") or
-                item.get("content") or item.get("body") or ""
-            )
-            if _is_relevant(text, kws):
-                relevant.append({
-                    "postUrl":  item.get("url") or item.get("postUrl", ""),
-                    "username": item.get("username") or item.get("author", ""),
-                    "text":     text[:500],
-                    "likes":    item.get("likeCount") or item.get("likes", 0),
-                    "platform": "threads",
-                })
-        logger.info("Threads: %d total → %d relevant for '%s'", len(items), len(relevant), company_name)
-        return relevant
+            text     = (item.get("captionText") or "").strip()
+            url_post = item.get("postUrl") or ""
+            author   = item.get("username") or ""
+            date     = item.get("takenAtFormatted") or ""
+            posts.append({
+                "postUrl":  url_post,
+                "username": author,
+                "text":     text[:500],
+                "likes":    item.get("likeCount", 0),
+                "date":     date,
+                "platform": "threads",
+            })
+        logger.info("Threads: %d posts for '%s'", len(posts), company_name)
+        return posts
     except Exception as e:
         logger.warning("Threads scraper failed: %s", e)
         return []
