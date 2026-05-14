@@ -289,11 +289,24 @@ async def fetch_news(
     co = company or {}
     ceo_name      = (co.get("ceo_name")      or "").strip()
     location      = (co.get("location")      or "").strip()
+    industry      = (co.get("industry")      or "").strip()
     news_sources  = co.get("news_sources")   or []
 
-    # Build targeted queries
     exact_query = f'"{company_name}"'
-    queries = [exact_query]
+
+    # For weak/ambiguous names (no unique words ≥4 chars), append context to query
+    _generic = _GENERIC_WORDS
+    parts = company_name.lower().split()
+    strong = [w for w in parts if len(w) >= 4 and w not in _generic]
+    if not strong and (industry or location):
+        ctx = industry.split()[0] if industry else location.split(",")[0].strip()
+        context_query = f'"{company_name}" {ctx}'
+    else:
+        context_query = exact_query
+
+    queries = [context_query]
+    if context_query != exact_query:
+        queries.append(exact_query)   # also try bare phrase as fallback
 
     if ceo_name:
         queries.append(f'"{ceo_name}"')
@@ -306,8 +319,8 @@ async def fetch_news(
     # Parallel fetch across all queries + sources
     tasks = [_fetch_by_query(q, limit) for q in queries]
     tasks += [
-        _fetch_yahoo(exact_query, limit),
-        _fetch_gdelt(f'"{company_name}"', limit),
+        _fetch_yahoo(context_query, limit),
+        _fetch_gdelt(context_query, limit),
         _fetch_reddit(company_name, limit),
         gr_client.fetch_gr_news(company_name, categories=["media_kz", "media_global"], relevance_filter=True),
     ]
@@ -341,7 +354,15 @@ async def fetch_yandex_news(
     news_sources = co.get("news_sources") or []
 
     import asyncio
-    tasks = [_fetch_yandex(f'"{company_name}"', limit)]
+    parts_y = company_name.lower().split()
+    strong_y = [w for w in parts_y if len(w) >= 4 and w not in _GENERIC_WORDS]
+    if not strong_y and (industry or location):
+        ctx_y = industry.split()[0] if industry else location.split(",")[0].strip()
+        yandex_query = f'"{company_name}" {ctx_y}'
+    else:
+        yandex_query = f'"{company_name}"'
+
+    tasks = [_fetch_yandex(yandex_query, limit)]
     if ceo_name:
         tasks.append(_fetch_yandex(f'"{ceo_name}"', limit // 2))
 
