@@ -1665,8 +1665,8 @@
                     {% else %}<span class="badge" style="font-size:10px">{{ em.position }}</span>{% endif %}
                   {% endif %}
                   {% if em.from_email %}<span style="font-size:12px;color:var(--text-muted)">{{ em.from_email }}</span>{% endif %}
-                  {% if em.confidence_score is not none %}
-                    {% set cs = em.confidence_score | int %}
+                  {% if em.confidence_score is defined and em.confidence_score is not none %}
+                    {% set cs = em.confidence_score | default(0) | int %}
                     {% if cs >= 70 %}{% set _cc = '#4ade80' %}{% set _cl = 'Подтверждено' %}
                     {% elif cs >= 40 %}{% set _cc = '#fbbf24' %}{% set _cl = 'Частично' %}
                     {% else %}{% set _cc = '#f87171' %}{% set _cl = 'Непроверено' %}{% endif %}
