@@ -1423,6 +1423,136 @@ async def monitor_run_now():
     return {"status": "started", "message": "Monitoring cycle started in background"}
 
 
+# ── Background analysis job tracker (in-memory, resets on deploy) ──
+_job_stages: dict[str, dict] = {}
+
+
+def _build_social_posts(social_data: dict) -> list[dict]:
+    posts = []
+    for platform, label in (("threads", "Threads"), ("instagram", "Instagram"), ("tiktok", "TikTok"), ("youtube", "YouTube")):
+        for p in social_data.get(platform, []):
+            text   = (p.get("text") or p.get("captionText") or p.get("title") or "").strip()
+            url    = (p.get("postUrl") or p.get("url") or "").strip()
+            author = (p.get("username") or p.get("author") or "").strip()
+            if text or url:
+                posts.append({"platform": platform, "label": label, "author": author, "text": text[:400], "url": url})
+    return posts
+
+
+async def _run_analysis_bg(
+    run_id: str,
+    company_name: str,
+    company_profile: dict,
+    employees: list,
+    emails_rows: list,
+) -> None:
+    def _set(stage: str, pct: int) -> None:
+        _job_stages[run_id] = {"stage": stage, "pct": pct}
+
+    try:
+        _set("Загружаем новости и данные…", 15)
+        news, yandex_news, vacancies, regulatory_news, market_news, gr_news, finance_data = await asyncio.gather(
+            news_client.fetch_news(company_name, limit=12, company=company_profile),
+            news_client.fetch_yandex_news(company_name, limit=8, company=company_profile),
+            hh_client.fetch_vacancies(company_name, limit=10),
+            news_client.fetch_regulatory_news(company_name, limit=6, company=company_profile),
+            news_client.fetch_market_news(company_name, limit=6, company=company_profile),
+            gr_client.fetch_gr_news_all(company_name, limit=20),
+            finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else asyncio.sleep(0, result={"found": False}),
+        )
+
+        _set("Загружаем соцсети (Threads, TikTok, YouTube…)", 40)
+        social_data = await (
+            apify_client.fetch_all_social(company_name, settings.APIFY_TOKEN, limit=15)
+            if settings.APIFY_TOKEN else asyncio.sleep(0, result=_EMPTY_SOCIAL)
+        )
+
+        threads_posts = social_data.get("threads", [])
+
+        reliable_emails = [e for e in emails_rows if e.get("confidence_score") is None or (e.get("confidence_score") or 0) >= 40]
+
+        def _by_type(emails: list, kws: list) -> list:
+            kw = [k.lower() for k in kws]
+            matched   = [e for e in emails if any(k in (e.get("position") or "").lower() for k in kw)]
+            unmatched = [e for e in emails if not (e.get("position") or "").strip()]
+            seen = {id(e) for e in matched}
+            return matched + [e for e in unmatched if id(e) not in seen]
+
+        hr_emails = _by_type(reliable_emails, ["hr", "кадр", "персонал", "human"])
+        pr_emails = _by_type(reliable_emails, ["pr", "маркетинг", "marketing", "коммуникац", "медиа"])
+        gr_emails = _by_type(reliable_emails, ["gr", "юрид", "legal", "compliance", "регулятор", "government"])
+        classified = {id(e) for lst in (hr_emails, pr_emails, gr_emails) for e in lst}
+        other = [e for e in reliable_emails if id(e) not in classified and (e.get("position") or "").strip()]
+        hr_emails += other; pr_emails += other; gr_emails += other
+
+        _set("AI анализирует риски…", 70)
+        analysis = await ai_client.analyze_company_risks(
+            company_name=company_name, employees=employees,
+            news=news, yandex_news=yandex_news, threads_posts=threads_posts,
+            social={"instagram": social_data.get("instagram", []), "tiktok": social_data.get("tiktok", []), "youtube": social_data.get("youtube", [])},
+            reviews=[], vacancies=vacancies,
+            regulatory_news=regulatory_news + gr_news, market_news=market_news,
+            finance=finance_data, hr_emails=hr_emails, pr_emails=pr_emails, gr_emails=gr_emails,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+
+        _set("Сохраняем результаты…", 92)
+        await supabase.rest_update_service(
+            path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            patch={
+                "status":       "done",
+                "score":        analysis["score"],
+                "advice":       analysis["advice"],
+                "risks":        analysis["risks"],
+                "categories":   analysis["categories"],
+                "scenarios":    analysis.get("scenarios", []),
+                "social_posts": _build_social_posts(social_data),
+            },
+        )
+        _job_stages[run_id] = {"stage": "Готово", "pct": 100, "done": True, "score": analysis["score"]}
+        logger.info("Background analysis done run_id=%s score=%s", run_id, analysis["score"])
+
+    except Exception:
+        import traceback
+        logger.error("Background analysis failed run_id=%s:\n%s", run_id, traceback.format_exc())
+        _job_stages[run_id] = {"stage": "Ошибка анализа", "pct": 0, "error": True}
+        try:
+            await supabase.rest_update_service(
+                path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                patch={"status": "error"},
+            )
+        except Exception:
+            pass
+
+
+@app.get("/risks/{run_id}/status")
+async def risk_run_status(run_id: str, req: Request):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    info = _job_stages.get(run_id)
+    if info:
+        status = "error" if info.get("error") else ("done" if info.get("done") else "running")
+        return {"status": status, **info}
+    # Not in memory (server restarted) — check DB
+    try:
+        rows = await supabase.rest_select_service(
+            table="risk_runs",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            select="status,score",
+            query_params={"id": f"eq.{run_id}"},
+        )
+        if rows:
+            r = rows[0]
+            db_status = r.get("status", "unknown")
+            return {"status": db_status, "pct": 100 if db_status == "done" else 0, "stage": db_status}
+    except Exception:
+        pass
+    return {"status": "unknown", "pct": 0, "stage": ""}
+
+
 @app.post("/risks/run")
 async def risks_run(
     req: Request,
@@ -1435,8 +1565,8 @@ async def risks_run(
 
     effective_token = getattr(req.state, "new_access_token", None) or access_token
 
-    # 1) Получаем полный профиль компании и список сотрудников параллельно
-    company_rows, employees = await asyncio.gather(
+    # Быстро: профиль компании + сотрудники + emails
+    company_rows, employees, emails_rows = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -1449,134 +1579,37 @@ async def risks_run(
             select="full_name,position,department",
             query_params={"company_id": f"eq.{company_id}"},
         ),
+        supabase.rest_select(
+            table="emails",
+            access_token=effective_token,
+            select="from_email,position,text,confidence_score",
+            order_by="created_at.desc",
+            query_params={"company_id": f"eq.{company_id}"},
+        ),
     )
     company_profile = company_rows[0] if company_rows else {}
     company_name = company_profile.get("name", "")
 
-    # 2) Параллельно тянем все источники данных включая соцсети
-    (
-        news, yandex_news, vacancies,
-        regulatory_news, market_news, gr_news, emails_rows,
-        finance_data, social_data,
-    ) = await asyncio.gather(
-        news_client.fetch_news(company_name, limit=12, company=company_profile),
-        news_client.fetch_yandex_news(company_name, limit=8, company=company_profile),
-        hh_client.fetch_vacancies(company_name, limit=10),
-        news_client.fetch_regulatory_news(company_name, limit=6, company=company_profile),
-        news_client.fetch_market_news(company_name, limit=6, company=company_profile),
-        gr_client.fetch_gr_news_all(company_name, limit=20),
-        supabase.rest_select(
-            table="emails",
-            access_token=effective_token,
-            select="from_email,position,text",
-            order_by="created_at.desc",
-            query_params={"company_id": f"eq.{company_id}"},
-        ),
-        finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else asyncio.sleep(0, result={"found": False}),
-        apify_client.fetch_all_social(company_name, settings.APIFY_TOKEN, limit=15) if settings.APIFY_TOKEN else asyncio.sleep(0, result=_EMPTY_SOCIAL),
-    )
-
-    # Разбиваем social по платформам
-    threads_posts = social_data.get("threads", [])
-
-    # Фильтруем сигналы с низким confidence score (< 40) из AI-анализа
-    reliable_emails = [
-        e for e in emails_rows
-        if e.get("confidence_score") is None or (e.get("confidence_score") or 0) >= 40
-    ]
-
-    # Сортируем emails по типу должности; неклассифицированные попадают во все категории
-    def _emails_by_type(emails: list[dict], keywords: list[str]) -> list[dict]:
-        kw = [k.lower() for k in keywords]
-        matched = [e for e in emails if any(k in (e.get("position") or "").lower() for k in kw)]
-        unmatched = [e for e in emails if not (e.get("position") or "").strip()]
-        # deduplicate
-        seen = {id(e) for e in matched}
-        return matched + [e for e in unmatched if id(e) not in seen]
-
-    hr_emails = _emails_by_type(reliable_emails, ["hr", "кадр", "персонал", "human"])
-    pr_emails = _emails_by_type(reliable_emails, ["pr", "маркетинг", "marketing", "коммуникац", "медиа"])
-    gr_emails = _emails_by_type(reliable_emails, ["gr", "юрид", "legal", "compliance", "регулятор", "government"])
-
-    # Emails с нераспознанной должностью — добавляем отдельным блоком
-    classified = set()
-    for lst in (hr_emails, pr_emails, gr_emails):
-        classified.update(id(e) for e in lst)
-    other_emails = [e for e in reliable_emails if id(e) not in classified and (e.get("position") or "").strip()]
-    # Добавляем other_emails во все три категории чтобы Claude сам решил куда отнести
-    hr_emails = hr_emails + other_emails
-    pr_emails = pr_emails + other_emails
-    gr_emails = gr_emails + other_emails
-
-    logger.info(
-        "Risk analysis for '%s': news=%d, yandex=%d, threads=%d, ig=%d, tt=%d, yt=%d, vacancies=%d, finance_found=%s, emails=%d",
-        company_name, len(news), len(yandex_news), len(threads_posts),
-        len(social_data.get("instagram", [])), len(social_data.get("tiktok", [])),
-        len(social_data.get("youtube", [])),
-        len(vacancies), finance_data.get("found"), len(emails_rows),
-    )
-
-    # 3) AI-анализ
-    analysis = await ai_client.analyze_company_risks(
-        company_name=company_name,
-        employees=employees,
-        news=news,
-        yandex_news=yandex_news,
-        threads_posts=threads_posts,
-        social={
-            "instagram": social_data.get("instagram", []),
-            "tiktok":    social_data.get("tiktok", []),
-            "youtube":   social_data.get("youtube", []),
-        },
-        reviews=[],
-        vacancies=vacancies,
-        regulatory_news=regulatory_news + gr_news,
-        market_news=market_news,
-        finance=finance_data,
-        hr_emails=hr_emails,
-        pr_emails=pr_emails,
-        gr_emails=gr_emails,
-        api_key=settings.ANTHROPIC_API_KEY,
-    )
-
-    # 4) Сохраняем один финальный risk_run (включая social_posts)
-    platform_map_save = {
-        "threads":   "Threads",
-        "instagram": "Instagram",
-        "tiktok":    "TikTok",
-        "youtube":   "YouTube",
-    }
-    all_social_posts = []
-    for platform, label in platform_map_save.items():
-        for p in social_data.get(platform, []):
-            text   = (p.get("text") or p.get("captionText") or p.get("title") or "").strip()
-            url    = (p.get("postUrl") or p.get("url") or "").strip()
-            author = (p.get("username") or p.get("author") or "").strip()
-            if text or url:
-                all_social_posts.append({
-                    "platform": platform,
-                    "label":    label,
-                    "author":   author,
-                    "text":     text[:400],
-                    "url":      url,
-                })
-
-    await supabase.rest_insert(
+    # Создаём запись со статусом "running" — пользователь сразу видит прогресс
+    run_row = await supabase.rest_insert(
         table="risk_runs",
         access_token=effective_token,
-        row={
-            "company_id":   company_id,
-            "status":       "done",
-            "score":        analysis["score"],
-            "advice":       analysis["advice"],
-            "risks":        analysis["risks"],
-            "categories":   analysis["categories"],
-            "scenarios":    analysis.get("scenarios", []),
-            "social_posts": all_social_posts,
-        },
+        row={"company_id": company_id, "status": "running", "score": None,
+             "advice": None, "risks": [], "categories": {}, "scenarios": [], "social_posts": []},
     )
+    run_id = run_row.get("id", "")
+    _job_stages[run_id] = {"stage": "Запуск анализа…", "pct": 5}
 
-    return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
+    # Запускаем фоновую задачу — не блокируем HTTP ответ
+    asyncio.create_task(_run_analysis_bg(
+        run_id=run_id,
+        company_name=company_name,
+        company_profile=company_profile,
+        employees=employees,
+        emails_rows=emails_rows,
+    ))
+
+    return RedirectResponse(url=f"/companies/{company_id}?run_id={run_id}", status_code=302)
 
 
 _CAT_META = {

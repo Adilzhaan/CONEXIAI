@@ -10,22 +10,107 @@ logger = logging.getLogger("conexiai")
 _client: anthropic.AsyncAnthropic | None = None
 
 
-def _parse_json(text: str) -> Any:
-    """Extract and parse JSON from Claude's response, tolerating common formatting issues."""
+def _repair_json(text: str) -> str:
+    """Fix common issues in Claude's JSON output before parsing."""
     text = text.strip()
     # Strip markdown code fences
     if text.startswith("```"):
         lines = text.split("\n")
         text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
         text = text.strip()
-    # Extract first {...} block in case there's surrounding prose
+    # Extract first {...} block
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end > start:
         text = text[start:end + 1]
-    # Remove trailing commas before } or ]  (invalid in JSON, common in Claude output)
+    # Fix Python literals
+    text = re.sub(r"\bTrue\b",  "true",  text)
+    text = re.sub(r"\bFalse\b", "false", text)
+    text = re.sub(r"\bNone\b",  "null",  text)
+    # Remove JS-style comments
+    text = re.sub(r"//[^\n]*", "", text)
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    # Remove trailing commas before } or ]
     text = re.sub(r",\s*([}\]])", r"\1", text)
-    return json.loads(text)
+    # Fix unescaped literal newlines/tabs inside JSON string values.
+    # Walk char-by-char so we only touch characters that are inside strings.
+    result = []
+    in_string = False
+    escape_next = False
+    for ch in text:
+        if escape_next:
+            result.append(ch)
+            escape_next = False
+        elif ch == "\\" and in_string:
+            result.append(ch)
+            escape_next = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif in_string and ch == "\n":
+            result.append("\\n")
+        elif in_string and ch == "\r":
+            result.append("\\r")
+        elif in_string and ch == "\t":
+            result.append("\\t")
+        else:
+            result.append(ch)
+    fixed = "".join(result)
+
+    # After the walk, all in-string newlines are escaped to \n, so any literal
+    # newline remaining is structural. Fix missing commas in all common cases.
+
+    # Missing comma between adjacent objects/arrays
+    fixed = re.sub(r"}\s*{", "},{", fixed)
+    fixed = re.sub(r"]\s*\[", "],[", fixed)
+
+    # Missing comma between a string value and the next string (key or value).
+    # Pattern: closing " then whitespace/newline then opening " — no comma between them.
+    # This covers: "value"\n"next_key": and "item1"\n"item2" in arrays.
+    fixed = re.sub(r'"(\s*\n\s*)"', r'",\1"', fixed)
+
+    # Missing comma after a number/boolean/null before the next element
+    fixed = re.sub(r'(\d)(\s*\n\s*)"', r'\1,\2"', fixed)
+    fixed = re.sub(r'(true|false|null)(\s*\n\s*)"', r'\1,\2"', fixed)
+
+    return fixed
+
+
+def _complete_json(text: str) -> str:
+    """Close any unclosed strings, arrays and objects (handles truncated responses)."""
+    stack = []
+    in_string = False
+    escape_next = False
+    for ch in text:
+        if escape_next:
+            escape_next = False
+        elif ch == "\\" and in_string:
+            escape_next = True
+        elif ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]" and stack and stack[-1] == ch:
+                stack.pop()
+    closing = ('\"' if in_string else "") + "".join(reversed(stack))
+    return text + closing
+
+
+def _parse_json(text: str) -> Any:
+    repaired = _repair_json(text)
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        # Fallback: response may be truncated — try completing it
+        completed = _complete_json(repaired)
+        try:
+            return json.loads(completed)
+        except json.JSONDecodeError as e:
+            snippet = repaired[max(0, e.pos - 120): e.pos + 120]
+            logger.error("JSON parse failed pos=%d line=%d col=%d\nNEAR: %s",
+                         e.pos, e.lineno, e.colno, repr(snippet))
+            raise
 
 
 def get_client(api_key: str) -> anthropic.AsyncAnthropic:
@@ -446,8 +531,7 @@ async def analyze_company_risks(
     try:
         response = await client.messages.create(
             model="claude-opus-4-6",
-            max_tokens=4096,
-            thinking={"type": "adaptive"},
+            max_tokens=16000,
             messages=[{"role": "user", "content": prompt}],
         )
 

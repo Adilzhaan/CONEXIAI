@@ -79,9 +79,26 @@
         {% if is_admin %}
         <form method="post" action="/risks/run" id="risk-form" style="margin:0">
           <input type="hidden" name="company_id" value="{{ company.id }}" />
-          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn">Запустить анализ</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn"
+                  onclick="this.disabled=true;this.textContent='Запуск…';this.form.submit()">Запустить анализ</button>
         </form>
         {% endif %}
+      </div>
+    </div>
+
+    <!-- Analysis progress banner -->
+    <div id="analysis-banner" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;
+         background:#1a1a2e;border:1px solid rgba(124,58,237,0.4);border-radius:14px;
+         padding:16px 20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:16px;height:16px;border:2px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;
+                    border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0"></div>
+        <span style="font-size:13px;font-weight:600;color:#e2e8f0">Анализ выполняется</span>
+      </div>
+      <div style="font-size:12px;color:#a78bfa;margin-bottom:10px" id="analysis-stage">Запуск…</div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:999px;height:6px;overflow:hidden">
+        <div id="analysis-bar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#a78bfa);
+             border-radius:999px;width:5%;transition:width 0.5s ease"></div>
       </div>
     </div>
 
@@ -2504,6 +2521,39 @@ document.addEventListener('click', function() {
   }
 })();
 
+// ── Analysis progress polling ──
+(function() {
+  const params = new URLSearchParams(location.search);
+  const runId  = params.get('run_id');
+  if (!runId) return;
 
+  const banner = document.getElementById('analysis-banner');
+  const stage  = document.getElementById('analysis-stage');
+  const bar    = document.getElementById('analysis-bar');
+  if (banner) banner.style.display = 'block';
+
+  let timer;
+  async function poll() {
+    try {
+      const res  = await fetch(`/risks/${runId}/status`);
+      const data = await res.json();
+      if (stage) stage.textContent = data.stage || '…';
+      if (bar)   bar.style.width   = (data.pct || 5) + '%';
+      if (data.status === 'done') {
+        clearInterval(timer);
+        if (bar)   bar.style.width = '100%';
+        if (stage) stage.textContent = 'Готово! Обновляем страницу…';
+        setTimeout(() => { location.href = location.pathname; }, 800);
+      } else if (data.status === 'error') {
+        clearInterval(timer);
+        if (stage) stage.textContent = 'Ошибка анализа';
+        if (bar)   bar.style.background = '#f87171';
+      }
+    } catch(e) { /* network hiccup — keep polling */ }
+  }
+
+  poll();
+  timer = setInterval(poll, 2500);
+})();
 </script>
 {% endblock %}
