@@ -1225,11 +1225,11 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
             <span data-i18n="current_news">Текущие новости</span>
             <span id="news-count"></span>
+            <button onclick="triggerLoadNews(this)" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:11px" data-i18n="btn_load_news">Загрузить новости</button>
           </div>
           <div class="mon-feed" id="live-news-feed">
-            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">
-              <div style="width:18px;height:18px;border:2px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
-              Загружаем новости…
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;opacity:0.5">
+              — нажмите «Загрузить новости» —
             </div>
           </div>
 
@@ -1837,10 +1837,7 @@ function showTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
   // If monitor tab opens and data already fetched — render immediately
-  if (name === 'monitor') {
-    if (_newsData !== null) _renderNews(_newsData);
-    else loadLiveNews();
-  }
+  if (name === 'monitor' && _newsData !== null) _renderNews(_newsData);
   // Lazy-load iframe tabs on first open
   const iframe = document.querySelector(`#tab-${name} iframe[data-src]`);
   if (iframe && !_iframeLoaded[name]) {
@@ -2277,6 +2274,7 @@ const _i18n = {
     signals_empty: 'Сигналов пока нет', signals_empty_sub: 'Здесь будут появляться сообщения от сотрудников',
     signals_panel_title: 'Сигналы от сотрудников',
     btn_refresh: '↻ Обновить', btn_add_signal: 'Добавить сигнал', btn_send_signal: 'Отправить сигнал',
+    btn_load_news: 'Загрузить новости',
     signal_modal_title: 'Новый сигнал', signal_modal_sub: 'Ручное добавление внутреннего сигнала',
     lbl_message: 'Сообщение *',
     conf_title: 'Оценка достоверности',
@@ -2336,6 +2334,7 @@ const _i18n = {
     signals_empty: 'No signals yet', signals_empty_sub: 'Employee messages will appear here',
     signals_panel_title: 'Employee Signals',
     btn_refresh: '↻ Refresh', btn_add_signal: 'Add Signal', btn_send_signal: 'Send Signal',
+    btn_load_news: 'Load News',
     signal_modal_title: 'New Signal', signal_modal_sub: 'Manual internal signal entry',
     lbl_message: 'Message *',
     conf_title: 'Credibility Assessment',
@@ -2463,6 +2462,8 @@ async function loadLiveNews() {
 function _renderNews(items) {
   const feed = document.getElementById('live-news-feed');
   const countEl = document.getElementById('news-count');
+  const loadBtn = document.querySelector('[onclick^="triggerLoadNews"]');
+  if (loadBtn) { loadBtn.disabled = false; loadBtn.dataset.i18n && (loadBtn.textContent = (_i18n[document.cookie.match(/lang=([^;]+)/)?.[1]||'ru']||{}).btn_load_news || 'Загрузить новости'); }
   if (!feed) return;
   const _lang = document.cookie.match(/lang=([^;]+)/)?.[1] || 'ru';
   if (countEl) countEl.textContent = items.length || '';
@@ -2524,7 +2525,11 @@ function _renderNews(items) {
   timer = setInterval(poll, 2500);
 })();
 
-// Pre-warm news cache in background immediately on page load
-loadLiveNews();
+function triggerLoadNews(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  _newsLoaded = false; // allow re-fetch
+  _newsData = null;
+  loadLiveNews();
+}
 </script>
 {% endblock %}
