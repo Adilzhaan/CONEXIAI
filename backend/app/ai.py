@@ -269,6 +269,7 @@ async def analyze_company_risks(
     pr_emails: list[dict[str, Any]],
     gr_emails: list[dict[str, Any]],
     api_key: str,
+    lang: str = "ru",
 ) -> dict[str, Any]:
     client = get_client(api_key)
 
@@ -368,7 +369,15 @@ async def analyze_company_risks(
     from datetime import date
     today_str = date.today().strftime("%d.%m.%Y")
 
-    prompt = f"""Ты — эксперт по корпоративным рискам. Проанализируй данные о компании «{company_name}» и составь структурированный отчёт по 5 категориям риска.
+    lang_instruction = (
+        "IMPORTANT: Write the entire response in English. All risk descriptions, advice, scenarios, and labels must be in English."
+        if lang == "en" else
+        "Пиши весь ответ на русском языке."
+    )
+
+    prompt = f"""{lang_instruction}
+
+Ты — эксперт по корпоративным рискам. Проанализируй данные о компании «{company_name}» и составь структурированный отчёт по 5 категориям риска.
 
 ## Компания
 Название: {company_name} | Сотрудников: {employee_count} | Отделы: {dept_text}

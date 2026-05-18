@@ -26,9 +26,9 @@
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
       </a>
-      <div class="sidebar-section-label">Система</div>
+      <div class="sidebar-section-label" data-i18n="nav_system">Система</div>
       <a href="/logout" class="sidebar-item">
-        <span class="sidebar-item-icon">⚙</span> Выйти
+        <span class="sidebar-item-icon">⚙</span> <span data-i18n="nav_logout">Выйти</span>
       </a>
     </nav>
   </aside>
@@ -45,9 +45,9 @@
             <div class="co-switcher-name">{{ company.name }}</div>
             <div class="co-switcher-sub">
               {% if monitor_snapshot %}
-                Проверено: {{ monitor_snapshot.last_checked_at[:10] | replace('T',' ') if monitor_snapshot.last_checked_at else '—' }}
+                <span data-i18n="co_checked">Проверено</span>: {{ monitor_snapshot.last_checked_at[:10] | replace('T',' ') if monitor_snapshot.last_checked_at else '—' }}
               {% else %}
-                Мониторинг не запущен
+                <span data-i18n="co_not_started">Мониторинг не запущен</span>
               {% endif %}
             </div>
           </div>
@@ -75,12 +75,19 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-secondary btn-sm">Скачать PDF</a>
+        <!-- Language toggle -->
+        <div style="display:flex;border:1px solid rgba(255,255,255,0.12);border-radius:8px;overflow:hidden;font-size:12px;font-weight:700">
+          <button id="lang-ru" onclick="setLang('ru')"
+                  style="padding:5px 10px;border:none;cursor:pointer;background:rgba(124,58,237,0.7);color:#fff;transition:background .15s">RU</button>
+          <button id="lang-en" onclick="setLang('en')"
+                  style="padding:5px 10px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.4);transition:background .15s">EN</button>
+        </div>
+        <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-secondary btn-sm" data-i18n="btn_pdf">Скачать PDF</a>
         {% if is_admin %}
         <form method="post" action="/risks/run" id="risk-form" style="margin:0">
           <input type="hidden" name="company_id" value="{{ company.id }}" />
-          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn"
-                  onclick="this.disabled=true;this.textContent='Запуск…';this.form.submit()">Запустить анализ</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn" data-i18n="btn_run"
+                  onclick="this.disabled=true;this.dataset.i18n='';this.textContent=document.cookie.includes('lang=en')?'Running…':'Запуск…';this.form.submit()">Запустить анализ</button>
         </form>
         {% endif %}
       </div>
@@ -93,9 +100,9 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <div style="width:16px;height:16px;border:2px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;
                     border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0"></div>
-        <span style="font-size:13px;font-weight:600;color:#e2e8f0">Анализ выполняется</span>
+        <span style="font-size:13px;font-weight:600;color:#e2e8f0" data-i18n="banner_analyzing">Анализ выполняется</span>
       </div>
-      <div style="font-size:12px;color:#a78bfa;margin-bottom:10px" id="analysis-stage">Запуск…</div>
+      <div style="font-size:12px;color:#a78bfa;margin-bottom:10px" id="analysis-stage" data-i18n="banner_starting">Запуск…</div>
       <div style="background:rgba(255,255,255,0.08);border-radius:999px;height:6px;overflow:hidden">
         <div id="analysis-bar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#a78bfa);
              border-radius:999px;width:5%;transition:width 0.5s ease"></div>
@@ -598,14 +605,14 @@
       <div class="analysis-loading" id="loading-overlay">
         <div class="loading-spinner"></div>
         <div style="text-align:center;color:#fff">
-          <div style="font-size:16px;font-weight:600;margin-bottom:20px">Анализируем компанию…</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:20px" data-i18n="loading_title">Анализируем компанию…</div>
           <div style="display:flex;flex-direction:column;gap:10px">
-            <div class="loading-step active" id="step-0"> Получаем новости…</div>
-            <div class="loading-step" id="step-1"> Сканируем Threads…</div>
-            <div class="loading-step" id="step-2"> Вакансии HH.ru…</div>
-            <div class="loading-step" id="step-3"> Регуляторные сигналы…</div>
-            <div class="loading-step" id="step-4"> Рыночная аналитика…</div>
-            <div class="loading-step" id="step-5"> Claude AI анализирует…</div>
+            <div class="loading-step active" id="step-0" data-i18n="loading_step0"> Получаем новости…</div>
+            <div class="loading-step" id="step-1" data-i18n="loading_step1"> Сканируем Threads…</div>
+            <div class="loading-step" id="step-2" data-i18n="loading_step2"> Вакансии HH.ru…</div>
+            <div class="loading-step" id="step-3" data-i18n="loading_step3"> Регуляторные сигналы…</div>
+            <div class="loading-step" id="step-4" data-i18n="loading_step4"> Рыночная аналитика…</div>
+            <div class="loading-step" id="step-5" data-i18n="loading_step5"> Claude AI анализирует…</div>
           </div>
         </div>
       </div>
@@ -626,8 +633,8 @@
       ] %}
       {% if cats %}
       <style>
-        .rcat-nav { padding:16px 32px 0; display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
-        @media(max-width:1000px){ .rcat-nav { grid-template-columns:repeat(3,1fr); } }
+        .rcat-nav { padding:16px 32px 0; display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+        @media(max-width:1200px){ .rcat-nav { grid-template-columns:repeat(3,1fr); } }
         @media(max-width:640px) { .rcat-nav { grid-template-columns:repeat(2,1fr); padding:12px 16px 0; } }
       </style>
       <div class="rcat-nav">
@@ -637,7 +644,8 @@
           {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
           {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
           {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
-          <a href="/companies/{{ company.id }}/category/{{ key }}"
+          <a href="{{ '#' if key == 'market' else '/companies/' + company.id + '/category/' + key }}"
+             {% if key == 'market' %}onclick="event.preventDefault();showTab('market',null)"{% endif %}
              style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
                     background:{{ bg }};border:1px solid {{ color }}26;border-left:3px solid {{ color }};
                     border-radius:var(--radius);text-decoration:none;color:inherit;
@@ -646,14 +654,6 @@
              onmouseout="this.style.boxShadow='';this.style.transform=''">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
               <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">{{ label }}</div>
-              {% if trend is not none %}
-                <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:99px;
-                  {% if trend > 0 %}background:rgba(248,113,113,0.12);color:#f87171
-                  {% elif trend < 0 %}background:rgba(52,211,153,0.10);color:#34d399
-                  {% else %}background:rgba(255,255,255,0.06);color:var(--text-muted){% endif %}">
-                  {% if trend > 0 %}↑+{{ trend }}{% elif trend < 0 %}↓{{ trend }}{% else %}→{% endif %}
-                </span>
-              {% endif %}
             </div>
             <div style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
               {{ score if score is not none else '—' }}
@@ -666,6 +666,21 @@
             {% endif %}
           </a>
         {% endfor %}
+
+        <!-- CI Monitor card -->
+        <a href="#" onclick="event.preventDefault();showTab('ci',null)"
+           style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
+                  background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-left:3px solid #06b6d4;
+                  border-radius:var(--radius);text-decoration:none;color:inherit;
+                  transition:box-shadow .15s,transform .15s;position:relative;overflow:hidden"
+           onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)';this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.boxShadow='';this.style.transform=''">
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">CI Monitor</div>
+          <div style="font-size:28px;font-weight:800;line-height:1;color:#06b6d4">→</div>
+          <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)"></div>
+          <div data-i18n="ci_sub" style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Конкурентная разведка</div>
+        </a>
+
       </div>
       {% endif %}
       <!-- ══ END RISK CATEGORIES NAV ══ -->
@@ -673,36 +688,25 @@
       <!-- Tab nav -->
       <div class="cd-tabs" style="margin-top:16px">
         <button class="cd-tab active" onclick="showTab('overview', this)">
-          ◎ Обзор
+          <span data-i18n="tab_overview">◎ Обзор</span>
         </button>
         <button class="cd-tab" onclick="showTab('team', this)">
-          Команда
+          <span data-i18n="tab_team">Команда</span>
           {% if members %}<span class="cd-tab-badge">{{ members|length }}</span>{% endif %}
         </button>
         <button class="cd-tab" onclick="showTab('signals', this)">
-          Сигналы
+          <span data-i18n="tab_signals">Сигналы</span>
           {% if emails %}<span class="cd-tab-badge">{{ emails|length }}</span>{% endif %}
         </button>
         <button class="cd-tab" onclick="showTab('history', this)">
-          История
+          <span data-i18n="tab_history">История</span>
           {% if risk_runs %}<span class="cd-tab-badge">{{ risk_runs|length }}</span>{% endif %}
         </button>
         <button class="cd-tab" onclick="showTab('monitor', this)">
-          Мониторинг
+          <span data-i18n="tab_monitor">Мониторинг</span>
           {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
           {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
         </button>
-        <button class="cd-tab" onclick="showTab('market', this)">
-          Рынок
-        </button>
-        <button class="cd-tab" onclick="showTab('ci', this)">
-          CI Monitor
-        </button>
-        {% if is_admin %}
-        <button class="cd-tab" onclick="showTab('integrations', this)">
-          Интеграции
-        </button>
-        {% endif %}
       </div>
 
       <!-- ══ OVERVIEW TAB ══ -->
@@ -904,16 +908,6 @@
                   <div class="ro-status-dot" style="background:{{ crisis_color }};{% if crisis_status == 'crisis' %}animation:ceoPulse 1.8s ease-in-out infinite{% endif %}"></div>
                   <span style="color:{{ crisis_color }}">{{ crisis_label }}</span>
                 </div>
-                {% if prev and prev.score is not none %}
-                  {% set gdelta = s - (prev.score | int) %}
-                  {% if gdelta > 0 %}
-                    <div class="ro-delta-badge" style="background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171">↑ +{{ gdelta }} vs прошлый</div>
-                  {% elif gdelta < 0 %}
-                    <div class="ro-delta-badge" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399">↓ {{ gdelta }} vs прошлый</div>
-                  {% else %}
-                    <div class="ro-delta-badge" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted)">→ без изменений</div>
-                  {% endif %}
-                {% endif %}
               </div>
 
               <!-- Category breakdown -->
@@ -938,14 +932,7 @@
                     <div class="ro-cat-score" style="color:{{ color }}">
                       {% if cat_score is not none %}{{ cat_score }}{% else %}—{% endif %}
                     </div>
-                    <div class="ro-cat-delta">
-                      {% if cat_delta is not none %}
-                        {% if cat_delta > 0 %}<span style="color:#f87171;font-size:10px;font-weight:700">↑+{{ cat_delta }}</span>
-                        {% elif cat_delta < 0 %}<span style="color:#34d399;font-size:10px;font-weight:700">↓{{ cat_delta }}</span>
-                        {% else %}<span style="color:rgba(255,255,255,0.25);font-size:10px">→</span>
-                        {% endif %}
-                      {% endif %}
-                    </div>
+                    <div class="ro-cat-delta"></div>
                   </div>
                 {% endfor %}
               </div>
@@ -953,9 +940,9 @@
               <!-- Financial Impact -->
               {% if risk_impact %}
               <div class="ro-finance-card">
-                <div class="ro-finance-lbl">Потенциальные потери</div>
+                <div class="ro-finance-lbl" data-i18n="fin_lbl">Потенциальные потери</div>
                 <div class="ro-finance-val">${{ "{:,.0f}".format(risk_impact.potential_loss) }}</div>
-                <div class="ro-finance-sub">при реализации рисков</div>
+                <div class="ro-finance-sub" data-i18n="fin_sub">при реализации рисков</div>
                 <div class="ro-finance-formula">
                   Impact = Sentiment × Reach × Sector<br>
                   = <span>{{ risk_impact.sentiment_factor }}</span>
@@ -976,7 +963,7 @@
                   {% set cscore = cats[key].score | int %}
                   {% set prev_cscore = (prev.categories[key].score | int if prev and prev.categories and prev.categories[key] and prev.categories[key].score is not none else none) %}
                   {% set growth = (cscore - prev_cscore) if prev_cscore is not none else none %}
-                  {% for risk in (cats[key].risks or [])[:2] %}
+                  {% for risk in (cats[key].risks or [])[:6] %}
                     {% set rtext = risk.text if risk is mapping else risk %}
                     {% if rtext and not rtext.startswith('Анализ недоступен') and 'Error code:' not in rtext %}
                       {% set prob = [99, (cscore * 0.92) | int] | min %}
@@ -993,17 +980,17 @@
               <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:flex;align-items:center;gap:7px">
                   <span style="width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:10px">⚑</span>
-                  Топ рисков
-                  <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.07);color:var(--text-muted);border:1px solid rgba(255,255,255,0.10)">{{ [sorted_risks|length, 5] | min }}</span>
+                  <span data-i18n="top_risks">Топ рисков</span>
+                  <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.07);color:var(--text-muted);border:1px solid rgba(255,255,255,0.10)">{{ [sorted_risks|length, 25] | min }}</span>
                 </div>
-                <div style="font-size:10px;color:var(--text-dim)">приоритет по вероятности × влиянию</div>
+                <div style="font-size:10px;color:var(--text-dim)" data-i18n="top_risks_sub">приоритет по вероятности × влиянию</div>
               </div>
-              <div class="ro-risks-hdr">
-                <div>Риск</div><div>Вероятность</div><div>Потери</div><div>Тренд</div><div>Категория</div>
+              <div class="ro-risks-hdr" style="grid-template-columns:1fr auto auto auto">
+                <div data-i18n="th_risk">Риск</div><div data-i18n="th_prob">Вероятность</div><div data-i18n="th_loss">Потери</div><div data-i18n="th_cat">Категория</div>
               </div>
-              {% for r in sorted_risks[:5] %}
-              <div class="ro-risk-row">
-                <div class="ro-risk-text">{{ r.text[:120] }}{% if r.text|length > 120 %}…{% endif %}</div>
+              {% for r in sorted_risks[:25] %}
+              <div class="ro-risk-row" style="grid-template-columns:1fr auto auto auto">
+                <div class="ro-risk-text">{{ r.text[:160] }}{% if r.text|length > 160 %}…{% endif %}</div>
                 <div>
                   <div class="ro-prob-wrap">
                     <div class="ro-prob-track"><div class="ro-prob-fill" style="width:{{ r.prob }}%;background:{{ r.color }}"></div></div>
@@ -1011,19 +998,6 @@
                   </div>
                 </div>
                 <div class="ro-impact">${{ "{:,.0f}".format(r.impact) }}</div>
-                <div>
-                  {% if r.growth is not none %}
-                    {% if r.growth > 5 %}
-                      <span class="ro-growth-badge" style="background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171">↑ Растёт</span>
-                    {% elif r.growth < -5 %}
-                      <span class="ro-growth-badge" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399">↓ Снижается</span>
-                    {% else %}
-                      <span class="ro-growth-badge" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10);color:var(--text-muted)">→ Стабильно</span>
-                    {% endif %}
-                  {% else %}
-                    <span style="font-size:10px;color:rgba(255,255,255,0.20)">—</span>
-                  {% endif %}
-                </div>
                 <div>
                   <span class="ro-risk-chip" style="color:{{ r.color }};background:{{ r.color }}18;border:1px solid {{ r.color }}33">{{ r.cat_label }}</span>
                 </div>
@@ -1052,23 +1026,23 @@
               <div class="ro-ap-col">
                 <div class="ro-ap-hdr" style="color:#34d399">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  Что делать сейчас
+                  <span data-i18n="ap_do">Что делать сейчас</span>
                 </div>
                 <div class="ro-ap-text">{{ latest.advice or "Провести полный аудит рисков и обновить антикризисные протоколы" }}</div>
               </div>
               <div class="ro-ap-col">
                 <div class="ro-ap-hdr" style="color:#f87171">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  Чего не делать
+                  <span data-i18n="ap_dont">Чего не делать</span>
                 </div>
-                <div class="ro-ap-text">{{ ro_dont_map.get(top_cat_key, 'Не принимать поспешных решений без данных') }}</div>
+                <div class="ro-ap-text" data-i18n-dont="{{ top_cat_key }}">{{ ro_dont_map.get(top_cat_key, 'Не принимать поспешных решений без данных') }}</div>
               </div>
               <div class="ro-ap-col">
                 <div class="ro-ap-hdr" style="color:#a78bfa">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-                  Ожидаемый результат
+                  <span data-i18n="ap_result">Ожидаемый результат</span>
                 </div>
-                <div class="ro-ap-text">{{ ro_result_map.get(top_cat_key, 'Снижение общего уровня риска и стабилизация позиций') }}</div>
+                <div class="ro-ap-text" data-i18n-result="{{ top_cat_key }}">{{ ro_result_map.get(top_cat_key, 'Снижение общего уровня риска и стабилизация позиций') }}</div>
               </div>
             </div>
 
@@ -1079,8 +1053,8 @@
           <!-- No analysis yet -->
           <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:16px;backdrop-filter:blur(20px)">
             <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-            <div class="empty-box-title">Анализ не запускался</div>
-            <div class="empty-box-sub">Нажмите «Запустить анализ» чтобы получить оценку рисков</div>
+            <div class="empty-box-title" data-i18n="no_analysis_title">Анализ не запускался</div>
+            <div class="empty-box-sub" data-i18n="no_analysis_sub">Нажмите «Запустить анализ» чтобы получить оценку рисков</div>
           </div>
         {% endif %}
 
@@ -1097,7 +1071,7 @@
 
           {% if latest and latest.advice %}
           <div class="advice-box" id="ai-advice" style="margin-bottom:12px">
-            <div class="advice-lbl">Рекомендация AI</div>
+            <div class="advice-lbl" data-i18n="advice_lbl">Рекомендация AI</div>
             <div class="advice-text" id="ai-advice-full">{{ latest.advice }}</div>
           </div>
           {% endif %}
@@ -1110,7 +1084,7 @@
             'high':   ('rgba(248,113,113,0.10)',  '#d44040', 'rgba(212,64,64,0.12)',  ''),
           } %}
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:8px">
-            Action Scenarios · {{ scenarios|length }} варианта
+            Action Scenarios · {{ scenarios|length }} <span data-i18n="sc_variants">варианта</span>
           </div>
           <div class="scenarios-grid">
             {% for sc in scenarios %}
@@ -1119,7 +1093,7 @@
               <div class="scenario-card">
                 <div class="scenario-header" style="border-top:3px solid {{ color }}">
                   <div class="scenario-badge" style="background:{{ bg }};color:{{ color }}">
-                    Сценарий {{ sc.id }} · {{ level | upper }}
+                    <span data-i18n="sc_label">Сценарий</span> {{ sc.id }} · {{ level | upper }}
                   </div>
                   <div class="scenario-title">{{ sc.label }}</div>
                   {% if sc.trigger %}
@@ -1216,23 +1190,23 @@
           <!-- Status cards -->
           <div class="mon-status-grid">
             <div class="mon-status-card">
-              <div class="mon-status-label">Последняя проверка</div>
+              <div class="mon-status-label" data-i18n="mon_last_check">Последняя проверка</div>
               {% if monitor_snapshot and monitor_snapshot.last_checked_at %}
                 <div class="mon-status-val">{{ monitor_snapshot.last_checked_at[:16] | replace('T',' ') }}</div>
               {% else %}
-                <div class="mon-status-val muted">Ещё не запускался</div>
+                <div class="mon-status-val muted" data-i18n="mon_not_started">Ещё не запускался</div>
               {% endif %}
             </div>
             <div class="mon-status-card">
-              <div class="mon-status-label">Последний анализ</div>
+              <div class="mon-status-label" data-i18n="mon_last_analysis">Последний анализ</div>
               {% if latest %}
                 <div class="mon-status-val" style="color:#34d399">{{ latest.created_at[:16] | replace('T',' ') }}</div>
               {% else %}
-                <div class="mon-status-val muted">Анализ не запускался</div>
+                <div class="mon-status-val muted" data-i18n="mon_no_analysis">Анализ не запускался</div>
               {% endif %}
             </div>
             <div class="mon-status-card">
-              <div class="mon-status-label">Риск-скор при анализе</div>
+              <div class="mon-status-label" data-i18n="mon_risk_score">Риск-скор при анализе</div>
               {% if latest and latest.score is not none %}
                 {% set sc = latest.score | int %}
                 <div class="mon-status-val" style="color:{% if sc >= 65 %}#f87171{% elif sc >= 35 %}#fbbf24{% else %}#34d399{% endif %}">{{ sc }} / 100</div>
@@ -1241,15 +1215,15 @@
               {% endif %}
             </div>
             <div class="mon-status-card">
-              <div class="mon-status-label">Интервал</div>
-              <div class="mon-status-val">каждые 15 мин</div>
+              <div class="mon-status-label" data-i18n="mon_interval">Интервал</div>
+              <div class="mon-status-val" data-i18n="mon_interval_val">каждые 15 мин</div>
             </div>
           </div>
 
           <!-- ─── Live news ─── -->
           <div class="mon-sec-hdr">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
-            Текущие новости
+            <span data-i18n="current_news">Текущие новости</span>
             <span id="news-count"></span>
           </div>
           <div class="mon-feed" id="live-news-feed">
@@ -1319,8 +1293,8 @@
             {% else %}
               <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
                 <div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div>
-                Мониторинг ещё не запускался.<br>
-                <span style="font-size:12px;color:var(--text-dim)">Система проверяет новости каждые 15 минут автоматически.</span>
+                <span data-i18n="mon_news_empty">Мониторинг ещё не запускался.</span><br>
+                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Система проверяет новости каждые 15 минут автоматически.</span>
               </div>
             {% endif %}
           </div>
@@ -1338,8 +1312,8 @@
           <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:460px;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
             <div style="padding:22px 24px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between">
               <div>
-                <div style="font-size:15px;font-weight:700">Пригласить участника</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Участник получит доступ к аналитике компании</div>
+                <div style="font-size:15px;font-weight:700" data-i18n="invite_title">Пригласить участника</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="invite_sub">Участник получит доступ к аналитике компании</div>
               </div>
               <button onclick="closeInviteModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:2px 6px">×</button>
             </div>
@@ -1354,7 +1328,7 @@
                     onblur="this.style.borderColor='';this.style.boxShadow=''" />
                 </div>
                 <div>
-                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">Сфера доступа</label>
+                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_access_scope">Сфера доступа</label>
                   <select name="role"
                     style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s;appearance:none;cursor:pointer"
                     onfocus="this.style.borderColor='#7c3aed'"
@@ -1369,8 +1343,8 @@
                 </div>
               </div>
               <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:10px">
-                <button type="button" onclick="closeInviteModal()" class="btn btn-ghost btn-sm">Отмена</button>
-                <button type="submit" class="btn btn-primary" id="invite-btn">Отправить приглашение</button>
+                <button type="button" onclick="closeInviteModal()" class="btn btn-ghost btn-sm" data-i18n="btn_cancel">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="invite-btn" data-i18n="btn_invite">Отправить приглашение</button>
               </div>
             </form>
           </div>
@@ -1380,12 +1354,12 @@
         <!-- Members -->
         {% if is_admin %}
         <div class="panel-hdr">
-          <div class="panel-hdr-title">Участники команды</div>
+          <div class="panel-hdr-title" data-i18n="team_members_title">Участники команды</div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:11px;color:var(--text-muted)">{{ members|length if members else 0 }} чел.</span>
             <button onclick="openInviteModal()" class="btn btn-primary btn-sm">
               <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              Пригласить
+              <span data-i18n="btn_invite_short">Пригласить</span>
             </button>
           </div>
         </div>
@@ -1404,7 +1378,7 @@
                   <div class="team-role-badge" style="color:{{ role_colors.get(m.role,'var(--text-muted)') }}">{{ role_labels.get(m.role, m.role) }}</div>
                 {% endif %}
                 <div class="team-meta" style="margin-top:5px">
-                  {% if m.status == 'active' %}<span style="color:#34d399">● активен</span>{% else %}<span>○ ожидает</span>{% endif %}
+                  {% if m.status == 'active' %}<span style="color:#34d399" data-i18n="status_active">● активен</span>{% else %}<span data-i18n="status_pending">○ ожидает</span>{% endif %}
                 </div>
               </div>
               <form method="post" action="/members/{{ m.id }}/remove" onsubmit="return confirm('Удалить?')" style="margin:0">
@@ -1417,8 +1391,8 @@
         {% else %}
         <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:20px;backdrop-filter:blur(20px)">
           <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
-          <div class="empty-box-title">Команда пуста</div>
-          <div class="empty-box-sub">Пригласите первого участника</div>
+          <div class="empty-box-title" data-i18n="team_empty">Команда пуста</div>
+          <div class="empty-box-sub" data-i18n="team_empty_sub">Пригласите первого участника</div>
         </div>
         {% endif %}
         {% endif %}{# end is_admin members #}
@@ -1429,8 +1403,8 @@
           <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:480px;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
             <div style="padding:22px 24px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between">
               <div>
-                <div style="font-size:15px;font-weight:700">Новый сотрудник</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Signal Contact — получает ссылку для отправки сигналов</div>
+                <div style="font-size:15px;font-weight:700" data-i18n="emp_modal_title">Новый сотрудник</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="emp_modal_sub">Signal Contact — получает ссылку для отправки сигналов</div>
               </div>
               <button onclick="closeEmpModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:2px 6px">×</button>
             </div>
@@ -1439,7 +1413,7 @@
               <div style="padding:22px 24px;display:flex;flex-direction:column;gap:14px">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                   <div>
-                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">ФИО *</label>
+                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_fullname">ФИО *</label>
                     <input name="full_name" type="text" placeholder="Иван Иванов" required
                       style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s"
                       onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
@@ -1455,14 +1429,14 @@
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                   <div>
-                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">Должность</label>
+                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_position">Должность</label>
                     <input name="position" type="text" placeholder="Менеджер"
                       style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s"
                       onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
                       onblur="this.style.borderColor='';this.style.boxShadow=''" />
                   </div>
                   <div>
-                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">Отдел</label>
+                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_department">Отдел</label>
                     <input name="department" type="text" placeholder="HR, Finance…"
                       style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s"
                       onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
@@ -1471,8 +1445,8 @@
                 </div>
               </div>
               <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:10px">
-                <button type="button" onclick="closeEmpModal()" class="btn btn-ghost btn-sm">Отмена</button>
-                <button type="submit" class="btn btn-primary" id="emp-btn">Добавить сотрудника</button>
+                <button type="button" onclick="closeEmpModal()" class="btn btn-ghost btn-sm" data-i18n="btn_cancel">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="emp-btn" data-i18n="btn_add_emp">Добавить сотрудника</button>
               </div>
             </form>
           </div>
@@ -1482,11 +1456,11 @@
         <div class="panel-hdr">
           <div class="panel-hdr-title">Signal Contacts</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:11px;color:var(--text-muted)">{{ employees|length if employees else 0 }} сотрудников</span>
+            <span style="font-size:11px;color:var(--text-muted)">{{ employees|length if employees else 0 }} <span data-i18n="emp_count_suffix">сотрудников</span></span>
             {% if is_admin %}
             <button onclick="openEmpModal()" class="btn btn-primary btn-sm">
               <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              Добавить
+              <span data-i18n="btn_add_short">Добавить</span>
             </button>
             {% endif %}
           </div>
@@ -1513,8 +1487,8 @@
         {% else %}
         <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:20px;backdrop-filter:blur(20px)">
           <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
-          <div class="empty-box-title">Сотрудников нет</div>
-          <div class="empty-box-sub">Нажмите «Добавить» чтобы создать первый контакт</div>
+          <div class="empty-box-title" data-i18n="emp_empty">Сотрудников нет</div>
+          <div class="empty-box-sub" data-i18n="emp_empty_sub">Нажмите «Добавить» чтобы создать первый контакт</div>
         </div>
         {% endif %}
 
@@ -1522,7 +1496,7 @@
         <div id="empDetailModal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px">
           <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
             <div style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between">
-              <div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.5)">Карточка сотрудника</div>
+              <div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.5)" data-i18n="emp_card_title">Карточка сотрудника</div>
               <button onclick="closeEmpDetail()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:2px 6px">×</button>
             </div>
             <div style="padding:24px">
@@ -1541,24 +1515,24 @@
                   <div id="ed-email" style="font-size:13px;color:var(--accent)"></div>
                 </div>
                 <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;align-items:start">
-                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);padding-top:1px">Отдел</div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);padding-top:1px" data-i18n="lbl_department">Отдел</div>
                   <div id="ed-department" style="font-size:13px"></div>
                 </div>
                 <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;align-items:start">
-                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);padding-top:1px">Должность</div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);padding-top:1px" data-i18n="lbl_position">Должность</div>
                   <div id="ed-pos2" style="font-size:13px"></div>
                 </div>
               </div>
               <!-- Photo upload (admin only) -->
               <div id="ed-photo-section" style="display:none;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
                 <form id="ed-photo-form" method="post" enctype="multipart/form-data">
-                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.4);display:block;margin-bottom:8px">Фото сотрудника</label>
+                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.4);display:block;margin-bottom:8px" data-i18n="lbl_photo">Фото сотрудника</label>
                   <div style="display:flex;align-items:center;gap:10px">
                     <label style="flex:1;padding:9px 14px;border-radius:10px;border:1px dashed rgba(255,255,255,0.2);background:rgba(255,255,255,0.03);cursor:pointer;font-size:12px;color:var(--text-muted);text-align:center" id="ed-file-label">
-                      Выбрать файл (JPG/PNG, до 5 МБ)
+                      <span data-i18n="lbl_choose_file">Выбрать файл (JPG/PNG, до 5 МБ)</span>
                       <input type="file" name="photo" accept="image/*" style="display:none" onchange="edFileChosen(this)">
                     </label>
-                    <button type="submit" class="btn btn-primary btn-sm" id="ed-upload-btn" disabled>Загрузить</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="ed-upload-btn" disabled data-i18n="btn_upload">Загрузить</button>
                   </div>
                 </form>
               </div>
@@ -1582,8 +1556,8 @@
           <div style="background:rgba(15,10,30,0.97);border:1px solid rgba(255,255,255,0.12);border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.5)">
             <div style="padding:22px 24px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between">
               <div>
-                <div style="font-size:15px;font-weight:700">Новый сигнал</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Ручное добавление внутреннего сигнала</div>
+                <div style="font-size:15px;font-weight:700" data-i18n="signal_modal_title">Новый сигнал</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="signal_modal_sub">Ручное добавление внутреннего сигнала</div>
               </div>
               <button onclick="closeSignalModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:2px 6px">×</button>
             </div>
@@ -1599,7 +1573,7 @@
                       onblur="this.style.borderColor='';this.style.boxShadow=''" />
                   </div>
                   <div>
-                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">Должность</label>
+                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_position">Должность</label>
                     <input name="position" type="text" placeholder="HR, PR, GR…"
                       style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s"
                       onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
@@ -1607,7 +1581,7 @@
                   </div>
                 </div>
                 <div>
-                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px">Сообщение *</label>
+                  <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.40);display:block;margin-bottom:6px" data-i18n="lbl_message">Сообщение *</label>
                   <textarea name="text" rows="4" required placeholder="Опишите ситуацию, проблему или риск…"
                     style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit;resize:vertical;transition:border-color .15s,box-shadow .15s"
                     onfocus="this.style.borderColor='#7c3aed';this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
@@ -1615,55 +1589,55 @@
                 </div>
                 <!-- Confidence questions -->
                 <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:14px;display:flex;flex-direction:column;gap:12px">
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.30)">Оценка достоверности</div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.30)" data-i18n="conf_title">Оценка достоверности</div>
                   <div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Вы уверены, что информация соответствует действительности?</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px" data-i18n="conf_q1">Вы уверены, что информация соответствует действительности?</div>
                     <div style="display:flex;gap:6px;flex-wrap:wrap">
-                      <label class="conf-opt"><input type="radio" name="certainty" value="confident"><span>Да, уверен</span></label>
-                      <label class="conf-opt"><input type="radio" name="certainty" value="uncertain"><span>Нет</span></label>
-                      <label class="conf-opt"><input type="radio" name="certainty" value="unknown" checked><span>Не знаю</span></label>
+                      <label class="conf-opt"><input type="radio" name="certainty" value="confident"><span data-i18n="conf_yes">Да, уверен</span></label>
+                      <label class="conf-opt"><input type="radio" name="certainty" value="uncertain"><span data-i18n="conf_no">Нет</span></label>
+                      <label class="conf-opt"><input type="radio" name="certainty" value="unknown" checked><span data-i18n="conf_dunno">Не знаю</span></label>
                     </div>
                   </div>
                   <div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Подтверждается ли это другими сотрудниками или фактами?</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px" data-i18n="conf_q2">Подтверждается ли это другими сотрудниками или фактами?</div>
                     <div style="display:flex;gap:6px;flex-wrap:wrap">
-                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="yes"><span>Да</span></label>
-                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="no"><span>Нет</span></label>
-                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="unknown" checked><span>Не знаю</span></label>
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="yes"><span data-i18n="conf_yes2">Да</span></label>
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="no"><span data-i18n="conf_no">Нет</span></label>
+                      <label class="conf-opt"><input type="radio" name="confirmed_by_others" value="unknown" checked><span data-i18n="conf_dunno">Не знаю</span></label>
                     </div>
                   </div>
                   <div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px">Источник информации:</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:7px" data-i18n="conf_q3">Источник информации:</div>
                     <div style="display:flex;gap:6px;flex-wrap:wrap">
-                      <label class="conf-opt"><input type="radio" name="source_type" value="experience"><span>Личный опыт</span></label>
-                      <label class="conf-opt"><input type="radio" name="source_type" value="observation" checked><span>Наблюдение</span></label>
-                      <label class="conf-opt"><input type="radio" name="source_type" value="rumor"><span>Слухи / предположение</span></label>
+                      <label class="conf-opt"><input type="radio" name="source_type" value="experience"><span data-i18n="src_experience">Личный опыт</span></label>
+                      <label class="conf-opt"><input type="radio" name="source_type" value="observation" checked><span data-i18n="src_observation">Наблюдение</span></label>
+                      <label class="conf-opt"><input type="radio" name="source_type" value="rumor"><span data-i18n="src_rumor">Слухи / предположение</span></label>
                     </div>
                   </div>
                   <div id="conf-preview" style="padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px">
                     <div id="conf-score-circle" style="min-width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid #fbbf24;background:rgba(251,191,36,0.12);color:#fbbf24">35</div>
                     <div>
-                      <div id="conf-score-label" style="font-size:12px;font-weight:600;color:#fbbf24">Частично подтверждено</div>
-                      <div style="font-size:11px;color:var(--text-muted)">Индекс достоверности сигнала</div>
+                      <div id="conf-score-label" style="font-size:12px;font-weight:600;color:#fbbf24" data-i18n="conf_partial">Частично подтверждено</div>
+                      <div style="font-size:11px;color:var(--text-muted)" data-i18n="conf_index">Индекс достоверности сигнала</div>
                     </div>
                   </div>
                 </div>
               </div>
               <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:10px">
-                <button type="button" onclick="closeSignalModal()" class="btn btn-ghost btn-sm">Отмена</button>
-                <button type="submit" class="btn btn-primary" id="signal-btn">Отправить сигнал</button>
+                <button type="button" onclick="closeSignalModal()" class="btn btn-ghost btn-sm" data-i18n="btn_cancel">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="signal-btn" data-i18n="btn_send_signal">Отправить сигнал</button>
               </div>
             </form>
           </div>
         </div>
 
         <div class="panel-hdr">
-          <div class="panel-hdr-title">Сигналы от сотрудников</div>
+          <div class="panel-hdr-title" data-i18n="signals_panel_title">Сигналы от сотрудников</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button onclick="refreshEmails()" class="btn btn-secondary btn-sm" id="emails-refresh-btn">↻ Обновить</button>
+            <button onclick="refreshEmails()" class="btn btn-secondary btn-sm" id="emails-refresh-btn" data-i18n="btn_refresh">↻ Обновить</button>
             <button onclick="openSignalModal()" class="btn btn-primary btn-sm">
               <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              Добавить сигнал
+              <span data-i18n="btn_add_signal">Добавить сигнал</span>
             </button>
           </div>
         </div>
@@ -1697,8 +1671,8 @@
           {% else %}
             <div class="empty-box" id="emails-empty">
               <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
-              <div class="empty-box-title">Сигналов пока нет</div>
-              <div class="empty-box-sub">Здесь будут появляться сообщения от сотрудников</div>
+              <div class="empty-box-title" data-i18n="signals_empty">Сигналов пока нет</div>
+              <div class="empty-box-sub" data-i18n="signals_empty_sub">Здесь будут появляться сообщения от сотрудников</div>
             </div>
           {% endif %}
         </div>
@@ -1710,7 +1684,7 @@
 
         <div class="panel-hdr">
           <div style="display:flex;align-items:center;gap:8px">
-            <div class="panel-hdr-title">История анализов</div>
+            <div class="panel-hdr-title" data-i18n="hist_title">История анализов</div>
             <span style="font-size:11px;padding:2px 8px;background:rgba(255,255,255,0.08);border-radius:999px;color:rgba(255,255,255,0.50);font-weight:600" id="hist-count">{{ risk_runs|length }}</span>
           </div>
           {% if risk_runs|length > 3 %}
@@ -1719,23 +1693,23 @@
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
               </svg>
-              Очистить
+              <span data-i18n="hist_cleanup">Очистить</span>
               <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" style="width:9px;height:9px;opacity:0.5">
                 <path d="M1 1l4 4 4-4"/>
               </svg>
             </button>
             <div id="cleanup-menu">
               <div class="cmenu-section">
-                <div class="cmenu-label">Оставить последние</div>
-                <button class="cleanup-opt" onclick="doCleanup('keep_last', 5)"><span class="co-icon">5</span> последних запусков</button>
-                <button class="cleanup-opt" onclick="doCleanup('keep_last', 10)"><span class="co-icon">10</span> последних запусков</button>
-                <button class="cleanup-opt" onclick="doCleanup('keep_last', 20)"><span class="co-icon">20</span> последних запусков</button>
+                <div class="cmenu-label" data-i18n="hist_keep_last">Оставить последние</div>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 5)"><span class="co-icon">5</span> 5 <span data-i18n="hist_runs">последних запусков</span></button>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 10)"><span class="co-icon">10</span> 10 <span data-i18n="hist_runs">последних запусков</span></button>
+                <button class="cleanup-opt" onclick="doCleanup('keep_last', 20)"><span class="co-icon">20</span> 20 <span data-i18n="hist_runs">последних запусков</span></button>
               </div>
               <div class="cmenu-section">
-                <div class="cmenu-label">Удалить записи старше</div>
-                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 30)"><span class="co-icon">30d</span> 30 дней</button>
-                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 90)"><span class="co-icon">90d</span> 90 дней</button>
-                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 180)"><span class="co-icon">180d</span> 180 дней</button>
+                <div class="cmenu-label" data-i18n="hist_delete_older">Удалить записи старше</div>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 30)"><span class="co-icon">30d</span> 30 <span data-i18n="hist_days">дней</span></button>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 90)"><span class="co-icon">90d</span> 90 <span data-i18n="hist_days">дней</span></button>
+                <button class="cleanup-opt" onclick="doCleanup('older_than_days', 180)"><span class="co-icon">180d</span> 180 <span data-i18n="hist_days">дней</span></button>
               </div>
             </div>
           </div>
@@ -1760,11 +1734,11 @@
                 <div class="hist-item-top">
                   <div class="hist-item-badges">
                     {% if rr.status in ('done','completed') %}
-                      <span class="badge badge-green" style="font-size:10px">✓ Завершён</span>
+                      <span class="badge badge-green" style="font-size:10px" data-i18n="status_done">✓ Завершён</span>
                     {% elif rr.status in ('queued','processing') %}
-                      <span class="badge badge-yellow" style="font-size:10px">⏳ В процессе</span>
+                      <span class="badge badge-yellow" style="font-size:10px" data-i18n="status_processing">⏳ В процессе</span>
                     {% elif rr.status == 'error' %}
-                      <span class="badge badge-red" style="font-size:10px">✕ Ошибка</span>
+                      <span class="badge badge-red" style="font-size:10px" data-i18n="status_error">✕ Ошибка</span>
                     {% else %}
                       <span class="badge" style="font-size:10px">{{ rr.status }}</span>
                     {% endif %}
@@ -1790,16 +1764,16 @@
                 <details style="margin-top:8px">
                   <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none;list-style:none;display:inline-flex;align-items:center;gap:4px">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
-                    Отправить CEO
+                    <span data-i18n="hist_send_ceo">Отправить CEO</span>
                   </summary>
                   <form method="post" action="/ceo/send" style="margin-top:10px">
                     <input type="hidden" name="company_id" value="{{ company.id }}" />
                     <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
                     <div class="row">
-                      <div class="field"><label>Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
-                      <div class="field"><label>Комментарий</label><input name="message" type="text" /></div>
+                      <div class="field"><label data-i18n="hist_subject">Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
+                      <div class="field"><label data-i18n="hist_comment">Комментарий</label><input name="message" type="text" /></div>
                     </div>
-                    <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm">Отправить</button></div>
+                    <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm" data-i18n="btn_send">Отправить</button></div>
                   </form>
                 </details>
                 {% endif %}
@@ -1815,138 +1789,21 @@
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
               </svg>
-              Удалить выбранные
+              <span data-i18n="hist_delete_sel">Удалить выбранные</span>
             </button>
-            <button class="bulk-cancel-btn" onclick="clearSelection()">Отмена</button>
+            <button class="bulk-cancel-btn" onclick="clearSelection()" data-i18n="btn_cancel">Отмена</button>
           </div>
         {% else %}
           <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);backdrop-filter:blur(20px)">
             <div class="empty-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg></div>
-            <div class="empty-box-title">История пуста</div>
-            <div class="empty-box-sub">Запустите первый анализ</div>
+            <div class="empty-box-title" data-i18n="hist_empty">История пуста</div>
+            <div class="empty-box-sub" data-i18n="hist_empty_sub">Запустите первый анализ</div>
           </div>
         {% endif %}
 
       </div>{# end history #}
 
       <!-- ══ INTEGRATIONS TAB ══ -->
-      <div class="cd-panel" id="tab-integrations">
-      <style>
-        .int-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:20px; padding:28px; }
-        .int-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; }
-        .int-card-hdr { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
-        .int-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
-        .int-title { font-size:14px; font-weight:700; }
-        .int-subtitle { font-size:11px; color:var(--text-muted); margin-top:1px; }
-        .int-field { margin-bottom:12px; }
-        .int-field label { display:block; font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:4px; letter-spacing:0.04em; text-transform:uppercase; }
-        .int-field input { width:100%; padding:8px 12px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; font-family:inherit; }
-        .int-field input:focus { outline:none; border-color:var(--accent); }
-        .int-save-btn { width:100%; padding:9px; border-radius:8px; border:none; background:var(--accent); color:#fff; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s; }
-        .int-save-btn:hover { background:var(--accent-hover); }
-        .int-status { font-size:11px; margin-top:8px; text-align:center; min-height:16px; }
-        .int-enabled { display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13px; color:var(--text-muted); }
-        .int-enabled input[type=checkbox] { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; }
-      </style>
-      <div style="padding:20px 28px 0; font-size:13px; color:var(--text-muted)">
-        Подключите каналы чтобы AI-агент мог выполнять антикризисные действия автоматически.
-      </div>
-      <div class="int-grid">
-
-        <!-- Telegram -->
-        <div class="int-card">
-          <div class="int-card-hdr">
-            <div class="int-icon" style="background:rgba(0,136,204,0.15)">✈️</div>
-            <div>
-              <div class="int-title">Telegram</div>
-              <div class="int-subtitle">Уведомления в чат или группу</div>
-            </div>
-          </div>
-          <div class="int-field">
-            <label>Bot Token</label>
-            <input type="password" id="tg-token" placeholder="1234567890:AAH..." />
-          </div>
-          <div class="int-field">
-            <label>Chat ID</label>
-            <input type="text" id="tg-chat" placeholder="-100123456789 или @username" />
-          </div>
-          <div class="int-enabled">
-            <input type="checkbox" id="tg-enabled" checked />
-            <label for="tg-enabled">Включить</label>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="int-save-btn" onclick="saveIntegration('telegram')">Сохранить</button>
-            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('telegram')">Тест</button>
-          </div>
-          <div class="int-status" id="tg-status"></div>
-        </div>
-
-        <!-- Slack -->
-        <div class="int-card">
-          <div class="int-card-hdr">
-            <div class="int-icon" style="background:rgba(74,21,75,0.20)">💬</div>
-            <div>
-              <div class="int-title">Slack</div>
-              <div class="int-subtitle">Incoming Webhook → канал команды</div>
-            </div>
-          </div>
-          <div class="int-field">
-            <label>Webhook URL</label>
-            <input type="password" id="slack-webhook" placeholder="https://hooks.slack.com/services/..." />
-          </div>
-          <div class="int-field">
-            <label>Канал (необязательно)</label>
-            <input type="text" id="slack-channel" placeholder="#crisis-alerts" />
-          </div>
-          <div class="int-enabled">
-            <input type="checkbox" id="slack-enabled" checked />
-            <label for="slack-enabled">Включить</label>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="int-save-btn" onclick="saveIntegration('slack')">Сохранить</button>
-            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('slack')">Тест</button>
-          </div>
-          <div class="int-status" id="slack-status"></div>
-        </div>
-
-        <!-- Email -->
-        <div class="int-card">
-          <div class="int-card-hdr">
-            <div class="int-icon" style="background:rgba(52,211,153,0.12)">📧</div>
-            <div>
-              <div class="int-title">Email (SMTP)</div>
-              <div class="int-subtitle">Gmail App Password или корп. SMTP</div>
-            </div>
-          </div>
-          <div class="int-field">
-            <label>Email отправителя</label>
-            <input type="email" id="email-user" placeholder="you@gmail.com" />
-          </div>
-          <div class="int-field">
-            <label>App Password / SMTP пароль</label>
-            <input type="password" id="email-pass" placeholder="xxxx xxxx xxxx xxxx" />
-          </div>
-          <div class="int-field">
-            <label>Email получателя по умолчанию</label>
-            <input type="email" id="email-to" placeholder="ceo@company.com" />
-          </div>
-          <div class="int-field">
-            <label>SMTP хост (необязательно)</label>
-            <input type="text" id="email-host" placeholder="smtp.gmail.com" />
-          </div>
-          <div class="int-enabled">
-            <input type="checkbox" id="email-enabled" checked />
-            <label for="email-enabled">Включить</label>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="int-save-btn" onclick="saveIntegration('email')">Сохранить</button>
-            <button class="int-save-btn" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)" onclick="testIntegration('email')">Тест</button>
-          </div>
-          <div class="int-status" id="email-status"></div>
-        </div>
-
-      </div>
-      </div>{# end integrations #}
 
       <!-- ══ MARKET TAB ══ -->
       <div class="cd-panel" id="tab-market">
@@ -1978,17 +1835,17 @@ function showTab(name, btn) {
   document.querySelectorAll('.cd-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.cd-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  // If monitor tab opens and data already fetched — render immediately
+  if (name === 'monitor') {
+    if (_newsData !== null) _renderNews(_newsData);
+    else loadLiveNews();
+  }
   // Lazy-load iframe tabs on first open
   const iframe = document.querySelector(`#tab-${name} iframe[data-src]`);
   if (iframe && !_iframeLoaded[name]) {
     _iframeLoaded[name] = true;
     iframe.src = iframe.dataset.src;
-  }
-  // Load integrations on first open
-  if (name === 'integrations' && !_tabLoaded.integrations) {
-    _tabLoaded.integrations = true;
-    loadIntegrations();
   }
 }
 
@@ -2028,14 +1885,14 @@ async function refreshEmails() {
       fresh.forEach(em => { lastEmailIds.add(em.id); c.insertAdjacentHTML('afterbegin', renderEmail(em)); });
     }
   } catch(e) {}
-  if (btn) { btn.disabled = false; btn.innerHTML = '↻ Обновить'; }
+  if (btn) { btn.disabled = false; btn.textContent = document.cookie.includes('lang=en') ? '↻ Refresh' : '↻ Обновить'; }
 }
 
 // ── Loading overlay ──
 {% if is_admin %}
 document.getElementById('risk-form').addEventListener('submit', function() {
   const btn = document.getElementById('risk-btn');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Анализируем…';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ' + (document.cookie.includes('lang=en') ? 'Analyzing…' : 'Анализируем…');
   document.getElementById('loading-overlay').classList.add('active');
   [0,4000,8000,12000,16000,20000].forEach((d,i) => setTimeout(() => {
     document.querySelectorAll('.loading-step').forEach((el,idx) => {
@@ -2223,7 +2080,7 @@ async function loadSocial() {
   const params = new URLSearchParams();
   if (igVal) params.set('instagram_url', igVal);
 
-  feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>Сканируем соцсети…</div>`;
+  feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></span>${document.cookie.includes('lang=en')?'Scanning social media…':'Сканируем соцсети…'}</div>`;
   if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
 
   try {
@@ -2258,7 +2115,7 @@ async function loadSocial() {
 
     if (btn) { btn.disabled = false; btn.textContent = `Обновить (${posts.length})`; }
   } catch(e) {
-    feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">Ошибка загрузки</div>`;
+    feed.innerHTML = `<div style="padding:14px 0;color:var(--text-muted);font-size:13px">${document.cookie.includes('lang=en')?'Load error':'Ошибка загрузки'}</div>`;
     if (btn) { btn.disabled = false; btn.textContent = 'Сканировать'; }
   }
 }
@@ -2361,11 +2218,12 @@ async function doCleanup(mode, value) {
   const menu = document.getElementById('cleanup-menu');
   if (menu) menu.style.display = 'none';
 
+  const _isEn = document.cookie.includes('lang=en');
   const labels = {
-    keep_last: `Оставить последние ${value}?`,
-    older_than_days: `Удалить записи старше ${value} дней?`,
+    keep_last: _isEn ? `Keep last ${value} runs?` : `Оставить последние ${value}?`,
+    older_than_days: _isEn ? `Delete records older than ${value} days?` : `Удалить записи старше ${value} дней?`,
   };
-  if (!confirm(labels[mode] + '\nЭто действие нельзя отменить.')) return;
+  if (!confirm(labels[mode] + (_isEn ? '\nThis action cannot be undone.' : '\nЭто действие нельзя отменить.'))) return;
 
   const fd = new FormData();
   fd.append(mode, value);
@@ -2374,107 +2232,197 @@ async function doCleanup(mode, value) {
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (data.deleted > 0) {
-      // Remove deleted items from DOM (reload is simplest)
       window.location.reload();
     } else {
-      alert('Нечего удалять.');
+      alert(document.cookie.includes('lang=en') ? 'Nothing to delete.' : 'Нечего удалять.');
     }
   } catch (e) {
-    alert('Ошибка при очистке. Попробуйте снова.');
+    alert(document.cookie.includes('lang=en') ? 'Cleanup error. Try again.' : 'Ошибка при очистке. Попробуйте снова.');
   }
 }
 loadSocialAccounts();
 
-// ── Integrations ──
-async function testIntegration(provider) {
-  const statusEl = document.getElementById(`${provider === 'telegram' ? 'tg' : provider}-status`);
-  statusEl.style.color = 'var(--text-muted)';
-  statusEl.textContent = 'Отправляем тест…';
-  try {
-    const fd = new FormData();
-    fd.append('provider', provider);
-    const r = await fetch('/companies/{{ company.id }}/integrations/test', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (data.ok) {
-      statusEl.style.color = '#34d399';
-      statusEl.textContent = '✓ Сообщение отправлено!';
-    } else {
-      statusEl.style.color = '#f87171';
-      statusEl.textContent = 'Ошибка: ' + (data.error || 'unknown');
-    }
-  } catch(e) {
-    statusEl.style.color = '#f87171';
-    statusEl.textContent = 'Ошибка сети';
-  }
-}
 
-async function saveIntegration(provider) {
-  let config = {};
-  let enabled = true;
-  if (provider === 'telegram') {
-    config = { token: document.getElementById('tg-token').value.trim(), chat_id: document.getElementById('tg-chat').value.trim() };
-    enabled = document.getElementById('tg-enabled').checked;
-  } else if (provider === 'slack') {
-    config = { webhook_url: document.getElementById('slack-webhook').value.trim(), channel: document.getElementById('slack-channel').value.trim() };
-    enabled = document.getElementById('slack-enabled').checked;
-  } else if (provider === 'email') {
-    config = {
-      smtp_user: document.getElementById('email-user').value.trim(),
-      smtp_password: document.getElementById('email-pass').value.trim(),
-      default_to: document.getElementById('email-to').value.trim(),
-      smtp_host: document.getElementById('email-host').value.trim() || 'smtp.gmail.com',
-      smtp_port: 587,
-    };
-    enabled = document.getElementById('email-enabled').checked;
+// Language toggle
+const _i18n = {
+  ru: {
+    tab_overview: '◎ Обзор', tab_team: 'Команда', tab_signals: 'Сигналы',
+    tab_history: 'История', tab_monitor: 'Мониторинг',
+    btn_pdf: 'Скачать PDF', btn_run: 'Запустить анализ',
+    btn_cancel: 'Отмена', btn_send: 'Отправить', btn_upload: 'Загрузить',
+    btn_add_short: 'Добавить', btn_invite_short: 'Пригласить',
+    ci_sub: 'Конкурентная разведка',
+    fin_lbl: 'Потенциальные потери', fin_sub: 'при реализации рисков',
+    top_risks: 'Топ рисков', top_risks_sub: 'приоритет по вероятности × влиянию',
+    th_risk: 'Риск', th_prob: 'Вероятность', th_loss: 'Потери', th_cat: 'Категория',
+    no_analysis_title: 'Анализ не запускался', no_analysis_sub: 'Нажмите «Запустить анализ» чтобы получить оценку рисков',
+    advice_lbl: 'Рекомендация AI',
+    mon_last_check: 'Последняя проверка', mon_not_started: 'Ещё не запускался',
+    mon_last_analysis: 'Последний анализ', mon_no_analysis: 'Анализ не запускался',
+    mon_risk_score: 'Риск-скор при анализе', mon_interval: 'Интервал', mon_interval_val: 'каждые 15 мин',
+    current_news: 'Текущие новости',
+    team_empty: 'Команда пуста', team_empty_sub: 'Пригласите первого участника',
+    team_members_title: 'Участники команды',
+    btn_add_emp: 'Добавить сотрудника', btn_invite: 'Отправить приглашение',
+    emp_empty: 'Сотрудников нет', emp_empty_sub: 'Нажмите «Добавить» чтобы создать первый контакт',
+    emp_count_suffix: 'сотрудников',
+    emp_modal_title: 'Новый сотрудник', emp_modal_sub: 'Signal Contact — получает ссылку для отправки сигналов',
+    emp_card_title: 'Карточка сотрудника',
+    invite_title: 'Пригласить участника', invite_sub: 'Участник получит доступ к аналитике компании',
+    lbl_access_scope: 'Сфера доступа', lbl_fullname: 'ФИО *',
+    lbl_position: 'Должность', lbl_department: 'Отдел',
+    lbl_photo: 'Фото сотрудника', lbl_choose_file: 'Выбрать файл (JPG/PNG, до 5 МБ)',
+    status_active: '● активен', status_pending: '○ ожидает',
+    status_done: '✓ Завершён', status_processing: '⏳ В процессе', status_error: '✕ Ошибка',
+    signals_empty: 'Сигналов пока нет', signals_empty_sub: 'Здесь будут появляться сообщения от сотрудников',
+    signals_panel_title: 'Сигналы от сотрудников',
+    btn_refresh: '↻ Обновить', btn_add_signal: 'Добавить сигнал', btn_send_signal: 'Отправить сигнал',
+    signal_modal_title: 'Новый сигнал', signal_modal_sub: 'Ручное добавление внутреннего сигнала',
+    lbl_message: 'Сообщение *',
+    conf_title: 'Оценка достоверности',
+    conf_q1: 'Вы уверены, что информация соответствует действительности?',
+    conf_q2: 'Подтверждается ли это другими сотрудниками или фактами?',
+    conf_q3: 'Источник информации:',
+    conf_yes: 'Да, уверен', conf_no: 'Нет', conf_dunno: 'Не знаю', conf_yes2: 'Да',
+    src_experience: 'Личный опыт', src_observation: 'Наблюдение', src_rumor: 'Слухи / предположение',
+    conf_partial: 'Частично подтверждено', conf_index: 'Индекс достоверности сигнала',
+    hist_empty: 'История пуста', hist_empty_sub: 'Запустите первый анализ',
+    hist_title: 'История анализов', hist_cleanup: 'Очистить',
+    hist_keep_last: 'Оставить последние', hist_runs: 'последних запусков',
+    hist_delete_older: 'Удалить записи старше', hist_days: 'дней',
+    hist_send_ceo: 'Отправить CEO', hist_subject: 'Тема', hist_comment: 'Комментарий',
+    hist_delete_sel: 'Удалить выбранные',
+    ap_do: 'Что делать сейчас', ap_dont: 'Чего не делать', ap_result: 'Ожидаемый результат',
+    sc_variants: 'варианта', sc_label: 'Сценарий',
+    banner_analyzing: 'Анализ выполняется', banner_starting: 'Запуск…',
+    loading_title: 'Анализируем компанию…',
+    loading_step0: ' Получаем новости…', loading_step1: ' Сканируем Threads…',
+    loading_step2: ' Вакансии HH.ru…', loading_step3: ' Регуляторные сигналы…',
+    loading_step4: ' Рыночная аналитика…', loading_step5: ' Claude AI анализирует…',
+    nav_system: 'Система', nav_logout: 'Выйти',
+    co_checked: 'Проверено', co_not_started: 'Мониторинг не запущен',
+    mon_news_empty: 'Мониторинг ещё не запускался.',
+    mon_news_auto: 'Система проверяет новости каждые 15 минут автоматически.',
+  },
+  en: {
+    tab_overview: '◎ Overview', tab_team: 'Team', tab_signals: 'Signals',
+    tab_history: 'History', tab_monitor: 'Monitoring',
+    btn_pdf: 'Download PDF', btn_run: 'Run Analysis',
+    btn_cancel: 'Cancel', btn_send: 'Send', btn_upload: 'Upload',
+    btn_add_short: 'Add', btn_invite_short: 'Invite',
+    ci_sub: 'Competitive Intelligence',
+    fin_lbl: 'Potential Losses', fin_sub: 'if risks materialize',
+    top_risks: 'Top Risks', top_risks_sub: 'priority by probability × impact',
+    th_risk: 'Risk', th_prob: 'Probability', th_loss: 'Losses', th_cat: 'Category',
+    no_analysis_title: 'No analysis yet', no_analysis_sub: 'Click "Run Analysis" to get a risk assessment',
+    advice_lbl: 'AI Recommendation',
+    mon_last_check: 'Last Check', mon_not_started: 'Not started yet',
+    mon_last_analysis: 'Last Analysis', mon_no_analysis: 'No analysis yet',
+    mon_risk_score: 'Risk Score', mon_interval: 'Interval', mon_interval_val: 'every 15 min',
+    current_news: 'Current News',
+    team_empty: 'Team is empty', team_empty_sub: 'Invite your first member',
+    team_members_title: 'Team Members',
+    btn_add_emp: 'Add Employee', btn_invite: 'Send Invitation',
+    emp_empty: 'No employees', emp_empty_sub: 'Click "Add" to create the first contact',
+    emp_count_suffix: 'employees',
+    emp_modal_title: 'New Employee', emp_modal_sub: 'Signal Contact — receives a link to submit signals',
+    emp_card_title: 'Employee Profile',
+    invite_title: 'Invite Member', invite_sub: 'Member will get access to company analytics',
+    lbl_access_scope: 'Access Scope', lbl_fullname: 'Full Name *',
+    lbl_position: 'Position', lbl_department: 'Department',
+    lbl_photo: 'Employee Photo', lbl_choose_file: 'Choose file (JPG/PNG, up to 5 MB)',
+    status_active: '● active', status_pending: '○ pending',
+    status_done: '✓ Completed', status_processing: '⏳ Processing', status_error: '✕ Error',
+    signals_empty: 'No signals yet', signals_empty_sub: 'Employee messages will appear here',
+    signals_panel_title: 'Employee Signals',
+    btn_refresh: '↻ Refresh', btn_add_signal: 'Add Signal', btn_send_signal: 'Send Signal',
+    signal_modal_title: 'New Signal', signal_modal_sub: 'Manual internal signal entry',
+    lbl_message: 'Message *',
+    conf_title: 'Credibility Assessment',
+    conf_q1: 'Are you confident the information is accurate?',
+    conf_q2: 'Is this confirmed by other employees or facts?',
+    conf_q3: 'Source of information:',
+    conf_yes: 'Yes, confident', conf_no: 'No', conf_dunno: "Don't know", conf_yes2: 'Yes',
+    src_experience: 'Personal experience', src_observation: 'Observation', src_rumor: 'Rumor / assumption',
+    conf_partial: 'Partially confirmed', conf_index: 'Signal credibility index',
+    hist_empty: 'History is empty', hist_empty_sub: 'Run your first analysis',
+    hist_title: 'Analysis History', hist_cleanup: 'Cleanup',
+    hist_keep_last: 'Keep last', hist_runs: 'runs',
+    hist_delete_older: 'Delete records older than', hist_days: 'days',
+    hist_send_ceo: 'Send to CEO', hist_subject: 'Subject', hist_comment: 'Comment',
+    hist_delete_sel: 'Delete selected',
+    ap_do: 'What to do now', ap_dont: 'What not to do', ap_result: 'Expected outcome',
+    sc_variants: 'scenarios', sc_label: 'Scenario',
+    banner_analyzing: 'Analysis running', banner_starting: 'Starting…',
+    loading_title: 'Analyzing company…',
+    loading_step0: ' Fetching news…', loading_step1: ' Scanning Threads…',
+    loading_step2: ' Jobs on HH.ru…', loading_step3: ' Regulatory signals…',
+    loading_step4: ' Market analytics…', loading_step5: ' Claude AI analyzing…',
+    nav_system: 'System', nav_logout: 'Sign Out',
+    co_checked: 'Checked', co_not_started: 'Monitoring not started',
+    mon_news_empty: 'Monitoring has not run yet.',
+    mon_news_auto: 'The system checks news every 15 minutes automatically.',
   }
-  const statusEl = document.getElementById(`${provider === 'telegram' ? 'tg' : provider}-status`);
-  statusEl.style.color = 'var(--text-muted)';
-  statusEl.textContent = 'Сохраняем…';
-  try {
-    const fd = new FormData();
-    fd.append('provider', provider);
-    fd.append('config_json', JSON.stringify(config));
-    fd.append('enabled', enabled ? 'true' : 'false');
-    const r = await fetch('/companies/{{ company.id }}/integrations/save', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (data.ok) {
-      statusEl.style.color = '#34d399';
-      statusEl.textContent = '✓ Сохранено';
-    } else {
-      statusEl.style.color = '#f87171';
-      statusEl.textContent = 'Ошибка: ' + (data.error || 'unknown');
-    }
-  } catch(e) {
-    statusEl.style.color = '#f87171';
-    statusEl.textContent = 'Ошибка сети';
-  }
-}
+};
 
-// Load saved integrations into fields on tab open
-async function loadIntegrations() {
-  try {
-    const r = await fetch('/companies/{{ company.id }}/integrations');
-    const data = await r.json();
-    for (const item of (data.integrations || [])) {
-      const cfg = item.config || {};
-      if (item.provider === 'telegram') {
-        if (cfg.token) document.getElementById('tg-token').value = cfg.token;
-        if (cfg.chat_id) document.getElementById('tg-chat').value = cfg.chat_id;
-        document.getElementById('tg-enabled').checked = item.enabled !== false;
-      } else if (item.provider === 'slack') {
-        if (cfg.webhook_url) document.getElementById('slack-webhook').value = cfg.webhook_url;
-        if (cfg.channel) document.getElementById('slack-channel').value = cfg.channel;
-        document.getElementById('slack-enabled').checked = item.enabled !== false;
-      } else if (item.provider === 'email') {
-        if (cfg.smtp_user) document.getElementById('email-user').value = cfg.smtp_user;
-        if (cfg.smtp_password) document.getElementById('email-pass').value = cfg.smtp_password;
-        if (cfg.default_to) document.getElementById('email-to').value = cfg.default_to;
-        if (cfg.smtp_host) document.getElementById('email-host').value = cfg.smtp_host;
-        document.getElementById('email-enabled').checked = item.enabled !== false;
-      }
-    }
-  } catch(e) {}
+const _dont_en = {
+  media:  "Do not suppress negative publications or ignore media requests",
+  hr:     "Do not conduct mass layoffs or ignore internal discontent",
+  gr:     "Do not enter open conflict with regulators or government bodies",
+  pr:     "Do not make public statements without an agreed crisis strategy",
+  market: "Do not make major investment decisions without reassessing risks",
+};
+const _dont_ru = {
+  media:  "Не замалчивать негативные публикации и не игнорировать запросы СМИ",
+  hr:     "Не проводить массовых сокращений и не игнорировать внутреннее недовольство",
+  gr:     "Не вступать в открытый конфликт с регуляторами и госструктурами",
+  pr:     "Не давать публичных комментариев без согласования антикризисной стратегии",
+  market: "Не принимать крупных инвестиционных решений без пересмотра рисков",
+};
+const _result_en = {
+  media:  "Reduced reputational pressure and increased audience trust",
+  hr:     "Team stabilization and retention of key employees",
+  gr:     "Normalized relations with the state and reduced regulatory risks",
+  pr:     "Restored public image and partner trust",
+  market: "Protected market position and reduced financial losses",
+};
+const _result_ru = {
+  media:  "Снижение репутационного давления и рост доверия аудитории",
+  hr:     "Стабилизация команды и удержание ключевых сотрудников",
+  gr:     "Нормализация отношений с государством и снижение регуляторных рисков",
+  pr:     "Восстановление публичного имиджа и доверия партнёров",
+  market: "Защита рыночной позиции и снижение финансовых потерь",
+};
+
+function setLang(lang) {
+  document.cookie = `lang=${lang};path=/;max-age=31536000`;
+  const dict = _i18n[lang] || _i18n.ru;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (dict[key]) el.textContent = dict[key];
+  });
+  // Translate dont/result action panel
+  document.querySelectorAll('[data-i18n-dont]').forEach(el => {
+    const key = el.dataset.i18nDont;
+    el.textContent = (lang === 'en' ? _dont_en : _dont_ru)[key] || el.textContent;
+  });
+  document.querySelectorAll('[data-i18n-result]').forEach(el => {
+    const key = el.dataset.i18nResult;
+    el.textContent = (lang === 'en' ? _result_en : _result_ru)[key] || el.textContent;
+  });
+  const btnRu = document.getElementById('lang-ru');
+  const btnEn = document.getElementById('lang-en');
+  if (btnRu && btnEn) {
+    btnRu.style.background = lang === 'ru' ? 'rgba(124,58,237,0.7)' : 'transparent';
+    btnRu.style.color      = lang === 'ru' ? '#fff' : 'rgba(255,255,255,0.4)';
+    btnEn.style.background = lang === 'en' ? 'rgba(124,58,237,0.7)' : 'transparent';
+    btnEn.style.color      = lang === 'en' ? '#fff' : 'rgba(255,255,255,0.4)';
+  }
 }
+(function() {
+  const lang = document.cookie.match(/lang=([^;]+)/)?.[1] || 'ru';
+  setLang(lang);
+})();
 
 // Company switcher dropdown
 function toggleCoDropdown(e) {
@@ -2485,41 +2433,61 @@ document.addEventListener('click', function() {
   document.getElementById('coSwitcher')?.classList.remove('open');
 });
 
-// Lazy-load news after page renders
-(async function loadLiveNews() {
+// News loaded in background on page load; rendered when monitor tab opens
+let _newsLoaded = false;
+let _newsData = null;
+async function loadLiveNews() {
+  if (_newsLoaded && _newsData !== null) {
+    _renderNews(_newsData);
+    return;
+  }
+  if (_newsLoaded) return; // fetch already in progress
+  _newsLoaded = true;
+
+  // Fetch in background immediately; render only when tab is open
+  fetch('/companies/{{ company.id }}/news')
+    .then(r => r.json())
+    .then(data => {
+      _newsData = data.news || [];
+      // Only render if monitor tab is currently visible
+      const panel = document.getElementById('tab-monitor');
+      if (panel && panel.classList.contains('active')) _renderNews(_newsData);
+    })
+    .catch(() => {
+      _newsData = [];
+      const panel = document.getElementById('tab-monitor');
+      if (panel && panel.classList.contains('active')) _renderNews(_newsData);
+    });
+}
+
+function _renderNews(items) {
   const feed = document.getElementById('live-news-feed');
   const countEl = document.getElementById('news-count');
   if (!feed) return;
-  try {
-    const res = await fetch('/companies/{{ company.id }}/news');
-    const data = await res.json();
-    const items = data.news || [];
-    if (countEl) countEl.textContent = items.length || '';
-    if (!items.length) {
-      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Новостей не найдено</div>';
-      return;
-    }
-    feed.innerHTML = items.map(n => {
-      const src = n.source || '';
-      const isReddit = src.toLowerCase().includes('reddit');
-      const srcBadge = isReddit
-        ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">${src}</span>`
-        : src ? `<span class="mon-badge mon-badge-src">${src}</span>` : '';
-      const date = n.pub_date ? `<span>·</span><span>${n.pub_date}</span>` : '';
-      return `<div class="mon-item">
-        <div class="mon-icon mon-icon-known" style="font-size:11px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
-        </div>
-        <div class="mon-body">
-          <a href="${n.link}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
-          <div class="mon-meta">${srcBadge}${date}</div>
-        </div>
-      </div>`;
-    }).join('');
-  } catch {
-    feed.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Ошибка загрузки новостей</div>';
+  const _lang = document.cookie.match(/lang=([^;]+)/)?.[1] || 'ru';
+  if (countEl) countEl.textContent = items.length || '';
+  if (!items.length) {
+    feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">${_lang==='en'?'No news found':'Новостей не найдено'}</div>`;
+    return;
   }
-})();
+  feed.innerHTML = items.map(n => {
+    const src = n.source || '';
+    const isReddit = src.toLowerCase().includes('reddit');
+    const srcBadge = isReddit
+      ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">${src}</span>`
+      : src ? `<span class="mon-badge mon-badge-src">${src}</span>` : '';
+    const date = n.pub_date ? `<span>·</span><span>${n.pub_date}</span>` : '';
+    return `<div class="mon-item">
+      <div class="mon-icon mon-icon-known" style="font-size:11px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
+      </div>
+      <div class="mon-body">
+        <a href="${n.link}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+        <div class="mon-meta">${srcBadge}${date}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 // ── Analysis progress polling ──
 (function() {
@@ -2542,11 +2510,11 @@ document.addEventListener('click', function() {
       if (data.status === 'done') {
         clearInterval(timer);
         if (bar)   bar.style.width = '100%';
-        if (stage) stage.textContent = 'Готово! Обновляем страницу…';
+        if (stage) stage.textContent = document.cookie.includes('lang=en') ? 'Done! Reloading…' : 'Готово! Обновляем страницу…';
         setTimeout(() => { location.href = location.pathname; }, 800);
       } else if (data.status === 'error') {
         clearInterval(timer);
-        if (stage) stage.textContent = 'Ошибка анализа';
+        if (stage) stage.textContent = document.cookie.includes('lang=en') ? 'Analysis error' : 'Ошибка анализа';
         if (bar)   bar.style.background = '#f87171';
       }
     } catch(e) { /* network hiccup — keep polling */ }
@@ -2555,5 +2523,8 @@ document.addEventListener('click', function() {
   poll();
   timer = setInterval(poll, 2500);
 })();
+
+// Pre-warm news cache in background immediately on page load
+loadLiveNews();
 </script>
 {% endblock %}

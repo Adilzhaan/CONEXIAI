@@ -339,7 +339,23 @@ async def fetch_news(
     industry = (co.get("industry") or "").strip()
     rules = _build_match_rules(company_name, ceo_name, industry=industry, location=location)
     relevant = _filter_relevant(all_items, rules, list(news_sources))
-    return relevant[:limit * 2]
+
+    # Drop articles older than 90 days, sort newest first
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+
+    def _parse_pub_date(item: dict):
+        pd = (item.get("pub_date") or "").strip()
+        for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+            try:
+                return datetime.strptime(pd, fmt).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                pass
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    fresh = [item for item in relevant if _parse_pub_date(item) >= cutoff]
+    fresh.sort(key=_parse_pub_date, reverse=True)
+    return fresh[:limit * 2]
 
 
 async def fetch_yandex_news(

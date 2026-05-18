@@ -518,12 +518,17 @@ async def dashboard(req: Request):
             return resp
         member_rows = []
 
-    # Fetch latest risk score + categories + advice for each company
-    company_ids = [
+    # If user belongs to exactly one company — go straight there
+    active_companies = [
         m["companies"]["id"]
         for m in member_rows
         if m.get("companies") and m["companies"].get("id")
     ]
+    if len(active_companies) == 1:
+        return RedirectResponse(url=f"/companies/{active_companies[0]}", status_code=302)
+
+    # Fetch latest risk score + categories + advice for each company
+    company_ids = active_companies
     risk_map: dict[str, dict] = {}
     prev_risk_map: dict[str, dict] = {}
     snapshot_map: dict[str, dict] = {}
@@ -829,6 +834,32 @@ async def _company_detail_inner(req: Request, company_id: str):
     if not company:
         return RedirectResponse(url="/dashboard", status_code=302)
 
+    # Filter monitor_snapshot news: drop items older than 90 days, write cleaned list back to DB
+    if monitor_snapshot and monitor_snapshot.get("recent_news"):
+        from datetime import datetime, timezone, timedelta
+        _cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        _filtered_news = []
+        for _item in monitor_snapshot["recent_news"]:
+            _pd = (_item.get("pub_date") or "").strip()
+            _dt = None
+            for _fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+                try:
+                    _dt = datetime.strptime(_pd, _fmt).replace(tzinfo=timezone.utc)
+                    break
+                except (ValueError, TypeError):
+                    pass
+            if _dt is not None and _dt >= _cutoff:
+                _filtered_news.append(_item)
+        # Write cleaned list back to DB if any stale items were removed
+        if len(_filtered_news) < len(monitor_snapshot["recent_news"]) and settings.SUPABASE_SERVICE_KEY:
+            asyncio.create_task(supabase.rest_upsert_service(
+                table="monitoring_snapshots",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                rows=[{"company_id": company_id, "recent_news": _filtered_news}],
+                on_conflict="company_id",
+            ))
+        monitor_snapshot = {**monitor_snapshot, "recent_news": _filtered_news}
+
     finance_data = await (
         finance_client.fetch_market_data(company["name"]) if settings.FINANCE_ENABLED
         else asyncio.sleep(0, result={"found": False})
@@ -937,12 +968,22 @@ async def _refresh_market_cache(company_id: str, company_name: str) -> dict:
     return {"finance": market_data, "ai_analysis": ai_analysis, "news": company_news}
 
 
+_news_cache: dict[str, tuple[float, list]] = {}  # company_id → (timestamp, news)
+_NEWS_CACHE_TTL = 60 * 60  # 1 hour
+
+
 @app.get("/companies/{company_id}/news")
 async def company_news_api(req: Request, company_id: str):
     """Fetch news for a company lazily (called from frontend after page load)."""
+    import time
     user = await get_current_user(req)
     if not user:
         return {"error": "unauthorized"}
+
+    # Return cached result if fresh
+    cached = _news_cache.get(company_id)
+    if cached and (time.time() - cached[0]) < _NEWS_CACHE_TTL:
+        return {"news": cached[1], "cached": True}
 
     access_token, _ = _get_tokens(req)
     effective_token = getattr(req.state, "new_access_token", None) or access_token
@@ -958,6 +999,7 @@ async def company_news_api(req: Request, company_id: str):
 
     company = company_rows[0]
     news = await news_client.fetch_news(company["name"], company=company)
+    _news_cache[company_id] = (time.time(), news)
     return {"news": news}
 
 
@@ -1445,6 +1487,7 @@ async def _run_analysis_bg(
     company_profile: dict,
     employees: list,
     emails_rows: list,
+    lang: str = "ru",
 ) -> None:
     def _set(stage: str, pct: int) -> None:
         _job_stages[run_id] = {"stage": stage, "pct": pct}
@@ -1494,6 +1537,7 @@ async def _run_analysis_bg(
             regulatory_news=regulatory_news + gr_news, market_news=market_news,
             finance=finance_data, hr_emails=hr_emails, pr_emails=pr_emails, gr_emails=gr_emails,
             api_key=settings.ANTHROPIC_API_KEY,
+            lang=lang,
         )
 
         _set("Сохраняем результаты…", 92)
@@ -1600,6 +1644,8 @@ async def risks_run(
     run_id = run_row.get("id", "")
     _job_stages[run_id] = {"stage": "Запуск анализа…", "pct": 5}
 
+    lang = req.cookies.get("lang", "ru")
+
     # Запускаем фоновую задачу — не блокируем HTTP ответ
     asyncio.create_task(_run_analysis_bg(
         run_id=run_id,
@@ -1607,6 +1653,7 @@ async def risks_run(
         company_profile=company_profile,
         employees=employees,
         emails_rows=emails_rows,
+        lang=lang,
     ))
 
     return RedirectResponse(url=f"/companies/{company_id}?run_id={run_id}", status_code=302)
@@ -2262,111 +2309,6 @@ async def crisis_generate(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ── Integrations (per-company) ─────────────────────────────────────────────
-
-@app.post("/companies/{company_id}/integrations/test")
-async def test_integration(req: Request, company_id: str, provider: str = Form(...)):
-    from fastapi.responses import JSONResponse
-    user = await get_current_user(req)
-    access_token, _ = _get_tokens(req)
-    if not user or not access_token:
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-    effective_token = getattr(req.state, "new_access_token", None) or access_token
-    rows = await supabase.rest_select(
-        table="integrations", access_token=effective_token,
-        select="provider,config,enabled",
-        query_params={"company_id": f"eq.{company_id}", "provider": f"eq.{provider}"},
-    )
-    if not rows:
-        return JSONResponse({"error": "integration_not_found"}, status_code=404)
-    cfg = rows[0].get("config") or {}
-    try:
-        if provider == "telegram":
-            result = await agent_client._send_telegram(cfg["token"], cfg["chat_id"], "✅ Тест CONEXIAI: интеграция с Telegram работает!")
-        elif provider == "slack":
-            result = await agent_client._send_slack(cfg["webhook_url"], "✅ Тест CONEXIAI: интеграция со Slack работает!")
-        elif provider == "email":
-            result = await agent_client._send_email(
-                cfg.get("smtp_host", "smtp.gmail.com"), int(cfg.get("smtp_port", 587)),
-                cfg["smtp_user"], cfg["smtp_password"],
-                cfg.get("default_to", cfg["smtp_user"]),
-                "Тест CONEXIAI", "Интеграция с Email работает!"
-            )
-        else:
-            return JSONResponse({"error": "unknown_provider"}, status_code=400)
-        return JSONResponse({"ok": True, "result": result})
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-@app.get("/companies/{company_id}/integrations")
-async def get_integrations(req: Request, company_id: str):
-    from fastapi.responses import JSONResponse
-    user = await get_current_user(req)
-    access_token, _ = _get_tokens(req)
-    if not user or not access_token:
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-    effective_token = getattr(req.state, "new_access_token", None) or access_token
-    rows = await supabase.rest_select(
-        table="integrations",
-        access_token=effective_token,
-        select="id,provider,config,enabled",
-        query_params={"company_id": f"eq.{company_id}"},
-    )
-    # Strip secrets from config before returning
-    safe = []
-    for r in rows:
-        cfg = dict(r.get("config") or {})
-        if "token" in cfg:
-            cfg["token"] = cfg["token"][:8] + "…" if cfg["token"] else ""
-        if "smtp_password" in cfg:
-            cfg["smtp_password"] = "••••••••"
-        if "webhook_url" in cfg:
-            cfg["webhook_url"] = cfg["webhook_url"][:30] + "…" if cfg["webhook_url"] else ""
-        safe.append({"id": r["id"], "provider": r["provider"], "config": cfg, "enabled": r.get("enabled", True)})
-    return JSONResponse({"integrations": safe})
-
-
-@app.post("/companies/{company_id}/integrations/save")
-async def save_integration(
-    req: Request,
-    company_id: str,
-    provider: str = Form(...),
-    config_json: str = Form("{}"),
-    enabled: str = Form("true"),
-):
-    from fastapi.responses import JSONResponse
-    user = await get_current_user(req)
-    access_token, _ = _get_tokens(req)
-    if not user or not access_token:
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-    effective_token = getattr(req.state, "new_access_token", None) or access_token
-
-    try:
-        config = json.loads(config_json)
-    except Exception:
-        return JSONResponse({"error": "invalid_json"}, status_code=400)
-
-    svc = settings.SUPABASE_SERVICE_KEY
-    if not svc:
-        return JSONResponse({"error": "no_service_key"}, status_code=500)
-
-    # Keep old secrets if new value is masked placeholder
-    existing = await supabase.rest_select(
-        table="integrations", access_token=effective_token,
-        select="config", query_params={"company_id": f"eq.{company_id}", "provider": f"eq.{provider}"},
-    )
-    if existing:
-        old_cfg = existing[0].get("config") or {}
-        for key in ("token", "smtp_password", "webhook_url"):
-            if key in config and config[key] and (config[key].endswith("…") or config[key] == "••••••••"):
-                config[key] = old_cfg.get(key, "")
-
-    await supabase.rest_upsert_service(
-        table="integrations", service_key=svc,
-        rows=[{"company_id": company_id, "provider": provider, "config": config, "enabled": enabled == "true"}],
-        on_conflict="company_id,provider",
-    )
-    return JSONResponse({"ok": True})
 
 
 @app.post("/companies/{company_id}/crisis/agent/execute")
