@@ -1215,8 +1215,8 @@
               {% endif %}
             </div>
             <div class="mon-status-card">
-              <div class="mon-status-label" data-i18n="mon_interval">Интервал</div>
-              <div class="mon-status-val" data-i18n="mon_interval_val">каждые 15 мин</div>
+              <div class="mon-status-label" data-i18n="mon_mode">Режим</div>
+              <div class="mon-status-val" data-i18n="mon_mode_val">Ручной запуск</div>
             </div>
           </div>
 
@@ -1294,7 +1294,7 @@
               <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
                 <div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div>
                 <span data-i18n="mon_news_empty">Мониторинг ещё не запускался.</span><br>
-                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Система проверяет новости каждые 15 минут автоматически.</span>
+                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Нажмите «Загрузить новости» чтобы получить свежие данные.</span>
               </div>
             {% endif %}
           </div>
@@ -2256,7 +2256,7 @@ const _i18n = {
     advice_lbl: 'Рекомендация AI',
     mon_last_check: 'Последняя проверка', mon_not_started: 'Ещё не запускался',
     mon_last_analysis: 'Последний анализ', mon_no_analysis: 'Анализ не запускался',
-    mon_risk_score: 'Риск-скор при анализе', mon_interval: 'Интервал', mon_interval_val: 'каждые 15 мин',
+    mon_risk_score: 'Риск-скор при анализе', mon_mode: 'Режим', mon_mode_val: 'Ручной запуск',
     current_news: 'Текущие новости',
     team_empty: 'Команда пуста', team_empty_sub: 'Пригласите первого участника',
     team_members_title: 'Участники команды',
@@ -2300,7 +2300,7 @@ const _i18n = {
     nav_system: 'Система', nav_logout: 'Выйти',
     co_checked: 'Проверено', co_not_started: 'Мониторинг не запущен',
     mon_news_empty: 'Мониторинг ещё не запускался.',
-    mon_news_auto: 'Система проверяет новости каждые 15 минут автоматически.',
+    mon_news_auto: 'Нажмите «Загрузить новости» чтобы получить свежие данные.',
   },
   en: {
     tab_overview: '◎ Overview', tab_team: 'Team', tab_signals: 'Signals',
@@ -2316,7 +2316,7 @@ const _i18n = {
     advice_lbl: 'AI Recommendation',
     mon_last_check: 'Last Check', mon_not_started: 'Not started yet',
     mon_last_analysis: 'Last Analysis', mon_no_analysis: 'No analysis yet',
-    mon_risk_score: 'Risk Score', mon_interval: 'Interval', mon_interval_val: 'every 15 min',
+    mon_risk_score: 'Risk Score', mon_mode: 'Mode', mon_mode_val: 'Manual',
     current_news: 'Current News',
     team_empty: 'Team is empty', team_empty_sub: 'Invite your first member',
     team_members_title: 'Team Members',
@@ -2360,7 +2360,7 @@ const _i18n = {
     nav_system: 'System', nav_logout: 'Sign Out',
     co_checked: 'Checked', co_not_started: 'Monitoring not started',
     mon_news_empty: 'Monitoring has not run yet.',
-    mon_news_auto: 'The system checks news every 15 minutes automatically.',
+    mon_news_auto: 'Click "Load News" to fetch the latest data.',
   }
 };
 
