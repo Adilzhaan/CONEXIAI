@@ -13,7 +13,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .config import settings
 from .supabase import supabase
@@ -65,32 +64,7 @@ def _pkce_pair() -> tuple[str, str]:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    scheduler = AsyncIOScheduler()
-    if settings.MONITORING_ENABLED:
-        async def _run_cycle():
-            await monitor_client.run_monitoring_cycle(
-                supabase=supabase,
-                news_client=news_client,
-                ai_client=ai_client,
-                apify_client=apify_client,
-                hh_client=hh_client,
-                finance_client=finance_client,
-                settings=settings,
-                ci_client=ci_client,
-            )
-        from datetime import datetime
-        scheduler.add_job(
-            _run_cycle,
-            trigger="interval",
-            minutes=settings.MONITORING_INTERVAL_MINUTES,
-            id="smart_monitor",
-            replace_existing=True,
-            next_run_time=datetime.now(),
-        )
-        logger.info("Smart monitor scheduler started (every %d min, first run: immediate)", settings.MONITORING_INTERVAL_MINUTES)
-    scheduler.start()
     yield
-    scheduler.shutdown(wait=False)
     await supabase.close()
     await news_client.close()
     await apify_client.close()
