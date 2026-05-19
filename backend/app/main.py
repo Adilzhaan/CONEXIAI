@@ -1469,15 +1469,16 @@ async def _run_analysis_bg(
 
     try:
         _set("Загружаем новости и данные…", 15)
-        news, yandex_news, vacancies, regulatory_news, market_news, gr_news, finance_data = await asyncio.gather(
-            news_client.fetch_news(company_name, limit=12, company=company_profile),
-            news_client.fetch_yandex_news(company_name, limit=8, company=company_profile),
+        news_combined, vacancies, finance_data = await asyncio.gather(
+            news_client.fetch_google_news_only(company_name, limit=30),
             hh_client.fetch_vacancies(company_name, limit=10),
-            news_client.fetch_regulatory_news(company_name, limit=6, company=company_profile),
-            news_client.fetch_market_news(company_name, limit=6, company=company_profile),
-            gr_client.fetch_gr_news_all(company_name, limit=20),
             finance_client.fetch_market_data(company_name) if settings.FINANCE_ENABLED else asyncio.sleep(0, result={"found": False}),
         )
+        news = news_combined
+        yandex_news: list = []
+        regulatory_news: list = []
+        market_news: list = []
+        gr_news: list = []
 
         _set("Загружаем соцсети (Threads, TikTok, YouTube…)", 40)
         social_data = await (
