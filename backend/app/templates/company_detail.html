@@ -1221,41 +1221,24 @@
           </div>
 
 
-          <!-- ─── Monitor log ─── -->
-          {% set mon_news = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
+          <!-- ─── News feed ─── -->
           <div class="mon-sec-hdr">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            Лог мониторинга
-            {% if mon_news %}<span>{{ mon_news|length }}</span>{% endif %}
+            Новости
+            <span id="mon-news-count" style="display:none"></span>
           </div>
-          <div class="mon-feed">
-            {% if mon_news %}
-              {% for n in mon_news %}
-                {% set is_trigger = n.triggered_analysis %}
-                {% set is_new = n.is_new %}
-                <div class="mon-item">
-                  <div class="mon-icon {% if is_trigger %}mon-icon-trigger{% elif is_new %}mon-icon-new{% else %}mon-icon-known{% endif %}">
-                    {% if is_trigger %}✓{% elif is_new %}★{% else %}·{% endif %}
-                  </div>
-                  <div class="mon-body">
-                    <a href="{{ n.link }}" target="_blank" rel="noopener" class="mon-title">{{ n.title }}</a>
-                    <div class="mon-meta">
-                      {% if is_trigger %}<span class="mon-badge mon-badge-trigger">✓ Запустил анализ</span>
-                      {% elif is_new %}<span class="mon-badge mon-badge-new">★ Новое</span>{% endif %}
-                      {% if n.source %}<span class="mon-badge mon-badge-src">{{ n.source }}</span>{% endif %}
-                      {% if n.pub_date %}<span>·</span><span>{{ n.pub_date }}</span>{% endif %}
-                      {% if n.captured_at %}<span>·</span><span style="color:var(--text-dim)">в системе {{ n.captured_at[:16] | replace('T',' ') }}</span>{% endif %}
-                    </div>
-                  </div>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
-                <div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div>
-                <span data-i18n="mon_news_empty">Мониторинг ещё не запускался.</span><br>
-                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Нажмите «Запустить анализ» чтобы получить свежие новости.</span>
-              </div>
-            {% endif %}
+          <div style="margin-bottom:12px">
+            <button id="load-news-btn" onclick="loadCompanyNews()"
+              style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(124,58,237,0.28)'" onmouseout="this.style.background='rgba(124,58,237,0.15)'">
+              Загрузить новости
+            </button>
+          </div>
+          <div id="mon-news-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div>
+              <span>Нажмите «Загрузить новости» чтобы получить свежие данные.</span>
+            </div>
           </div>
 
         </div>
@@ -2423,6 +2406,49 @@ document.addEventListener('click', function() {
   poll();
   timer = setInterval(poll, 2500);
 })();
+
+
+async function loadCompanyNews() {
+  const btn = document.getElementById('load-news-btn');
+  const feed = document.getElementById('mon-news-feed');
+  const countEl = document.getElementById('mon-news-count');
+
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Получаем новости…</div>';
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/news`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const items = data.news || [];
+
+    if (!items.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div><span>Новостей по этой компании не найдено.</span></div>';
+      return;
+    }
+
+    countEl.textContent = items.length;
+    countEl.style.display = '';
+
+    feed.innerHTML = items.map(n => `
+      <div class="mon-item">
+        <div class="mon-icon mon-icon-new">★</div>
+        <div class="mon-body">
+          <a href="${n.link}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+          <div class="mon-meta">
+            ${n.source ? `<span class="mon-badge mon-badge-src">${n.source}</span>` : ''}
+            ${n.pub_date ? `<span>·</span><span>${n.pub_date}</span>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки новостей.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обновить';
+  }
+}
 
 
 </script>

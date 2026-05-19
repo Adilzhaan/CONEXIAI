@@ -943,7 +943,7 @@ async def _refresh_market_cache(company_id: str, company_name: str) -> dict:
 
 
 _news_cache: dict[str, tuple[float, list]] = {}  # company_id → (timestamp, news)
-_NEWS_CACHE_TTL = 60 * 60  # 1 hour
+_NEWS_CACHE_TTL = 5 * 60  # 5 minutes
 
 
 @app.get("/companies/{company_id}/news")
