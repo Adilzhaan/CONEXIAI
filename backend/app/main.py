@@ -1457,6 +1457,7 @@ def _build_social_posts(social_data: dict) -> list[dict]:
 
 async def _run_analysis_bg(
     run_id: str,
+    company_id: str,
     company_name: str,
     company_profile: dict,
     employees: list,
@@ -1515,18 +1516,50 @@ async def _run_analysis_bg(
         )
 
         _set("Сохраняем результаты…", 92)
-        await supabase.rest_update_service(
-            path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}",
-            service_key=settings.SUPABASE_SERVICE_KEY,
-            patch={
-                "status":       "done",
-                "score":        analysis["score"],
-                "advice":       analysis["advice"],
-                "risks":        analysis["risks"],
-                "categories":   analysis["categories"],
-                "scenarios":    analysis.get("scenarios", []),
-                "social_posts": _build_social_posts(social_data),
-            },
+        from datetime import datetime, timezone as _tz
+        _now_iso = datetime.now(_tz.utc).isoformat()
+        all_news = (news or []) + (yandex_news or [])
+        seen_titles: set = set()
+        deduped_news = []
+        for _n in all_news:
+            _k = (_n.get("title") or "")[:60].lower()
+            if _k and _k not in seen_titles:
+                seen_titles.add(_k)
+                deduped_news.append({
+                    "title":       _n.get("title", ""),
+                    "link":        _n.get("link", ""),
+                    "source":      _n.get("source", ""),
+                    "pub_date":    _n.get("pub_date", ""),
+                    "captured_at": _now_iso,
+                    "is_new":      True,
+                    "triggered_analysis": False,
+                })
+        await asyncio.gather(
+            supabase.rest_update_service(
+                path_with_query=f"rest/v1/risk_runs?id=eq.{run_id}",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                patch={
+                    "status":       "done",
+                    "score":        analysis["score"],
+                    "advice":       analysis["advice"],
+                    "risks":        analysis["risks"],
+                    "categories":   analysis["categories"],
+                    "scenarios":    analysis.get("scenarios", []),
+                    "social_posts": _build_social_posts(social_data),
+                },
+            ),
+            supabase.rest_upsert_service(
+                table="monitoring_snapshots",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                rows=[{
+                    "company_id":     company_id,
+                    "recent_news":    deduped_news[:30],
+                    "last_checked_at": _now_iso,
+                    "last_run_at":    _now_iso,
+                    "last_score":     analysis["score"],
+                }],
+                on_conflict="company_id",
+            ),
         )
         _job_stages[run_id] = {"stage": "Готово", "pct": 100, "done": True, "score": analysis["score"]}
         logger.info("Background analysis done run_id=%s score=%s", run_id, analysis["score"])
@@ -1623,6 +1656,7 @@ async def risks_run(
     # Запускаем фоновую задачу — не блокируем HTTP ответ
     asyncio.create_task(_run_analysis_bg(
         run_id=run_id,
+        company_id=company_id,
         company_name=company_name,
         company_profile=company_profile,
         employees=employees,

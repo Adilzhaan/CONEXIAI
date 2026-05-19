@@ -1220,18 +1220,6 @@
             </div>
           </div>
 
-          <!-- ─── Live news ─── -->
-          <div class="mon-sec-hdr">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
-            <span data-i18n="current_news">Текущие новости</span>
-            <span id="news-count"></span>
-            <button onclick="triggerLoadNews(this)" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:11px" data-i18n="btn_load_news">Загрузить новости</button>
-          </div>
-          <div class="mon-feed" id="live-news-feed">
-            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;opacity:0.5">
-              — нажмите «Загрузить новости» —
-            </div>
-          </div>
 
           <!-- ─── Social posts from last analysis ─── -->
           {% set social_posts = latest.social_posts if latest and latest.social_posts else [] %}
@@ -1836,8 +1824,6 @@ function showTab(name, btn) {
   document.querySelectorAll('.cd-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
-  // If monitor tab opens and data already fetched — render immediately
-  if (name === 'monitor' && _newsData !== null) _renderNews(_newsData);
   // Lazy-load iframe tabs on first open
   const iframe = document.querySelector(`#tab-${name} iframe[data-src]`);
   if (iframe && !_iframeLoaded[name]) {
@@ -2432,64 +2418,6 @@ document.addEventListener('click', function() {
   document.getElementById('coSwitcher')?.classList.remove('open');
 });
 
-// News loaded in background on page load; rendered when monitor tab opens
-let _newsLoaded = false;
-let _newsData = null;
-async function loadLiveNews() {
-  if (_newsLoaded && _newsData !== null) {
-    _renderNews(_newsData);
-    return;
-  }
-  if (_newsLoaded) return; // fetch already in progress
-  _newsLoaded = true;
-
-  // Fetch in background immediately; render only when tab is open
-  fetch('/companies/{{ company.id }}/news')
-    .then(r => r.json())
-    .then(data => {
-      _newsData = data.news || [];
-      // Only render if monitor tab is currently visible
-      const panel = document.getElementById('tab-monitor');
-      if (panel && panel.classList.contains('active')) _renderNews(_newsData);
-    })
-    .catch(() => {
-      _newsData = [];
-      const panel = document.getElementById('tab-monitor');
-      if (panel && panel.classList.contains('active')) _renderNews(_newsData);
-    });
-}
-
-function _renderNews(items) {
-  const feed = document.getElementById('live-news-feed');
-  const countEl = document.getElementById('news-count');
-  const loadBtn = document.querySelector('[onclick^="triggerLoadNews"]');
-  if (loadBtn) { loadBtn.disabled = false; loadBtn.dataset.i18n && (loadBtn.textContent = (_i18n[document.cookie.match(/lang=([^;]+)/)?.[1]||'ru']||{}).btn_load_news || 'Загрузить новости'); }
-  if (!feed) return;
-  const _lang = document.cookie.match(/lang=([^;]+)/)?.[1] || 'ru';
-  if (countEl) countEl.textContent = items.length || '';
-  if (!items.length) {
-    feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">${_lang==='en'?'No news found':'Новостей не найдено'}</div>`;
-    return;
-  }
-  feed.innerHTML = items.map(n => {
-    const src = n.source || '';
-    const isReddit = src.toLowerCase().includes('reddit');
-    const srcBadge = isReddit
-      ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">${src}</span>`
-      : src ? `<span class="mon-badge mon-badge-src">${src}</span>` : '';
-    const date = n.pub_date ? `<span>·</span><span>${n.pub_date}</span>` : '';
-    return `<div class="mon-item">
-      <div class="mon-icon mon-icon-known" style="font-size:11px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
-      </div>
-      <div class="mon-body">
-        <a href="${n.link}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
-        <div class="mon-meta">${srcBadge}${date}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
 // ── Analysis progress polling ──
 (function() {
   const params = new URLSearchParams(location.search);
@@ -2525,11 +2453,6 @@ function _renderNews(items) {
   timer = setInterval(poll, 2500);
 })();
 
-function triggerLoadNews(btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  _newsLoaded = false; // allow re-fetch
-  _newsData = null;
-  loadLiveNews();
-}
+
 </script>
 {% endblock %}
