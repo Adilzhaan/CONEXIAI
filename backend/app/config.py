@@ -35,6 +35,20 @@ class Settings:
     # Instagram (instagrapi)
     INSTAGRAM_USERNAME: str = os.getenv("INSTAGRAM_USERNAME", "")
     INSTAGRAM_PASSWORD: str = os.getenv("INSTAGRAM_PASSWORD", "")
+
+    # Reddit (PRAW)
+    REDDIT_CLIENT_ID: str = os.getenv("REDDIT_CLIENT_ID", "")
+    REDDIT_CLIENT_SECRET: str = os.getenv("REDDIT_CLIENT_SECRET", "")
+
+    # YouTube Data API v3
+    YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
+
+    # VK API
+    VK_ACCESS_TOKEN: str = os.getenv("VK_ACCESS_TOKEN", "")
+
+    # Telegram (Pyrogram)
+    TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID", "0"))
+    TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
     FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
 

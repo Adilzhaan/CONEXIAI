@@ -26,6 +26,10 @@ from . import ci as ci_client
 from . import gr_sources as gr_client
 from . import instagram as instagram_client
 from . import threads_client
+from . import reddit_client
+from . import youtube_api as youtube_client
+from . import vk_client
+from . import telegram_client
 from . import agent as agent_client
 from .pdf import generate_report
 
@@ -978,6 +982,74 @@ async def company_news_api(req: Request, company_id: str):
     news = await news_client.fetch_google_news_only(company["name"], limit=40)
     _news_cache[company_id] = (time.time(), news)
     return {"news": news}
+
+
+async def _get_company_name(company_id: str, token: str) -> str | None:
+    rows = await supabase.rest_select(
+        table="companies", access_token=token,
+        select="name", query_params={"id": f"eq.{company_id}"},
+    )
+    return rows[0]["name"] if rows else None
+
+
+@app.get("/companies/{company_id}/reddit")
+async def company_reddit(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    if not settings.REDDIT_CLIENT_ID or not settings.REDDIT_CLIENT_SECRET:
+        return {"posts": [], "error": "Reddit не настроен — добавьте REDDIT_CLIENT_ID и REDDIT_CLIENT_SECRET в .env"}
+    token = getattr(req.state, "new_access_token", None) or _get_tokens(req)[0]
+    name = await _get_company_name(company_id, token)
+    if not name:
+        return {"posts": []}
+    posts = await reddit_client.fetch_reddit_posts(name, settings.REDDIT_CLIENT_ID, settings.REDDIT_CLIENT_SECRET)
+    return {"posts": posts}
+
+
+@app.get("/companies/{company_id}/youtube-api")
+async def company_youtube_api(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    if not settings.YOUTUBE_API_KEY:
+        return {"posts": [], "error": "YouTube API не настроен — добавьте YOUTUBE_API_KEY в .env"}
+    token = getattr(req.state, "new_access_token", None) or _get_tokens(req)[0]
+    name = await _get_company_name(company_id, token)
+    if not name:
+        return {"posts": []}
+    posts = await youtube_client.fetch_youtube_videos(name, settings.YOUTUBE_API_KEY)
+    return {"posts": posts}
+
+
+@app.get("/companies/{company_id}/vk")
+async def company_vk(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    if not settings.VK_ACCESS_TOKEN:
+        return {"posts": [], "error": "VK не настроен — добавьте VK_ACCESS_TOKEN в .env"}
+    token = getattr(req.state, "new_access_token", None) or _get_tokens(req)[0]
+    name = await _get_company_name(company_id, token)
+    if not name:
+        return {"posts": []}
+    posts = await vk_client.fetch_vk_posts(name, settings.VK_ACCESS_TOKEN)
+    return {"posts": posts}
+
+
+@app.get("/companies/{company_id}/telegram")
+async def company_telegram(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    if not settings.TELEGRAM_API_ID or not settings.TELEGRAM_API_HASH:
+        return {"posts": [], "error": "Telegram не настроен — добавьте TELEGRAM_API_ID и TELEGRAM_API_HASH в .env"}
+    token = getattr(req.state, "new_access_token", None) or _get_tokens(req)[0]
+    name = await _get_company_name(company_id, token)
+    if not name:
+        return {"posts": []}
+    posts = await telegram_client.fetch_telegram_posts(name, settings.TELEGRAM_API_ID, settings.TELEGRAM_API_HASH)
+    return {"posts": posts}
 
 
 @app.get("/companies/{company_id}/threads")

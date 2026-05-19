@@ -1836,6 +1836,86 @@
             </div>
           </div>
 
+          <!-- VK -->
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+            VK
+            <span id="vk-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-vk-btn" onclick="loadSocial('vk','vk-feed','vk-count','load-vk-btn','Ищем посты ВКонтакте…','🔵')"
+              style="background:rgba(0,119,255,0.12);border:1px solid rgba(0,119,255,0.35);color:#60a5fa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(0,119,255,0.24)'" onmouseout="this.style.background='rgba(0,119,255,0.12)'">
+              Загрузить посты
+            </button>
+          </div>
+          <div id="vk-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🔵</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания ВКонтакте.</span>
+            </div>
+          </div>
+
+          <!-- Reddit -->
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Reddit
+            <span id="reddit-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-reddit-btn" onclick="loadSocial('reddit','reddit-feed','reddit-count','load-reddit-btn','Ищем посты на Reddit…','🟠')"
+              style="background:rgba(255,69,0,0.12);border:1px solid rgba(255,69,0,0.35);color:#fb923c;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(255,69,0,0.24)'" onmouseout="this.style.background='rgba(255,69,0,0.12)'">
+              Загрузить посты
+            </button>
+          </div>
+          <div id="reddit-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🟠</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания на Reddit.</span>
+            </div>
+          </div>
+
+          <!-- YouTube Official -->
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            YouTube
+            <span id="youtube-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-youtube-btn" onclick="loadYouTube()"
+              style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.35);color:#f87171;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(220,38,38,0.24)'" onmouseout="this.style.background='rgba(220,38,38,0.12)'">
+              Загрузить видео
+            </button>
+          </div>
+          <div id="youtube-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div>
+              <span>Нажмите «Загрузить видео» чтобы найти упоминания на YouTube.</span>
+            </div>
+          </div>
+
+          <!-- Telegram -->
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Telegram
+            <span id="telegram-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-telegram-btn" onclick="loadSocial('telegram','telegram-feed','telegram-count','load-telegram-btn','Ищем в Telegram каналах…','✈️')"
+              style="background:rgba(0,136,204,0.12);border:1px solid rgba(0,136,204,0.35);color:#38bdf8;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(0,136,204,0.24)'" onmouseout="this.style.background='rgba(0,136,204,0.12)'">
+              Загрузить посты
+            </button>
+          </div>
+          <div id="telegram-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">✈️</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания в Telegram.</span>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -2538,6 +2618,69 @@ async function loadInstagram() {
 }
 
 
+// Universal loader for VK / Reddit / Telegram
+async function loadSocial(platform, feedId, countId, btnId, loadingText, icon) {
+  const btn     = document.getElementById(btnId);
+  const feed    = document.getElementById(feedId);
+  const countEl = document.getElementById(countId);
+
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">${loadingText}</div>`;
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/${platform}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    if (data.error) {
+      feed.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">${data.error}</div>`;
+      return;
+    }
+
+    const posts = data.posts || [];
+    if (!posts.length) {
+      feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">${icon}</div><span>Упоминаний не найдено.</span></div>`;
+      return;
+    }
+
+    countEl.textContent = posts.length;
+    countEl.style.display = '';
+
+    feed.innerHTML = posts.map(p => {
+      const title = p.title || p.text || '—';
+      const url   = p.url || '';
+      const meta  = [
+        p.author   ? `<span>${p.author}</span>` : '',
+        p.channel  ? `<span>${p.channel}</span>` : '',
+        p.subreddit? `<span>r/${p.subreddit}</span>` : '',
+        p.score    != null ? `<span>·</span><span>▲ ${p.score}</span>` : '',
+        p.likes    ? `<span>·</span><span>❤ ${p.likes}</span>` : '',
+        p.reposts  ? `<span>·</span><span>🔁 ${p.reposts}</span>` : '',
+        p.comments ? `<span>·</span><span>💬 ${p.comments}</span>` : '',
+        p.views    ? `<span>·</span><span>👁 ${Number(p.views).toLocaleString()}</span>` : '',
+        p.date     ? `<span>·</span><span>${p.date}</span>` : '',
+      ].filter(Boolean).join('');
+      return `
+        <div class="mon-item">
+          <div class="mon-icon mon-icon-new" style="font-size:13px">${icon}</div>
+          <div class="mon-body">
+            ${url ? `<a href="${url}" target="_blank" rel="noopener" class="mon-title">${title}</a>`
+                  : `<span class="mon-title" style="cursor:default">${title}</span>`}
+            ${p.text && p.title ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.text}</div>` : ''}
+            <div class="mon-meta">${meta}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обновить';
+  }
+}
+
+
 async function loadYouTube() {
   const btn     = document.getElementById('load-youtube-btn');
   const feed    = document.getElementById('youtube-feed');
@@ -2548,52 +2691,36 @@ async function loadYouTube() {
   feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем видео на YouTube…</div>';
 
   try {
-    const r = await fetch(
-      `${APIFY_BASE_URL}/streamers~youtube-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          searchQueries: [COMPANY_NAME],
-          maxResults: 10, maxResultsShorts: 0, maxResultStreams: 0,
-          downloadSubtitles: false, hasCC: false, hasLocation: false,
-          hasSubtitles: false, is360: false, is3D: false, is4K: false,
-          isBought: false, isHD: false, isHDR: false, isLive: false,
-          isVR180: false, preferAutoGeneratedSubtitles: false, saveSubsToKVS: false,
-        }),
-      }
-    );
+    const r = await fetch(`/companies/${COMPANY_ID}/youtube-api`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const items = await r.json();
+    const data = await r.json();
 
-    if (!items.length) {
+    if (data.error) {
+      feed.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">${data.error}</div>`;
+      return;
+    }
+
+    const posts = data.posts || [];
+    if (!posts.length) {
       feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div><span>Видео не найдено.</span></div>';
       return;
     }
 
-    countEl.textContent = items.length;
+    countEl.textContent = posts.length;
     countEl.style.display = '';
 
-    feed.innerHTML = items.map(p => {
-      const title  = p.title || p.text || '—';
-      const url    = p.url || p.videoUrl || '';
-      const author = p.channelName || p.channel || '';
-      const views  = p.viewCount ?? p.views ?? null;
-      const likes  = p.likeCount ?? p.likes ?? null;
-      return `
-        <div class="mon-item">
-          <div class="mon-icon" style="font-size:14px;background:rgba(220,38,38,0.15)">▶️</div>
-          <div class="mon-body">
-            ${url ? `<a href="${url}" target="_blank" rel="noopener" class="mon-title">${title}</a>`
-                  : `<span class="mon-title" style="cursor:default">${title}</span>`}
-            <div class="mon-meta">
-              ${author ? `<span>${author}</span><span>·</span>` : ''}
-              ${views != null ? `<span>👁 ${Number(views).toLocaleString()}</span>` : ''}
-              ${likes != null ? `<span>·</span><span>❤ ${Number(likes).toLocaleString()}</span>` : ''}
-            </div>
+    feed.innerHTML = posts.map(p => `
+      <div class="mon-item">
+        <div class="mon-icon" style="font-size:14px;background:rgba(220,38,38,0.15)">▶️</div>
+        <div class="mon-body">
+          <a href="${p.url}" target="_blank" rel="noopener" class="mon-title">${p.title}</a>
+          ${p.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description}</div>` : ''}
+          <div class="mon-meta">
+            ${p.channel ? `<span>${p.channel}</span>` : ''}
+            ${p.date ? `<span>·</span><span>${p.date}</span>` : ''}
           </div>
-        </div>`;
-    }).join('');
+        </div>
+      </div>`).join('');
   } catch(e) {
     feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
   } finally {
