@@ -24,3 +24,6 @@ build/
 # Logs
 *.log
 .claude/
+
+# Instagram session
+backend/instagram_session.json

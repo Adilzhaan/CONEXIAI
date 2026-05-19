@@ -31,6 +31,10 @@ class Settings:
 
     # Apify
     APIFY_TOKEN: str = os.getenv("APIFY_TOKEN", "")
+
+    # Instagram (instagrapi)
+    INSTAGRAM_USERNAME: str = os.getenv("INSTAGRAM_USERNAME", "")
+    INSTAGRAM_PASSWORD: str = os.getenv("INSTAGRAM_PASSWORD", "")
     TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
     FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
 
