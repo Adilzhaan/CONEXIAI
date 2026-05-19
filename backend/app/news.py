@@ -92,8 +92,43 @@ async def _fetch_yahoo(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
-async def fetch_google_news_only(company_name: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Fetch from Google News + Yahoo News + GDELT in parallel."""
+async def _fetch_bing(query: str, limit: int) -> list[dict[str, Any]]:
+    try:
+        url = f"https://www.bing.com/news/search?q={quote(query)}&format=rss&count={limit}"
+        r = await _http.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)"})
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        items: list[dict[str, Any]] = []
+        for item in root.findall("./channel/item")[:limit]:
+            title = item.findtext("title", "").strip()
+            link = item.findtext("link", "").strip()
+            pub_date_raw = item.findtext("pubDate", "")
+            pub_date = ""
+            if pub_date_raw:
+                try:
+                    pub_date = parsedate_to_datetime(pub_date_raw).strftime("%d.%m.%Y %H:%M")
+                except Exception:
+                    pub_date = pub_date_raw[:16]
+            if title and link:
+                items.append({"title": title, "link": link, "pub_date": pub_date, "source": "Bing News"})
+        return items
+    except Exception:
+        return []
+
+
+def _pub_date_to_dt(item: dict):
+    from datetime import datetime, timezone
+    pd = (item.get("pub_date") or "").strip()
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(pd, fmt).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            pass
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+async def fetch_google_news_only(company_name: str, limit: int = 30) -> list[dict[str, Any]]:
+    """Fetch from Google News + Yahoo + GDELT + Yandex + Bing in parallel."""
     import asyncio
     query = f'"{company_name}"'
 
@@ -105,6 +140,8 @@ async def fetch_google_news_only(company_name: str, limit: int = 20) -> list[dic
     tasks += [
         _fetch_yahoo(query, limit),
         _fetch_gdelt(query, limit),
+        _fetch_yandex(query, limit),
+        _fetch_bing(query, limit),
     ]
     results = await asyncio.gather(*tasks)
 
@@ -117,7 +154,7 @@ async def fetch_google_news_only(company_name: str, limit: int = 20) -> list[dic
                 seen.add(key)
                 items.append(item)
 
-    items.sort(key=lambda x: x.get("pub_date", ""), reverse=True)
+    items.sort(key=_pub_date_to_dt, reverse=True)
     return items[:limit]
 
 
