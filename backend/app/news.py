@@ -138,7 +138,6 @@ async def fetch_google_news_only(company_name: str, limit: int = 30) -> list[dic
 
     tasks = [_fetch_by_query(q, limit) for q in google_queries]
     tasks += [
-        _fetch_yahoo(query, limit),
         _fetch_gdelt(query, limit),
         _fetch_yandex(query, limit),
     ]
