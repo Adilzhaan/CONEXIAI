@@ -154,6 +154,20 @@ async def fetch_google_news_only(company_name: str, limit: int = 30) -> list[dic
                 seen.add(key)
                 items.append(item)
 
+    # Keep only articles that mention the company name in the title
+    name_lower = company_name.lower()
+    name_parts = [w for w in name_lower.split() if len(w) >= 3]
+
+    def _title_matches(title: str) -> bool:
+        t = title.lower()
+        if name_lower in t:
+            return True
+        # All significant words present
+        if len(name_parts) >= 2 and all(w in t for w in name_parts):
+            return True
+        return False
+
+    items = [i for i in items if _title_matches(i.get("title", ""))]
     items.sort(key=_pub_date_to_dt, reverse=True)
     return items[:limit]
 
