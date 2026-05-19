@@ -47,7 +47,7 @@ class Settings:
     VK_ACCESS_TOKEN: str = os.getenv("VK_ACCESS_TOKEN", "")
 
     # Telegram (Pyrogram)
-    TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID", "0"))
+    TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID") or "0")
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
     FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
