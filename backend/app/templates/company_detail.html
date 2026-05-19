@@ -2613,20 +2613,10 @@ async function loadThreads() {
   feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем упоминания в Threads…</div>';
 
   try {
-    const r = await fetch(
-      `${APIFY_BASE_URL}/watcher.data~search-threads-by-keywords/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          keywords: [COMPANY_NAME],
-          proxyConfiguration: {useApifyProxy: false},
-          sortByRecent: true,
-        }),
-      }
-    );
+    const r = await fetch(`/companies/${COMPANY_ID}/threads`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const items = await r.json();
+    const data = await r.json();
+    const items = data.posts || [];
 
     if (!items.length) {
       feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">🧵</div><span>Упоминаний не найдено.</span></div>';
@@ -2636,30 +2626,20 @@ async function loadThreads() {
     countEl.textContent = items.length;
     countEl.style.display = '';
 
-    feed.innerHTML = items.map(p => {
-      // watcher.data actor fields
-      const text   = (p.text || p.caption || p.captionText || '').trim();
-      const url    = p.url || p.postUrl || p.threadUrl || '';
-      const author = p.username || p.author || p.ownerUsername || '';
-      const likes  = p.likesCount ?? p.likeCount ?? null;
-      const reposts = p.repostsCount ?? p.repostCount ?? null;
-      const date   = p.publishedAt || p.takenAtFormatted || p.date || '';
-      const displayDate = date ? new Date(date).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'}) : '';
-      return `
-        <div class="mon-item">
-          <div class="mon-icon mon-icon-new" style="font-size:14px">🧵</div>
-          <div class="mon-body">
-            ${url ? `<a href="${url}" target="_blank" rel="noopener" class="mon-title">${text || url}</a>`
-                  : `<span class="mon-title" style="cursor:default">${text || '—'}</span>`}
-            <div class="mon-meta">
-              ${author ? `<span>@${author}</span>` : ''}
-              ${likes != null ? `<span>·</span><span>❤ ${likes}</span>` : ''}
-              ${reposts != null ? `<span>·</span><span>🔁 ${reposts}</span>` : ''}
-              ${displayDate ? `<span>·</span><span>${displayDate}</span>` : ''}
-            </div>
+    feed.innerHTML = items.map(p => `
+      <div class="mon-item">
+        <div class="mon-icon mon-icon-new" style="font-size:14px">🧵</div>
+        <div class="mon-body">
+          ${p.url
+            ? `<a href="${p.url}" target="_blank" rel="noopener" class="mon-title">${p.text || p.url}</a>`
+            : `<span class="mon-title" style="cursor:default">${p.text || '—'}</span>`}
+          <div class="mon-meta">
+            ${p.author ? `<span>@${p.author}</span>` : ''}
+            ${p.likes ? `<span>·</span><span>❤ ${p.likes}</span>` : ''}
+            ${p.date ? `<span>·</span><span>${p.date}</span>` : ''}
           </div>
-        </div>`;
-    }).join('');
+        </div>
+      </div>`).join('');
   } catch(e) {
     feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
   } finally {

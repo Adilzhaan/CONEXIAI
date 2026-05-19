@@ -25,6 +25,7 @@ from . import monitor as monitor_client
 from . import ci as ci_client
 from . import gr_sources as gr_client
 from . import instagram as instagram_client
+from . import threads_client
 from . import agent as agent_client
 from .pdf import generate_report
 
@@ -977,6 +978,28 @@ async def company_news_api(req: Request, company_id: str):
     news = await news_client.fetch_google_news_only(company["name"], limit=40)
     _news_cache[company_id] = (time.time(), news)
     return {"news": news}
+
+
+@app.get("/companies/{company_id}/threads")
+async def company_threads(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+
+    access_token, _ = _get_tokens(req)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+    company_rows = await supabase.rest_select(
+        table="companies",
+        access_token=effective_token,
+        select="name",
+        query_params={"id": f"eq.{company_id}"},
+    )
+    if not company_rows:
+        return {"posts": []}
+
+    company_name = company_rows[0]["name"]
+    posts = await threads_client.fetch_threads_posts(company_name, limit=20)
+    return {"posts": posts}
 
 
 @app.get("/companies/{company_id}/instagram")
