@@ -45,6 +45,8 @@ class Settings:
 
     # VK API
     VK_ACCESS_TOKEN: str = os.getenv("VK_ACCESS_TOKEN", "")
+    VK_LOGIN: str = os.getenv("VK_LOGIN", "")
+    VK_PASSWORD: str = os.getenv("VK_PASSWORD", "")
 
     # Telegram (Pyrogram)
     TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID") or "0")
