@@ -707,6 +707,9 @@
           {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
           {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
         </button>
+        <button class="cd-tab" onclick="showTab('social', this)">
+          <span data-i18n="tab_social">Соцсети</span>
+        </button>
       </div>
 
       <!-- ══ OVERVIEW TAB ══ -->
@@ -1765,6 +1768,34 @@
         </iframe>
       </div>
 
+      <!-- ══ SOCIAL TAB ══ -->
+      <div class="cd-panel" id="tab-social">
+        <div style="max-width:720px;margin:0 auto;padding:8px 0">
+
+          <div class="mon-sec-hdr">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Threads
+            <span id="threads-count" style="display:none"></span>
+          </div>
+
+          <div style="margin-bottom:12px">
+            <button id="load-threads-btn" onclick="loadThreads()"
+              style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(124,58,237,0.28)'" onmouseout="this.style.background='rgba(124,58,237,0.15)'">
+              Загрузить посты
+            </button>
+          </div>
+
+          <div id="threads-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🧵</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания в Threads.</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -2184,7 +2215,7 @@ loadSocialAccounts();
 const _i18n = {
   ru: {
     tab_overview: '◎ Обзор', tab_team: 'Команда', tab_signals: 'Сигналы',
-    tab_history: 'История', tab_monitor: 'Мониторинг',
+    tab_history: 'История', tab_monitor: 'Мониторинг', tab_social: 'Соцсети',
     btn_pdf: 'Скачать PDF', btn_run: 'Запустить анализ',
     btn_cancel: 'Отмена', btn_send: 'Отправить', btn_upload: 'Загрузить',
     btn_add_short: 'Добавить', btn_invite_short: 'Пригласить',
@@ -2244,7 +2275,7 @@ const _i18n = {
   },
   en: {
     tab_overview: '◎ Overview', tab_team: 'Team', tab_signals: 'Signals',
-    tab_history: 'History', tab_monitor: 'Monitoring',
+    tab_history: 'History', tab_monitor: 'Monitoring', tab_social: 'Social',
     btn_pdf: 'Download PDF', btn_run: 'Run Analysis',
     btn_cancel: 'Cancel', btn_send: 'Send', btn_upload: 'Upload',
     btn_add_short: 'Add', btn_invite_short: 'Invite',
@@ -2406,6 +2437,52 @@ document.addEventListener('click', function() {
   poll();
   timer = setInterval(poll, 2500);
 })();
+
+
+async function loadThreads() {
+  const btn    = document.getElementById('load-threads-btn');
+  const feed   = document.getElementById('threads-feed');
+  const countEl = document.getElementById('threads-count');
+
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем упоминания в Threads…</div>';
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/social?platform=threads`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const posts = (data.threads || data.posts || []);
+
+    if (!posts.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">🧵</div><span>Упоминаний не найдено.</span></div>';
+      return;
+    }
+
+    countEl.textContent = posts.length;
+    countEl.style.display = '';
+
+    feed.innerHTML = posts.map(p => `
+      <div class="mon-item">
+        <div class="mon-icon mon-icon-new" style="font-size:14px">🧵</div>
+        <div class="mon-body">
+          ${p.postUrl
+            ? `<a href="${p.postUrl}" target="_blank" rel="noopener" class="mon-title">${p.text || p.postUrl}</a>`
+            : `<span class="mon-title" style="cursor:default">${p.text || '—'}</span>`}
+          <div class="mon-meta">
+            ${p.username ? `<span>@${p.username}</span><span>·</span>` : ''}
+            ${p.likes != null ? `<span>❤ ${p.likes}</span><span>·</span>` : ''}
+            ${p.date ? `<span>${p.date}</span>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обновить';
+  }
+}
 
 
 async function loadCompanyNews() {
