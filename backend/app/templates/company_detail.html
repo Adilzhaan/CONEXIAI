@@ -1221,35 +1221,6 @@
           </div>
 
 
-          <!-- ─── Social posts from last analysis ─── -->
-          {% set social_posts = latest.social_posts if latest and latest.social_posts else [] %}
-          {% if social_posts %}
-          {% set platform_icons = {"threads": "🧵", "instagram": "📸", "tiktok": "🎵", "youtube": "▶️"} %}
-          <div class="mon-sec-hdr">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Соцсети
-            <span>{{ social_posts|length }}</span>
-          </div>
-          <div class="mon-feed">
-            {% for p in social_posts %}
-            <div class="mon-item">
-              <div class="mon-icon mon-icon-known" style="font-size:14px">{{ platform_icons.get(p.platform, "🔗") }}</div>
-              <div class="mon-body">
-                {% if p.url %}
-                  <a href="{{ p.url }}" target="_blank" rel="noopener" class="mon-title">{{ p.text or p.url }}</a>
-                {% else %}
-                  <span class="mon-title" style="cursor:default">{{ p.text }}</span>
-                {% endif %}
-                <div class="mon-meta">
-                  {% if p.author %}<span>@{{ p.author }}</span><span>·</span>{% endif %}
-                  <span class="mon-badge mon-badge-src">{{ p.label }}</span>
-                </div>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-
           <!-- ─── Monitor log ─── -->
           {% set mon_news = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
           <div class="mon-sec-hdr">
@@ -1282,7 +1253,7 @@
               <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
                 <div style="font-size:24px;margin-bottom:8px;opacity:0.3">◎</div>
                 <span data-i18n="mon_news_empty">Мониторинг ещё не запускался.</span><br>
-                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Нажмите «Загрузить новости» чтобы получить свежие данные.</span>
+                <span style="font-size:12px;color:var(--text-dim)" data-i18n="mon_news_auto">Нажмите «Запустить анализ» чтобы получить свежие новости.</span>
               </div>
             {% endif %}
           </div>
@@ -2286,7 +2257,7 @@ const _i18n = {
     nav_system: 'Система', nav_logout: 'Выйти',
     co_checked: 'Проверено', co_not_started: 'Мониторинг не запущен',
     mon_news_empty: 'Мониторинг ещё не запускался.',
-    mon_news_auto: 'Нажмите «Загрузить новости» чтобы получить свежие данные.',
+    mon_news_auto: 'Нажмите «Запустить анализ» чтобы получить свежие новости.',
   },
   en: {
     tab_overview: '◎ Overview', tab_team: 'Team', tab_signals: 'Signals',
@@ -2346,7 +2317,7 @@ const _i18n = {
     nav_system: 'System', nav_logout: 'Sign Out',
     co_checked: 'Checked', co_not_started: 'Monitoring not started',
     mon_news_empty: 'Monitoring has not run yet.',
-    mon_news_auto: 'Click "Load News" to fetch the latest data.',
+    mon_news_auto: 'Click "Run Analysis" to fetch the latest news.',
   }
 };
 
