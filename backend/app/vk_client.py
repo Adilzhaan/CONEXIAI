@@ -1,7 +1,6 @@
 """VK search via official API (free)."""
 import asyncio
 import logging
-import os
 from typing import Any
 
 logger = logging.getLogger("conexiai.vk")
@@ -18,14 +17,7 @@ async def fetch_vk_posts(
     def _sync():
         try:
             import vk_api
-            # Support both token and login/password
-            login    = os.environ.get("VK_LOGIN", "")
-            password = os.environ.get("VK_PASSWORD", "")
-            if login and password:
-                vk_session = vk_api.VkApi(login=login, password=password)
-                vk_session.auth(token_only=True)
-            else:
-                vk_session = vk_api.VkApi(token=access_token)
+            vk_session = vk_api.VkApi(token=access_token)
             vk = vk_session.get_api()
 
             response = vk.newsfeed.search(

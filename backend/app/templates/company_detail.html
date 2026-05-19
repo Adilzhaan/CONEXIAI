@@ -1842,12 +1842,16 @@
             VK
             <span id="vk-count" style="display:none"></span>
           </div>
-          <div style="margin-bottom:12px">
+          <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
             <button id="load-vk-btn" onclick="loadSocial('vk','vk-feed','vk-count','load-vk-btn','Ищем посты ВКонтакте…','🔵')"
               style="background:rgba(0,119,255,0.12);border:1px solid rgba(0,119,255,0.35);color:#60a5fa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
               onmouseover="this.style.background='rgba(0,119,255,0.24)'" onmouseout="this.style.background='rgba(0,119,255,0.12)'">
               Загрузить посты
             </button>
+            <a href="/auth/vk" target="_blank"
+              style="background:rgba(0,119,255,0.20);border:1px solid rgba(0,119,255,0.50);color:#60a5fa;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none">
+              🔗 Подключить VK
+            </a>
           </div>
           <div id="vk-feed" class="mon-feed">
             <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">

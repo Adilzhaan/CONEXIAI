@@ -268,6 +268,71 @@ async def logout(_req: Request):
     return resp
 
 
+@app.get("/auth/vk")
+async def vk_auth_redirect(req: Request):
+    """Redirect user to VK OAuth page."""
+    if not settings.VK_APP_ID:
+        return HTMLResponse("VK_APP_ID не задан в .env", status_code=400)
+    redirect_uri = f"{settings.SITE_URL}/auth/vk/callback"
+    url = (
+        f"https://oauth.vk.com/authorize"
+        f"?client_id={settings.VK_APP_ID}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope=wall,offline"
+        f"&response_type=code"
+        f"&v=5.131"
+    )
+    return RedirectResponse(url=url)
+
+
+@app.get("/auth/vk/callback")
+async def vk_auth_callback(req: Request, code: str = ""):
+    """Exchange VK auth code for access token and save to .env."""
+    import httpx as _httpx
+    if not code:
+        return HTMLResponse("Ошибка: код не получен", status_code=400)
+
+    redirect_uri = f"{settings.SITE_URL}/auth/vk/callback"
+    resp = await _httpx.AsyncClient().get(
+        "https://oauth.vk.com/access_token",
+        params={
+            "client_id":     settings.VK_APP_ID,
+            "client_secret": settings.VK_APP_SECRET,
+            "redirect_uri":  redirect_uri,
+            "code":          code,
+        },
+    )
+    data = resp.json()
+    token = data.get("access_token", "")
+    if not token:
+        return HTMLResponse(f"Ошибка VK: {data}", status_code=400)
+
+    # Save token to .env file
+    env_path = __file__.replace("app/main.py", ".env")
+    try:
+        with open(env_path, "r") as f:
+            content = f.read()
+        if 'VK_ACCESS_TOKEN=""' in content or "VK_ACCESS_TOKEN=''" in content:
+            content = content.replace('VK_ACCESS_TOKEN=""', f'VK_ACCESS_TOKEN="{token}"')
+            content = content.replace("VK_ACCESS_TOKEN=''", f'VK_ACCESS_TOKEN="{token}"')
+        elif "VK_ACCESS_TOKEN=" in content:
+            import re as _re
+            content = _re.sub(r'VK_ACCESS_TOKEN="[^"]*"', f'VK_ACCESS_TOKEN="{token}"', content)
+        with open(env_path, "w") as f:
+            f.write(content)
+        settings.VK_ACCESS_TOKEN = token
+    except Exception as e:
+        return HTMLResponse(f"Токен получен, но не сохранён: {token}<br>Ошибка: {e}", status_code=200)
+
+    return HTMLResponse("""
+        <html><body style="font-family:sans-serif;padding:40px;background:#0f0a1e;color:#fff">
+        <h2>✅ VK подключён!</h2>
+        <p>Токен сохранён. Можете закрыть эту страницу.</p>
+        <script>setTimeout(()=>window.close(),2000)</script>
+        </body></html>
+    """)
+
+
 @app.get("/auth/google")
 async def auth_google(req: Request):
     verifier, challenge = _pkce_pair()
