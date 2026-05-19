@@ -1836,30 +1836,6 @@
             </div>
           </div>
 
-          <!-- VK -->
-          <div class="mon-sec-hdr" style="margin-top:20px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
-            VK
-            <span id="vk-count" style="display:none"></span>
-          </div>
-          <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-            <button id="load-vk-btn" onclick="loadSocial('vk','vk-feed','vk-count','load-vk-btn','Ищем посты ВКонтакте…','🔵')"
-              style="background:rgba(0,119,255,0.12);border:1px solid rgba(0,119,255,0.35);color:#60a5fa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
-              onmouseover="this.style.background='rgba(0,119,255,0.24)'" onmouseout="this.style.background='rgba(0,119,255,0.12)'">
-              Загрузить посты
-            </button>
-            <a href="/auth/vk" target="_blank"
-              style="background:rgba(0,119,255,0.20);border:1px solid rgba(0,119,255,0.50);color:#60a5fa;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none">
-              🔗 Подключить VK
-            </a>
-          </div>
-          <div id="vk-feed" class="mon-feed">
-            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
-              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🔵</div>
-              <span>Нажмите «Загрузить посты» чтобы найти упоминания ВКонтакте.</span>
-            </div>
-          </div>
-
           <!-- Reddit -->
           <div class="mon-sec-hdr" style="margin-top:20px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
@@ -2622,7 +2598,7 @@ async function loadInstagram() {
 }
 
 
-// Universal loader for VK / Reddit / Telegram
+// Universal loader for Reddit / Telegram
 async function loadSocial(platform, feedId, countId, btnId, loadingText, icon) {
   const btn     = document.getElementById(btnId);
   const feed    = document.getElementById(feedId);

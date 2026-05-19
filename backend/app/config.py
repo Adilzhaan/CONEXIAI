@@ -43,11 +43,6 @@ class Settings:
     # YouTube Data API v3
     YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
 
-    # VK API
-    VK_ACCESS_TOKEN: str = os.getenv("VK_ACCESS_TOKEN", "")
-    VK_APP_ID: str = os.getenv("VK_APP_ID", "")
-    VK_APP_SECRET: str = os.getenv("VK_APP_SECRET", "")
-
     # Telegram (Pyrogram)
     TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID") or "0")
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")

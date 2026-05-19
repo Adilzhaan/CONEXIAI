@@ -28,7 +28,7 @@ from . import instagram as instagram_client
 from . import threads_client
 from . import reddit_client
 from . import youtube_api as youtube_client
-from . import vk_client
+
 from . import telegram_client
 from . import agent as agent_client
 from .pdf import generate_report
@@ -267,70 +267,6 @@ async def logout(_req: Request):
     _clear_tokens(resp)
     return resp
 
-
-@app.get("/auth/vk")
-async def vk_auth_redirect(req: Request):
-    """Redirect user to VK OAuth page."""
-    if not settings.VK_APP_ID:
-        return HTMLResponse("VK_APP_ID не задан в .env", status_code=400)
-    redirect_uri = f"{settings.SITE_URL}/auth/vk/callback"
-    url = (
-        f"https://oauth.vk.com/authorize"
-        f"?client_id={settings.VK_APP_ID}"
-        f"&redirect_uri={redirect_uri}"
-        f"&scope=wall,offline"
-        f"&response_type=code"
-        f"&v=5.131"
-    )
-    return RedirectResponse(url=url)
-
-
-@app.get("/auth/vk/callback")
-async def vk_auth_callback(req: Request, code: str = ""):
-    """Exchange VK auth code for access token and save to .env."""
-    import httpx as _httpx
-    if not code:
-        return HTMLResponse("Ошибка: код не получен", status_code=400)
-
-    redirect_uri = f"{settings.SITE_URL}/auth/vk/callback"
-    resp = await _httpx.AsyncClient().get(
-        "https://oauth.vk.com/access_token",
-        params={
-            "client_id":     settings.VK_APP_ID,
-            "client_secret": settings.VK_APP_SECRET,
-            "redirect_uri":  redirect_uri,
-            "code":          code,
-        },
-    )
-    data = resp.json()
-    token = data.get("access_token", "")
-    if not token:
-        return HTMLResponse(f"Ошибка VK: {data}", status_code=400)
-
-    # Save token to .env file
-    env_path = __file__.replace("app/main.py", ".env")
-    try:
-        with open(env_path, "r") as f:
-            content = f.read()
-        if 'VK_ACCESS_TOKEN=""' in content or "VK_ACCESS_TOKEN=''" in content:
-            content = content.replace('VK_ACCESS_TOKEN=""', f'VK_ACCESS_TOKEN="{token}"')
-            content = content.replace("VK_ACCESS_TOKEN=''", f'VK_ACCESS_TOKEN="{token}"')
-        elif "VK_ACCESS_TOKEN=" in content:
-            import re as _re
-            content = _re.sub(r'VK_ACCESS_TOKEN="[^"]*"', f'VK_ACCESS_TOKEN="{token}"', content)
-        with open(env_path, "w") as f:
-            f.write(content)
-        settings.VK_ACCESS_TOKEN = token
-    except Exception as e:
-        return HTMLResponse(f"Токен получен, но не сохранён: {token}<br>Ошибка: {e}", status_code=200)
-
-    return HTMLResponse("""
-        <html><body style="font-family:sans-serif;padding:40px;background:#0f0a1e;color:#fff">
-        <h2>✅ VK подключён!</h2>
-        <p>Токен сохранён. Можете закрыть эту страницу.</p>
-        <script>setTimeout(()=>window.close(),2000)</script>
-        </body></html>
-    """)
 
 
 @app.get("/auth/google")
@@ -1086,20 +1022,6 @@ async def company_youtube_api(req: Request, company_id: str):
     posts = await youtube_client.fetch_youtube_videos(name, settings.YOUTUBE_API_KEY)
     return {"posts": posts}
 
-
-@app.get("/companies/{company_id}/vk")
-async def company_vk(req: Request, company_id: str):
-    user = await get_current_user(req)
-    if not user:
-        return {"error": "unauthorized"}
-    if not settings.VK_ACCESS_TOKEN:
-        return {"posts": [], "error": "VK не настроен — добавьте VK_ACCESS_TOKEN в .env"}
-    token = getattr(req.state, "new_access_token", None) or _get_tokens(req)[0]
-    name = await _get_company_name(company_id, token)
-    if not name:
-        return {"posts": []}
-    posts = await vk_client.fetch_vk_posts(name, settings.VK_ACCESS_TOKEN)
-    return {"posts": posts}
 
 
 @app.get("/companies/{company_id}/telegram")
