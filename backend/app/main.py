@@ -972,7 +972,7 @@ async def company_news_api(req: Request, company_id: str):
         return {"news": []}
 
     company = company_rows[0]
-    news = await news_client.fetch_news(company["name"], company=company)
+    news = await news_client.fetch_google_news_only(company["name"], limit=20)
     _news_cache[company_id] = (time.time(), news)
     return {"news": news}
 

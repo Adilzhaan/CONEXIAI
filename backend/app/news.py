@@ -92,6 +92,31 @@ async def _fetch_yahoo(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
+async def fetch_google_news_only(company_name: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Single Google News RSS fetch — no Reddit, Yahoo, GDELT or gr_sources."""
+    import asyncio
+    queries = [f'"{company_name}"']
+
+    parts = company_name.lower().split()
+    strong = [w for w in parts if len(w) >= 4 and w not in _GENERIC_WORDS]
+    if not strong:
+        queries.append(company_name)
+
+    results = await asyncio.gather(*[_fetch_by_query(q, limit) for q in queries])
+
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for batch in results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
+
+    items.sort(key=lambda x: x.get("pub_date", ""), reverse=True)
+    return items[:limit]
+
+
 async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
     return await _fetch_yahoo(company_name, limit)
 
