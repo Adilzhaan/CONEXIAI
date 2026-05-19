@@ -881,6 +881,7 @@ async def _company_detail_inner(req: Request, company_id: str):
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
+            "settings": settings,
         },
     )
 
