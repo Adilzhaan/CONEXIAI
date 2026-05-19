@@ -127,19 +127,21 @@ def _pub_date_to_dt(item: dict):
     return datetime.min.replace(tzinfo=timezone.utc)
 
 
-async def fetch_google_news_only(company_name: str, limit: int = 30) -> list[dict[str, Any]]:
-    """Fetch from Google News + Yahoo + GDELT + Yandex + Bing in parallel."""
+async def fetch_google_news_only(company_name: str, limit: int = 40) -> list[dict[str, Any]]:
+    """Fetch from Google News + GDELT + Yandex in parallel."""
     import asyncio
     query = f'"{company_name}"'
 
     parts = company_name.lower().split()
     strong = [w for w in parts if len(w) >= 4 and w not in _GENERIC_WORDS]
+    # For strong names: exact query + city/region variant; for weak: also try bare name
     google_queries = [query] if strong else [query, company_name]
 
-    tasks = [_fetch_by_query(q, limit) for q in google_queries]
+    per_source = max(limit, 20)
+    tasks = [_fetch_by_query(q, per_source) for q in google_queries]
     tasks += [
-        _fetch_gdelt(query, limit),
-        _fetch_yandex(query, limit),
+        _fetch_gdelt(query, per_source),
+        _fetch_yandex(query, per_source),
     ]
     results = await asyncio.gather(*tasks)
 
