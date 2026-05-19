@@ -208,10 +208,10 @@ async def fetch_youtube_videos(
     url = f"{APIFY_BASE}/{ACTOR_YOUTUBE}/run-sync-get-dataset-items?token={token}"
     payload = {
         "searchQueries":                [company_name],
-        "maxResults":                   limit,
+        "maxResults":                   10,
         "maxResultsShorts":             0,
         "maxResultStreams":              0,
-        "downloadSubtitles":            True,
+        "downloadSubtitles":            False,
         "hasCC":                        False,
         "hasLocation":                  False,
         "hasSubtitles":                 False,

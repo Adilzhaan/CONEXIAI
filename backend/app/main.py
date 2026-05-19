@@ -1011,6 +1011,10 @@ async def company_social(req: Request, company_id: str):
             social_data = {"threads": await apify_client.fetch_threads_posts(
                 company_name, settings.APIFY_TOKEN, max_posts=20
             )}
+        elif platform_filter == "youtube":
+            social_data = {"youtube": await apify_client.fetch_youtube_videos(
+                company_name, settings.APIFY_TOKEN, limit=10
+            )}
         else:
             social_data = await apify_client.fetch_all_social(
                 company_name=company_name,
