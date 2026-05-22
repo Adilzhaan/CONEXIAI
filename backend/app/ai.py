@@ -273,13 +273,13 @@ async def analyze_company_risks(
 ) -> dict[str, Any]:
     client = get_client(api_key)
 
-    # Index all sources
+    # Index all sources — hard caps to keep prompt size manageable
     news_idx, news_text = _build_indexed(
-        news, "N", "title", "link",
+        news[:60], "N", "title", "link",
         lambda x: f"{x.get('title','')} — {x.get('source','')} ({x.get('pub_date','')})"
     )
     yn_idx, yn_text = _build_indexed(
-        yandex_news, "YN", "title", "link",
+        yandex_news[:20], "YN", "title", "link",
         lambda x: f"{x.get('title','')} ({x.get('pub_date','')})"
     )
     threads_idx, threads_text = _build_indexed(
@@ -537,13 +537,25 @@ async def analyze_company_risks(
                 result.append({"text": str(r), "sources": []})
         return result
 
-    try:
-        response = await client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=16000,
-            messages=[{"role": "user", "content": prompt}],
-        )
+    import asyncio as _asyncio
+    for _attempt in range(4):
+        try:
+            response = await client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=16000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            break
+        except Exception as _e:
+            _emsg = str(_e)
+            if "overloaded" in _emsg and _attempt < 3:
+                _wait = 15 * (2 ** _attempt)  # 15s, 30s, 60s
+                logger.warning("Claude overloaded, retry %d/3 in %ds", _attempt + 1, _wait)
+                await _asyncio.sleep(_wait)
+            else:
+                raise
 
+    try:
         text = ""
         for block in response.content:
             if block.type == "text":
@@ -601,6 +613,299 @@ async def analyze_company_risks(
             "categories": {k: fallback_cat for k in ("media", "hr", "gr", "pr", "market")},
             "scenarios": [],
         }
+
+
+async def analyze_company_risks_parallel(
+    company_name: str,
+    news: list[dict[str, Any]],
+    yandex_news: list[dict[str, Any]],
+    threads_posts: list[dict[str, Any]],
+    social: dict[str, list[dict[str, Any]]],
+    vacancies: list[dict[str, Any]],
+    regulatory_news: list[dict[str, Any]],
+    market_news: list[dict[str, Any]],
+    finance: dict[str, Any],
+    hr_emails: list[dict[str, Any]],
+    pr_emails: list[dict[str, Any]],
+    gr_emails: list[dict[str, Any]],
+    employees: list[dict[str, Any]],
+    api_key: str,
+    lang: str = "ru",
+    on_stage: Any = None,  # optional callable(stage_text: str)
+) -> dict[str, Any]:
+    """
+    11-agent distributed pipeline:
+      Stage 1 — 5 parallel Haiku filter agents (100 articles each → relevant only)
+      Stage 2 — 5 parallel Haiku category agents (one per media/hr/gr/pr/market)
+      Stage 3 — 1 Haiku aggregator (overall score + advice + scenarios)
+    """
+    import asyncio as _aio
+    from datetime import date as _date
+
+    _MODEL = "claude-haiku-4-5-20251001"
+    today_str = _date.today().strftime("%d.%m.%Y")
+
+    def _haiku(prompt: str, max_tokens: int = 1024) -> dict | list:
+        import anthropic as _a, time as _time
+        # max_retries=0 — we handle retries ourselves with proper backoff
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        attempt = 0
+        while True:
+            try:
+                msg = c.messages.create(
+                    model=_MODEL, max_tokens=max_tokens,
+                    system="JSON API. Respond ONLY with a valid JSON object. No markdown.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                raw = msg.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(raw.split("\n")[1:])
+                    raw = raw.rsplit("```", 1)[0].strip()
+                return json.loads(raw)
+            except Exception as _e:
+                if "overloaded" in str(_e):
+                    # exponential backoff capped at 120s — retry forever
+                    wait = min(10 * (2 ** attempt), 120)
+                    attempt += 1
+                    logger.info("Haiku overloaded, waiting %ds (attempt %d)…", wait, attempt)
+                    _time.sleep(wait)
+                else:
+                    raise
+
+    # ── helpers ──────────────────────────────────────────────────────────
+    def _fmt_articles(articles: list) -> str:
+        return "\n".join(
+            f"[{i}] {a.get('title', '')} | {a.get('source', '')} | {a.get('pub_date', '')}"
+            for i, a in enumerate(articles)
+        ) or "Нет статей."
+
+    def _fmt_list(items: list, key: str = "title", limit: int = 15) -> str:
+        return "\n".join(
+            f"[{i+1}] {it.get(key, '')[:140]}" for i, it in enumerate(items[:limit])
+        ) or "Нет данных."
+
+    # ── STAGE 1: filter agents ────────────────────────────────────────────
+    all_articles = (news or []) + (yandex_news or []) + (regulatory_news or []) + (market_news or [])
+    all_articles = all_articles[:500]
+
+    def _filter_batch(batch: list, idx: int) -> list[dict]:
+        if not batch:
+            return []
+        try:
+            result = _haiku(
+                f"""Строгий фильтр для «{company_name}».
+ВКЛЮЧАЙ только если в заголовке ЯВНО упомянута именно «{company_name}» и статья о ней.
+ОТКЛОНЯЙ: другие компании/команды с похожим названием, общеотраслевые новости, реклама.
+Верни JSON: {{"relevant": [0, 2, 5, ...]}} — индексы (0-based).
+
+{_fmt_articles(batch)}""",
+                max_tokens=256,
+            )
+            indices = result.get("relevant", [])
+            filtered = [batch[i] for i in indices if isinstance(i, int) and 0 <= i < len(batch)]
+            logger.info("Filter agent %d: %d/%d kept", idx, len(filtered), len(batch))
+            return filtered
+        except Exception as e:
+            logger.warning("Filter agent %d failed: %r — keeping batch", idx, e)
+            return batch[:20]
+
+    batches = [all_articles[i:i+100] for i in range(0, len(all_articles), 100)]
+    while len(batches) < 5:
+        batches.append([])
+
+    _n_batches = sum(1 for b in batches if b)
+    # Sequential — one API call at a time to avoid 529 floods
+    filter_results = []
+    for _i, _b in enumerate(batches):
+        if _b and on_stage:
+            on_stage(f"🔍 Фильтрация статей ({_i + 1}/{_n_batches})…")
+        filter_results.append(await _aio.to_thread(_filter_batch, _b, _i))
+        if _i < len(batches) - 1 and _b:
+            await _aio.sleep(3)
+
+    seen_k: set[str] = set()
+    filtered: list[dict] = []
+    for batch_out in filter_results:
+        for a in batch_out:
+            k = (a.get("title") or "")[:60].lower()
+            if k and k not in seen_k:
+                seen_k.add(k); filtered.append(a)
+
+    logger.info("Stage 1 done: %d/%d articles after filtering", len(filtered), len(all_articles))
+
+    # ── STAGE 2: single combined analysis call (all 5 categories + aggregator) ──
+    news_txt = _fmt_articles(filtered[:50])
+    thr_txt  = "\n".join(f"[{i+1}] @{p.get('username','')}: {(p.get('captionText') or '')[:100]}"
+                         for i, p in enumerate(threads_posts[:8])) or "Нет."
+    ig_txt   = _fmt_list(social.get("instagram", []), "text", limit=8)
+    yt_txt   = _fmt_list(social.get("youtube",   []), "text", limit=5)
+    vac_txt  = _fmt_list(vacancies, "title", limit=10)
+    hr_e_txt = "\n".join(f"- [{e.get('position','')}] {e.get('text','')[:150]}" for e in hr_emails[:5]) or ""
+    pr_e_txt = "\n".join(f"- [{e.get('position','')}] {e.get('text','')[:150]}" for e in pr_emails[:5]) or ""
+    gr_e_txt = "\n".join(f"- [{e.get('position','')}] {e.get('text','')[:150]}" for e in gr_emails[:5]) or ""
+
+    stock = finance.get("stock") if finance else None
+    fin_txt = (f"Тикер: {stock.get('ticker')} | Цена: {stock.get('last')}"
+               if stock else "Не торгуется публично.")
+
+    if on_stage:
+        on_stage("🧠 Анализ рисков по категориям…")
+
+    def _combined_analysis() -> dict:
+        prompt = f"""Компания: «{company_name}». Дата: {today_str}.
+
+=== НОВОСТИ ({len(filtered)} релевантных) ===
+{news_txt}
+
+=== СОЦИАЛЬНЫЕ СЕТИ ===
+Threads: {thr_txt}
+Instagram: {ig_txt}
+YouTube: {yt_txt}
+
+=== HR / ВАКАНСИИ ===
+{vac_txt}
+{hr_e_txt}
+
+=== GR / РЕГУЛЯТОРИКА ===
+{gr_e_txt}
+
+=== PR СИГНАЛЫ ===
+{pr_e_txt}
+
+=== РЫНОК ===
+{fin_txt}
+
+Проанализируй ВСЕ 5 категорий риска и дай итоговую оценку.
+
+JSON (строго такая структура):
+{{
+  "categories": {{
+    "media":  {{"score": 0-100, "risks": [{{"text": "риск", "severity": "high|medium|low"}}]}},
+    "hr":     {{"score": 0-100, "risks": [{{"text": "риск", "severity": "high|medium|low"}}]}},
+    "gr":     {{"score": 0-100, "risks": [{{"text": "риск", "severity": "high|medium|low"}}]}},
+    "pr":     {{"score": 0-100, "risks": [{{"text": "риск", "severity": "high|medium|low"}}]}},
+    "market": {{"score": 0-100, "risks": [{{"text": "риск", "severity": "high|medium|low"}}]}}
+  }},
+  "overall_score": 0-100,
+  "advice": "2-3 предложения руководству",
+  "scenarios": [
+    {{"id":"A","label":"Мягкое реагирование","level":"low","trigger":"условие","steps":[{{"action":"действие","owner":"HR|PR|GR|CEO","deadline":"сегодня|48ч|неделя"}}]}},
+    {{"id":"B","label":"Активное управление","level":"medium","trigger":"условие","steps":[{{"action":"...","owner":"...","deadline":"..."}}]}},
+    {{"id":"C","label":"Кризисный протокол","level":"high","trigger":"условие","steps":[{{"action":"...","owner":"...","deadline":"..."}}]}}
+  ]
+}}"""
+        try:
+            return _haiku(prompt, max_tokens=4096)
+        except Exception as e:
+            logger.warning("Combined analysis failed: %r", e)
+            return {}
+
+    raw = await _aio.to_thread(_combined_analysis)
+
+    # Parse categories
+    raw_cats = raw.get("categories", {})
+    categories: dict[str, Any] = {}
+    for cat in ("media", "hr", "gr", "pr", "market"):
+        cd = raw_cats.get(cat, {})
+        score = max(0, min(100, int(cd.get("score", 50))))
+        risks = [
+            {"text": (r.get("text", str(r)) if isinstance(r, dict) else str(r))[:300],
+             "severity": r.get("severity", "medium") if isinstance(r, dict) else "medium",
+             "sources": []}
+            for r in cd.get("risks", [])[:5]
+        ]
+        categories[cat] = {"score": score, "risks": risks}
+        logger.info("Category %s: score=%d risks=%d", cat, score, len(risks))
+
+    overall = max(0, min(100, int(raw.get("overall_score",
+        sum(v["score"] for v in categories.values()) // 5))))
+
+    logger.info("Stage 2 done: overall=%d", overall)
+    return {
+        "score":      overall,
+        "advice":     str(raw.get("advice", "")),
+        "risks":      [],
+        "categories": categories,
+        "scenarios":  raw.get("scenarios", []),
+    }
+
+
+def filter_articles(
+    articles: list[dict],  # list of {title, source, pub_date}
+    company_name: str,
+    api_key: str,
+    on_stage=None,         # optional callable(str) — called before each batch
+) -> list[int]:
+    """
+    AI-powered relevance filter. Returns sorted list of selected indices.
+    Synchronous — call via asyncio.to_thread().
+    Retries forever on 529 overloaded with exponential backoff capped at 120s.
+    """
+    import anthropic as _a, time as _time
+
+    c = _a.Anthropic(api_key=api_key, max_retries=0)
+
+    def _call(prompt: str) -> dict:
+        attempt = 0
+        while True:
+            try:
+                msg = c.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=512,
+                    system="JSON API. Respond ONLY with a valid JSON object. No markdown.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                raw = msg.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+                return json.loads(raw)
+            except Exception as _e:
+                if "overloaded" in str(_e):
+                    wait = min(10 * (2 ** attempt), 120)
+                    attempt += 1
+                    logger.info("filter_articles overloaded, waiting %ds (attempt %d)…", wait, attempt)
+                    _time.sleep(wait)
+                else:
+                    logger.warning("filter_articles call failed: %r — keeping first 20 of batch", _e)
+                    return {"relevant": list(range(min(20, len(articles))))}
+
+    batches = [articles[i:i + 100] for i in range(0, len(articles), 100)]
+    n_real = sum(1 for b in batches if b)
+    all_selected: list[int] = []
+
+    for bi, batch in enumerate(batches):
+        if not batch:
+            continue
+        if on_stage:
+            on_stage(f"🔍 Проверка статей ({bi + 1}/{n_real})…")
+
+        offset = bi * 100
+        lines = "\n".join(
+            f"[{i}] {a.get('title', '')} | {a.get('source', '')} | {a.get('pub_date', '')}"
+            for i, a in enumerate(batch)
+        )
+        result = _call(
+            f"Ты — строгий фильтр новостей для риск-мониторинга компании «{company_name}».\n\n"
+            f"ВКЛЮЧАЙ статью ТОЛЬКО если выполнены ВСЕ условия:\n"
+            f"1. В заголовке или источнике ЯВНО упомянута именно «{company_name}» (точное совпадение названия)\n"
+            f"2. Статья о деятельности ЭТОЙ конкретной компании (не однофамильцев, не команд, не других организаций)\n\n"
+            f"ОТКЛОНЯЙ если:\n"
+            f"- Другая компания/организация/команда с похожим или таким же названием\n"
+            f"- Название упомянуто вскользь или как контекст, а статья о другом\n"
+            f"- Общеотраслевые новости без прямого упоминания «{company_name}»\n"
+            f"- Реклама, вакансии, прайс-листы, технические справки\n\n"
+            f"Верни JSON: {{\"relevant\": [0, 2, 5, ...]}} — только индексы (0-based) прошедших фильтр.\n\n"
+            f"Материалов: {len(batch)}\n{lines}"
+        )
+        indices = result.get("relevant", [])
+        kept = [offset + i for i in indices if isinstance(i, int) and 0 <= i < len(batch)]
+        all_selected.extend(kept)
+        logger.info("filter_articles batch %d: %d/%d kept", bi, len(kept), len(batch))
+
+        if bi < len(batches) - 1:
+            _time.sleep(3)
+
+    return sorted(all_selected)
 
 
 _COMM_PROMPTS = {

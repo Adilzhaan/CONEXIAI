@@ -1,3 +1,4 @@
+import logging
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from email.utils import parsedate_to_datetime
@@ -6,16 +7,28 @@ from typing import Any
 import httpx
 from . import gr_sources as gr_client
 
-_http = httpx.AsyncClient(timeout=8, follow_redirects=True)
+logger = logging.getLogger("conexiai.news")
+_http = httpx.AsyncClient(timeout=15, follow_redirects=True)
 
 
 async def close() -> None:
     await _http.aclose()
 
 
-async def _fetch_by_query(query: str, limit: int) -> list[dict[str, Any]]:
+async def _fetch_by_query(query: str, limit: int, region: str = "RU") -> list[dict[str, Any]]:
+    # region: "RU"=Россия/СНГ, "KZ"=Казахстан, "US"=США(en), "GB"=UK/EU(en), "DE"=Германия
+    if region == "KZ":
+        locale = "hl=ru&gl=KZ&ceid=KZ:ru"
+    elif region == "US":
+        locale = "hl=en-US&gl=US&ceid=US:en"
+    elif region == "GB":
+        locale = "hl=en-GB&gl=GB&ceid=GB:en"
+    elif region == "DE":
+        locale = "hl=de&gl=DE&ceid=DE:de"
+    else:
+        locale = "hl=ru&gl=RU&ceid=RU:ru"
     try:
-        url = f"https://news.google.com/rss/search?q={quote(query)}&hl=ru&gl=RU&ceid=RU:ru"
+        url = f"https://news.google.com/rss/search?q={quote(query)}&{locale}"
         r = await _http.get(url)
         r.raise_for_status()
         root = ET.fromstring(r.content)
@@ -40,9 +53,9 @@ async def _fetch_by_query(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
-async def _fetch_yandex(query: str, limit: int) -> list[dict[str, Any]]:
+async def _fetch_yandex_lang(query: str, limit: int, lang: str) -> list[dict[str, Any]]:
     try:
-        url = f"https://news.yandex.ru/yandsearch?rss=1&text={quote(query)}&lang=ru"
+        url = f"https://news.yandex.ru/yandsearch?rss=1&text={quote(query)}&lang={lang}"
         r = await _http.get(url)
         r.raise_for_status()
         root = ET.fromstring(r.content)
@@ -58,10 +71,31 @@ async def _fetch_yandex(query: str, limit: int) -> list[dict[str, Any]]:
                 except Exception:
                     pub_date = pub_date_raw[:16]
             if title and link:
-                items.append({"title": title, "link": link, "pub_date": pub_date, "source": "Yandex News"})
+                items.append({"title": title, "link": link, "pub_date": pub_date, "source": f"Yandex News ({lang})"})
+        logger.info("Yandex News (%s): %d items", lang, len(items))
         return items
-    except Exception:
+    except Exception as e:
+        logger.warning("Yandex News (%s) error: %r", lang, e)
         return []
+
+
+async def _fetch_yandex(query: str, limit: int) -> list[dict[str, Any]]:
+    import asyncio
+    results = await asyncio.gather(
+        _fetch_yandex_lang(query, limit, "ru"),
+        _fetch_yandex_lang(query, limit, "en"),
+        _fetch_yandex_lang(query, limit, "kk"),
+    )
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for batch in results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
+    return items
+
 
 
 async def _fetch_yahoo(query: str, limit: int) -> list[dict[str, Any]]:
@@ -92,6 +126,31 @@ async def _fetch_yahoo(query: str, limit: int) -> list[dict[str, Any]]:
         return []
 
 
+async def _fetch_kase(company_name: str, limit: int = 15) -> list[dict[str, Any]]:
+    """Fetch KASE-related news via Google News with exchange-specific queries."""
+    import asyncio
+    exact = f'"{company_name}"'
+    queries = [
+        f'{exact} site:kase.kz',          # direct KASE publications
+        f'{exact} KASE биржа',             # exchange news in media
+        f'{exact} KASE облигации акции',   # financial instruments
+    ]
+    tasks = [_fetch_by_query(q, limit, region="RU") for q in queries]
+    results = await asyncio.gather(*tasks)
+
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for batch in results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                item["source"] = f"KASE / {item.get('source', 'Google News')}"
+                items.append(item)
+    logger.info("KASE News: %d items for '%s'", len(items), company_name)
+    return items[:limit]
+
+
 async def _fetch_bing(query: str, limit: int) -> list[dict[str, Any]]:
     try:
         url = f"https://www.bing.com/news/search?q={quote(query)}&format=rss&count={limit}"
@@ -111,8 +170,10 @@ async def _fetch_bing(query: str, limit: int) -> list[dict[str, Any]]:
                     pub_date = pub_date_raw[:16]
             if title and link:
                 items.append({"title": title, "link": link, "pub_date": pub_date, "source": "Bing News"})
+        logger.info("Bing News: %d items", len(items))
         return items
-    except Exception:
+    except Exception as e:
+        logger.warning("Bing News error: %r", e)
         return []
 
 
@@ -127,24 +188,129 @@ def _pub_date_to_dt(item: dict):
     return datetime.min.replace(tzinfo=timezone.utc)
 
 
-async def fetch_google_news_only(company_name: str, limit: int = 40) -> list[dict[str, Any]]:
-    """Fetch from Google News + GDELT + Yandex in parallel."""
+async def fetch_google_news_only(company_name: str, limit: int = 300) -> list[dict[str, Any]]:
+    """Fetch from Google News (multi-region + date slices) + Bing + KASE in parallel."""
     import asyncio
-    query = f'"{company_name}"'
+    from datetime import datetime, timezone, timedelta
 
+    query = f'"{company_name}"'
     parts = company_name.lower().split()
     strong = [w for w in parts if len(w) >= 4 and w not in _GENERIC_WORDS]
-    # For strong names: exact query + city/region variant; for weak: also try bare name
-    google_queries = [query] if strong else [query, company_name]
+    bare_queries = [query] if strong else [query, company_name]
 
-    per_source = max(limit, 20)
-    tasks = [_fetch_by_query(q, per_source) for q in google_queries]
-    tasks += [
-        _fetch_gdelt(query, per_source),
-        _fetch_yandex(query, per_source),
+    # Date slices — Google News returns different articles per window
+    now = datetime.now(timezone.utc)
+    slices = [
+        (now - timedelta(days=7),  now),
+        (now - timedelta(days=30), now - timedelta(days=7)),
+        (now - timedelta(days=90), now - timedelta(days=30)),
     ]
-    results = await asyncio.gather(*tasks)
+    def _date_q(base: str, start: datetime, end: datetime) -> str:
+        return f"{base} after:{start.strftime('%Y-%m-%d')} before:{end.strftime('%Y-%m-%d')}"
 
+    # Build all Google News query variants
+    google_tasks = []
+    for base_q in bare_queries:
+        for region in ("RU", "KZ", "US", "GB"):
+            # Plain (no date filter)
+            google_tasks.append(_fetch_by_query(base_q, 100, region=region))
+            # Each date slice
+            for start, end in slices:
+                google_tasks.append(_fetch_by_query(_date_q(base_q, start, end), 100, region=region))
+
+    other_tasks = [
+        _fetch_bing(query, 100),
+        _fetch_bing(company_name, 100),
+        _fetch_kase(company_name, 30),
+    ]
+
+    all_results = await asyncio.gather(*google_tasks, *other_tasks)
+
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for batch in all_results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
+
+    items.sort(key=_pub_date_to_dt, reverse=True)
+
+    # Drop articles older than 90 days
+    _cutoff = now - timedelta(days=90)
+    items = [
+        it for it in items
+        if _pub_date_to_dt(it) == datetime.min.replace(tzinfo=timezone.utc)
+        or _pub_date_to_dt(it) >= _cutoff
+    ]
+
+    return items[:limit]
+
+
+async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
+    return await _fetch_yahoo(company_name, limit)
+
+
+async def fetch_reddit_news(company_name: str, limit: int = 15) -> list[dict[str, Any]]:
+    return await _fetch_reddit(company_name, limit)
+
+
+async def _fetch_serpapi_query(query: str, api_key: str, gl: str = "kz", hl: str = "ru", limit: int = 10) -> list[dict[str, Any]]:
+    """Single SerpAPI Google News request — returns structured news results."""
+    try:
+        url = (
+            f"https://serpapi.com/search"
+            f"?engine=google_news"
+            f"&q={quote(query)}"
+            f"&gl={gl}&hl={hl}"
+            f"&api_key={api_key}"
+            f"&num={limit}"
+        )
+        r = await _http.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+
+        items: list[dict[str, Any]] = []
+        for art in (data.get("news_results") or [])[:limit]:
+            title = (art.get("title") or "").strip()
+            link  = (art.get("link")  or "").strip()
+            if not title or not link:
+                continue
+            source = ""
+            src = art.get("source")
+            if isinstance(src, dict):
+                source = src.get("name", "")
+            elif isinstance(src, str):
+                source = src
+            pub_date = art.get("date", "")
+            snippet  = art.get("snippet", "")
+            items.append({
+                "title":    title,
+                "link":     link,
+                "pub_date": pub_date,
+                "source":   f"SerpAPI/{source}" if source else "SerpAPI",
+                "snippet":  snippet,
+            })
+        logger.info("SerpAPI gl=%s: %d items for '%s'", gl, len(items), query)
+        return items
+    except Exception as e:
+        logger.warning("SerpAPI gl=%s error: %r", gl, e)
+        return []
+
+
+async def fetch_serpapi_news(company_name: str, api_key: str, limit: int = 10) -> list[dict[str, Any]]:
+    """
+    Fetch news via SerpAPI Google News — 3 requests (KZ/RU/US).
+    Keeps total requests low since API quota is limited.
+    """
+    import asyncio
+    query = f'"{company_name}"'
+    results = await asyncio.gather(
+        _fetch_serpapi_query(query, api_key, gl="kz", hl="ru", limit=limit),
+        _fetch_serpapi_query(query, api_key, gl="ru", hl="ru", limit=limit),
+        _fetch_serpapi_query(query, api_key, gl="us", hl="en", limit=limit),
+    )
     seen: set[str] = set()
     items: list[dict[str, Any]] = []
     for batch in results:
@@ -153,13 +319,7 @@ async def fetch_google_news_only(company_name: str, limit: int = 40) -> list[dic
             if key not in seen:
                 seen.add(key)
                 items.append(item)
-
-    items.sort(key=_pub_date_to_dt, reverse=True)
-    return items[:limit]
-
-
-async def fetch_yahoo_news(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
-    return await _fetch_yahoo(company_name, limit)
+    return items
 
 
 async def _fetch_reddit(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
@@ -245,8 +405,10 @@ async def _fetch_gdelt(query: str, limit: int) -> list[dict[str, Any]]:
                 "pub_date": pub_date,
                 "source":   a.get("domain") or "GDELT",
             })
+        logger.info("GDELT: %d items", len(items))
         return items
-    except Exception:
+    except Exception as e:
+        logger.warning("GDELT error: %r", e)
         return []
 
 
@@ -382,8 +544,13 @@ async def fetch_news(
         if city and city.lower() not in company_name.lower():
             queries.append(f'"{company_name}" {city}')
 
-    # Parallel fetch across all queries + sources
-    tasks = [_fetch_by_query(q, limit) for q in queries]
+    # Parallel fetch across all queries + sources (RU + KZ + US + GB regions)
+    tasks = []
+    for q in queries:
+        tasks.append(_fetch_by_query(q, limit, region="RU"))
+        tasks.append(_fetch_by_query(q, limit, region="KZ"))
+        tasks.append(_fetch_by_query(q, limit, region="US"))
+        tasks.append(_fetch_by_query(q, limit, region="GB"))
     tasks += [
         _fetch_yahoo(context_query, limit),
         _fetch_gdelt(context_query, limit),
@@ -526,3 +693,186 @@ async def fetch_market_news(
     rules = _build_match_rules(company_name, (co.get("ceo_name") or "").strip())
     relevant = _filter_relevant(items, rules)
     return relevant[:limit]
+
+
+# ── hh.kz ─────────────────────────────────────────────────────────────────────
+
+def _parse_hh_items(raw: list[dict]) -> list[dict[str, Any]]:
+    from datetime import datetime as _dt
+    items: list[dict[str, Any]] = []
+    for v in raw:
+        title = (v.get("name") or "").strip()
+        if not title:
+            continue
+        url_ = v.get("alternate_url") or ""
+        pub_raw = (v.get("published_at") or "")[:10]
+        pub_date = ""
+        if pub_raw:
+            try:
+                pub_date = _dt.strptime(pub_raw, "%Y-%m-%d").strftime("%d.%m.%Y")
+            except Exception:
+                pass
+        salary = v.get("salary") or {}
+        sal_str = ""
+        if salary:
+            fr, to, cur = salary.get("from"), salary.get("to"), salary.get("currency", "KZT")
+            if fr and to:
+                sal_str = f"{fr}–{to} {cur}"
+            elif fr:
+                sal_str = f"от {fr} {cur}"
+            elif to:
+                sal_str = f"до {to} {cur}"
+        snippet = v.get("snippet") or {}
+        desc = (snippet.get("requirement") or snippet.get("responsibility") or "")[:300]
+        items.append({
+            "title":    title,
+            "link":     url_,
+            "pub_date": pub_date,
+            "source":   "hh.kz",
+            "text":     (f"{sal_str} | {desc}" if sal_str else desc),
+            "type":     "hr",
+        })
+    return items
+
+
+_HH_HEADERS = {
+    "User-Agent": "CONEXIAI/1.0 (hello@conexiai.kz)",
+    "HH-User-Agent": "CONEXIAI/1.0 (hello@conexiai.kz)",
+}
+_HH_API = "https://api.hh.ru"  # hh.ru = parent; hh.kz redirects here
+
+
+async def fetch_hh_vacancies(company_name: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Fetch open vacancies from hh.kz for HR risk monitoring (mass hiring/layoffs signal)."""
+    import asyncio
+
+    async def _by_employer() -> list[dict]:
+        try:
+            er = await _http.get(
+                f"{_HH_API}/employers?text={quote(company_name)}&per_page=5",
+                headers=_HH_HEADERS,
+            )
+            er.raise_for_status()
+            employers = er.json().get("items") or []
+            emp_id = None
+            for emp in employers:
+                if company_name.lower() in (emp.get("name") or "").lower():
+                    emp_id = emp["id"]
+                    break
+            if not emp_id and employers:
+                emp_id = employers[0]["id"]
+            if not emp_id:
+                return []
+            vr = await _http.get(
+                f"{_HH_API}/vacancies?employer_id={emp_id}&per_page={limit}&order_by=publication_time",
+                headers=_HH_HEADERS,
+            )
+            vr.raise_for_status()
+            logger.info("hh.kz employer %s: %d vacancies", emp_id, len(vr.json().get("items") or []))
+            return _parse_hh_items(vr.json().get("items") or [])
+        except Exception as e:
+            logger.warning("hh.kz employer search: %r", e)
+            return []
+
+    async def _by_text() -> list[dict]:
+        try:
+            tr = await _http.get(
+                f"{_HH_API}/vacancies?text={quote(company_name)}&per_page={limit}&order_by=publication_time",
+                headers=_HH_HEADERS,
+            )
+            tr.raise_for_status()
+            raw = [
+                v for v in (tr.json().get("items") or [])
+                if company_name.lower() in (v.get("employer") or {}).get("name", "").lower()
+            ]
+            return _parse_hh_items(raw)
+        except Exception as e:
+            logger.warning("hh.kz text search: %r", e)
+            return []
+
+    results = await asyncio.gather(_by_employer(), _by_text())
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for batch in results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
+    logger.info("hh.kz: %d vacancies total for '%s'", len(items), company_name)
+    return items[:limit]
+
+
+# ── krisha.kz ─────────────────────────────────────────────────────────────────
+
+async def fetch_krisha_listings(
+    company_name: str,
+    limit: int = 10,
+    serpapi_key: str = "",
+) -> list[dict[str, Any]]:
+    """Fetch krisha.kz real estate listings mentioning the company.
+
+    Uses SerpAPI (engine=google, site:krisha.kz) when key provided,
+    otherwise falls back to Google News RSS site: queries.
+    """
+    import asyncio
+
+    if serpapi_key:
+        # SerpAPI web search — finds actual listing pages indexed by Google
+        items: list[dict[str, Any]] = []
+        for query in (
+            f'site:krisha.kz "{company_name}"',
+            f'site:krisha.kz {company_name} аренда офис',
+        ):
+            try:
+                url = (
+                    f"https://serpapi.com/search"
+                    f"?engine=google"
+                    f"&q={quote(query)}"
+                    f"&gl=kz&hl=ru"
+                    f"&num={limit}"
+                    f"&api_key={serpapi_key}"
+                )
+                r = await _http.get(url, timeout=15)
+                r.raise_for_status()
+                for res in (r.json().get("organic_results") or [])[:limit]:
+                    title = (res.get("title") or "").strip()
+                    link  = (res.get("link")  or "").strip()
+                    if title and link and "krisha.kz" in link:
+                        snippet = res.get("snippet", "")
+                        items.append({
+                            "title":    title,
+                            "link":     link,
+                            "pub_date": "",
+                            "source":   "krisha.kz",
+                            "text":     snippet[:300],
+                        })
+            except Exception as e:
+                logger.warning("krisha.kz SerpAPI: %r", e)
+
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for item in items:
+            key = item["title"].lower()[:60]
+            if key not in seen:
+                seen.add(key)
+                deduped.append(item)
+        logger.info("krisha.kz: %d listings (SerpAPI) for '%s'", len(deduped), company_name)
+        return deduped[:limit]
+
+    # Fallback: Google News RSS with site: filter (may return 0 for classifieds)
+    results = await asyncio.gather(
+        _fetch_by_query(f'site:krisha.kz "{company_name}"', limit, region="RU"),
+        _fetch_by_query(f'site:krisha.kz {company_name} аренда', limit, region="RU"),
+    )
+    seen2: set[str] = set()
+    fb: list[dict[str, Any]] = []
+    for batch in results:
+        for item in batch:
+            key = item["title"].lower()[:60]
+            if key not in seen2:
+                seen2.add(key)
+                item["source"] = "krisha.kz"
+                fb.append(item)
+    logger.info("krisha.kz: %d listings (RSS fallback) for '%s'", len(fb), company_name)
+    return fb[:limit]

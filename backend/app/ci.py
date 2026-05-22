@@ -229,12 +229,40 @@ async def analyze_ci(
         }
 
 
+async def score_competitor(name: str, news: list[dict], api_key: str) -> dict[str, Any]:
+    """Lightweight risk score for a single competitor — uses Haiku for speed/cost."""
+    import anthropic as _a, json as _json
+    if not news:
+        return {"score": None, "categories": {}, "summary": ""}
+    news_lines = "\n".join(f"- {n['title']}" for n in news[:12])
+    prompt = (
+        f"Оцени риски компании «{name}» по новостям. Оценка 0–100 (0=нет рисков, 100=критические).\n\n"
+        f"Новости:\n{news_lines}\n\n"
+        f"Верни ТОЛЬКО JSON:\n"
+        f'{{"score":<0-100>,"categories":{{"media":<0-100>,"hr":<0-100>,"gr":<0-100>,"pr":<0-100>,"market":<0-100>}},"summary":"<1 предложение>"}}'
+    )
+    try:
+        client = _a.AsyncAnthropic(api_key=api_key)
+        resp = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.content[0].text.strip()
+        if text.startswith("```"):
+            text = "\n".join(text.split("\n")[1:-1])
+        return _json.loads(text)
+    except Exception as e:
+        logger.warning("score_competitor %s: %r", name, e)
+        return {"score": None, "categories": {}, "summary": ""}
+
+
 async def run_ci(
     company_name: str,
     competitors: list[dict],
     api_key: str,
 ) -> dict[str, Any]:
-    """Full CI pipeline: collect data → AI analysis."""
+    """Full CI pipeline: collect data → AI analysis + risk scores."""
     if not competitors:
         return {"summary": "Конкуренты не добавлены.", "threat_level": "low",
                 "competitors": [], "opportunities": [], "risks": [], "recommendations": []}
@@ -245,11 +273,24 @@ async def run_ci(
     )
     competitors_data = list(competitors_data)
 
-    ai = await analyze_ci(company_name, competitors_data, api_key)
+    # Run CI analysis + individual risk scores in parallel
+    risk_scores, ai = await asyncio.gather(
+        asyncio.gather(*[
+            score_competitor(c["name"], c["news"], api_key)
+            for c in competitors_data
+        ]),
+        analyze_ci(company_name, competitors_data, api_key),
+    )
 
-    # Merge news into AI competitors list
-    news_map = {c["name"]: c["news"] for c in competitors_data}
+    # Attach risk score to each competitor data entry
+    for c, rs in zip(competitors_data, risk_scores):
+        c["risk"] = rs
+
+    # Merge news + risk into AI competitors list
+    data_map = {c["name"]: c for c in competitors_data}
     for c in ai.get("competitors", []):
-        c["news"] = news_map.get(c["name"], [])[:5]
+        cd = data_map.get(c["name"], {})
+        c["news"] = cd.get("news", [])[:5]
+        c["risk"] = cd.get("risk", {})
 
     return {"ai": ai, "competitors_data": competitors_data}

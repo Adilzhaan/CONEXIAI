@@ -61,14 +61,14 @@
           {% if all_companies %}
             <div class="co-drop-divider"></div>
             {% for c in all_companies %}
-              <a href="/companies/{{ c.id }}" class="co-drop-item">
+              <a href="/companies/{{ c.id }}" class="co-drop-item" onclick="event.stopPropagation();window.location.href='/companies/{{ c.id }}'">
                 <div class="co-avatar" style="width:22px;height:22px;font-size:10px;border-radius:6px;background:linear-gradient(135deg,#4f46e5,#7c3aed)">{{ c.name[0] | upper }}</div>
                 {{ c.name }}
               </a>
             {% endfor %}
           {% endif %}
           <div class="co-drop-divider"></div>
-          <a href="/dashboard" class="co-drop-item co-drop-cc">
+          <a href="/dashboard" class="co-drop-item co-drop-cc" onclick="event.stopPropagation();window.location.href='/dashboard'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
             Command Center
           </a>
@@ -84,11 +84,7 @@
         </div>
         <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-secondary btn-sm" data-i18n="btn_pdf">Скачать PDF</a>
         {% if is_admin %}
-        <form method="post" action="/risks/run" id="risk-form" style="margin:0">
-          <input type="hidden" name="company_id" value="{{ company.id }}" />
-          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn" data-i18n="btn_run"
-                  onclick="this.disabled=true;this.dataset.i18n='';this.textContent=document.cookie.includes('lang=en')?'Running…':'Запуск…';this.form.submit()">Запустить анализ</button>
-        </form>
+        <button class="btn btn-primary btn-sm" id="risk-btn" onclick="launchFullAnalysis(this)">Запустить анализ</button>
         {% endif %}
       </div>
     </div>
@@ -108,6 +104,33 @@
              border-radius:999px;width:5%;transition:width 0.5s ease"></div>
       </div>
     </div>
+
+    <!-- ── Floating analysis progress overlay ── -->
+    <div id="analysis-stages" style="display:none;position:fixed;bottom:24px;right:24px;z-index:10000;
+         width:340px;background:#13111f;border:1px solid rgba(124,58,237,0.35);border-radius:16px;
+         box-shadow:0 12px 40px rgba(0,0,0,0.6);overflow:hidden">
+      <div style="padding:14px 18px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <div style="width:14px;height:14px;border:2px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0"></div>
+        <span style="font-size:13px;font-weight:600;color:#e2e8f0">Идёт анализ…</span>
+      </div>
+      <div id="stage-news"      class="analysis-stage"><span class="stage-icon">⏳</span><span class="stage-label">📰 Новости + KASE</span><span class="stage-status">ожидание…</span></div>
+      <div id="stage-reddit"    class="analysis-stage"><span class="stage-icon">⏳</span><span class="stage-label">🟠 Reddit</span><span class="stage-status">ожидание…</span></div>
+      <div id="stage-youtube"   class="analysis-stage"><span class="stage-icon">⏳</span><span class="stage-label">▶️ YouTube</span><span class="stage-status">ожидание…</span></div>
+      <div id="stage-instagram" class="analysis-stage"><span class="stage-icon">⏳</span><span class="stage-label">📸 Instagram</span><span class="stage-status">ожидание…</span></div>
+      <div id="stage-threads"   class="analysis-stage"><span class="stage-icon">⏳</span><span class="stage-label">🧵 Threads</span><span class="stage-status">ожидание…</span></div>
+      <div id="stage-ai"        class="analysis-stage" style="border-bottom:none"><span class="stage-icon">⏳</span><span class="stage-label">🤖 AI агенты</span><span class="stage-status">ожидание…</span></div>
+    </div>
+
+    <style>
+      .analysis-stage { display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px; }
+      .stage-icon { font-size:14px;width:18px;text-align:center;flex-shrink:0; }
+      .stage-label { flex:1;color:var(--text);font-weight:500; }
+      .stage-status { color:var(--text-muted);font-size:11px; }
+      .stage-loading .stage-icon { animation:spin 1s linear infinite;display:inline-block; }
+      .stage-done .stage-status { color:#34d399; }
+      .stage-error .stage-status { color:#f87171; }
+      .stage-skip .stage-status { color:#6b7280; }
+    </style>
 
     <div class="sidebar-wrap" style="padding:0">
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -631,21 +654,19 @@
         ("pr",    "PR Environment",     "#c084fc", "rgba(124,58,237,0.1)"),
         ("market","Market & Industry",  "#fbbf24", "rgba(217,119,6,0.1)"),
       ] %}
-      {% if cats %}
       <style>
         .rcat-nav { padding:16px 32px 0; display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
         @media(max-width:1200px){ .rcat-nav { grid-template-columns:repeat(3,1fr); } }
         @media(max-width:640px) { .rcat-nav { grid-template-columns:repeat(2,1fr); padding:12px 16px 0; } }
       </style>
-      <div class="rcat-nav">
+      <div class="rcat-nav" id="rcat-nav">
         {% for key, label, color, bg in cat_meta_top %}
-          {% set score = cats[key].score if cats[key] else none %}
-          {% set risks = cats[key].risks if cats[key] else [] %}
+          {% set score = cats[key].score if cats and cats[key] else none %}
+          {% set risks = cats[key].risks if cats and cats[key] else [] %}
           {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
-          {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
-          {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
           <a href="{{ '#' if key == 'market' else '/companies/' + company.id + '/category/' + key }}"
              {% if key == 'market' %}onclick="event.preventDefault();showTab('market',null)"{% endif %}
+             id="rcat-card-{{ key }}"
              style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
                     background:{{ bg }};border:1px solid {{ color }}26;border-left:3px solid {{ color }};
                     border-radius:var(--radius);text-decoration:none;color:inherit;
@@ -655,15 +676,15 @@
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
               <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">{{ label }}</div>
             </div>
-            <div style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
+            <div id="rcat-score-{{ key }}" style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
               {{ score if score is not none else '—' }}
             </div>
             <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07);overflow:hidden">
-              <div style="height:100%;border-radius:2px;background:{{ color }};opacity:0.7;width:{{ score if score is not none else 0 }}%"></div>
+              <div id="rcat-bar-{{ key }}" style="height:100%;border-radius:2px;background:{{ color }};opacity:0.7;width:{{ score if score is not none else 0 }}%"></div>
             </div>
-            {% if desc %}
-              <div style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">{{ desc[:55] }}{% if desc|length > 55 %}…{% endif %}</div>
-            {% endif %}
+            <div id="rcat-desc-{{ key }}" style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">
+              {% if desc %}{{ desc[:55] }}{% if desc|length > 55 %}…{% endif %}{% endif %}
+            </div>
           </a>
         {% endfor %}
 
@@ -682,7 +703,6 @@
         </a>
 
       </div>
-      {% endif %}
       <!-- ══ END RISK CATEGORIES NAV ══ -->
 
       <!-- Tab nav -->
@@ -702,11 +722,7 @@
           <span data-i18n="tab_history">История</span>
           {% if risk_runs %}<span class="cd-tab-badge">{{ risk_runs|length }}</span>{% endif %}
         </button>
-        <button class="cd-tab" onclick="showTab('monitor', this)">
-          <span data-i18n="tab_monitor">Мониторинг</span>
-          {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
-          {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
-        </button>
+        <!-- Monitor tab hidden temporarily -->
         <button class="cd-tab" onclick="showTab('social', this)">
           <span data-i18n="tab_social">Соцсети</span>
         </button>
@@ -903,7 +919,7 @@
                       stroke-linecap="round" opacity="0.85"/>
                   </svg>
                   <div class="ro-gauge-num">
-                    <div class="ro-gauge-score" style="color:{{ crisis_color }}">{{ s }}</div>
+                    <div id="ro-gauge-score" class="ro-gauge-score" style="color:{{ crisis_color }}">{{ s }}</div>
                     <div class="ro-gauge-max">/ 100</div>
                   </div>
                 </div>
@@ -925,14 +941,12 @@
                 <div class="ro-cats-title">Risk = (PR + HR + GR + MI + MK) / 5</div>
                 {% for key, lbl, color in ro_cat_meta %}
                   {% set cat_score = cats[key].score | int if cats and cats[key] and cats[key].score is not none else none %}
-                  {% set prev_cat_score = (prev.categories[key].score | int if prev and prev.categories and prev.categories[key] and prev.categories[key].score is not none else none) %}
-                  {% set cat_delta = (cat_score - prev_cat_score) if cat_score is not none and prev_cat_score is not none else none %}
                   <div class="ro-cat-row">
                     <div class="ro-cat-lbl" style="color:{{ color }}">{{ lbl }}</div>
                     <div class="ro-cat-track">
-                      <div class="ro-cat-fill" style="width:{{ cat_score if cat_score else 0 }}%;background:{{ color }};opacity:0.75"></div>
+                      <div id="ro-fill-{{ key }}" class="ro-cat-fill" style="width:{{ cat_score if cat_score else 0 }}%;background:{{ color }};opacity:0.75"></div>
                     </div>
-                    <div class="ro-cat-score" style="color:{{ color }}">
+                    <div id="ro-score-{{ key }}" class="ro-cat-score" style="color:{{ color }}">
                       {% if cat_score is not none %}{{ cat_score }}{% else %}—{% endif %}
                     </div>
                     <div class="ro-cat-delta"></div>
@@ -1061,6 +1075,111 @@
           </div>
         {% endif %}
 
+        <!-- ══ SECTION 2: AI Summary (populated by JS after analysis) ══ -->
+        <div class="ri-section" id="ov-ai-section" style="display:none">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">🤖</div>
+              <span>AI Мониторинг</span>
+            </div>
+            <span id="ov-ai-date" style="font-size:11px;color:var(--text-muted)"></span>
+          </div>
+          <div id="ov-ai-summary" style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:14px 18px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:12px"></div>
+          <div id="ov-ai-recommendation" style="display:none;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--text-muted);margin-bottom:12px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div id="ov-ai-problems" style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.18);border-radius:12px;padding:12px 16px;display:none">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#f87171;margin-bottom:8px">Проблемы</div>
+              <div id="ov-ai-problems-list"></div>
+            </div>
+            <div id="ov-ai-losses" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.18);border-radius:12px;padding:12px 16px;display:none">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#fbbf24;margin-bottom:8px">Потенциальные потери</div>
+              <div id="ov-ai-losses-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ SECTION 2b: Top Monitoring Items ══ -->
+        {% set top_items_s2 = monitoring_items | selectattr("is_top") | list if monitoring_items else [] %}
+        <div class="ri-section" id="ov-top-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">★</div>
+              <span>Топ новостей и постов</span>
+            </div>
+            {% if top_items_s2 %}
+            <span id="ov-top-count" style="font-size:11px;color:var(--text-muted)">{{ top_items_s2|length }} материалов · свежие</span>
+            {% endif %}
+          </div>
+          {% set src_icons_s2 = {"news":"📰","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵"} %}
+          {% if top_items_s2 %}
+          <div id="ov-top-feed" style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+            {% for item in top_items_s2 %}
+            <div class="mon-item">
+              <div class="mon-icon mon-icon-new" style="font-size:14px">{{ src_icons_s2.get(item.source, "📄") }}</div>
+              <div class="mon-body">
+                <a href="{{ item.url or '#' }}" target="_blank" rel="noopener" class="mon-title">{{ item.title }}</a>
+                <div class="mon-meta">
+                  <span class="mon-badge mon-badge-src">{{ item.source }}</span>
+                  {% if item.source_name %}<span>·</span><span>{{ item.source_name }}</span>{% endif %}
+                  {% if item.pub_date %}<span>·</span><span>{{ item.pub_date }}</span>{% endif %}
+                </div>
+                {% if item.importance %}
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">{{ item.importance }}</div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div id="ov-top-feed" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:22px 20px;text-align:center">
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Запустите анализ чтобы получить актуальные новости и посты</div>
+            <button onclick="launchFullAnalysis(this)"
+              style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer">
+              Запустить анализ →
+            </button>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- ══ SECTION 2c: News Sources ══ -->
+        {% set all_news = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
+        {% if all_news %}
+        <div class="ri-section" id="ov-sources-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">📰</div>
+              <span>Источники анализа</span>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">{{ all_news|length }} материалов</span>
+          </div>
+          <div id="ov-sources-feed" style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+            {% set src_icons_news = {"news":"📰","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵","kase":"📊"} %}
+            {% for item in all_news %}
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.last %}border-bottom:none{% endif %}">
+              <span style="font-size:14px;flex-shrink:0;margin-top:2px">{{ src_icons_news.get((item.source or '')|lower|replace(' ',''), '📄') }}</span>
+              <div style="flex:1;min-width:0">
+                {% if item.link %}
+                  <a href="{{ item.link }}" target="_blank" rel="noopener"
+                     style="font-size:12px;font-weight:500;color:var(--text);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;margin-bottom:2px"
+                     onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">{{ item.title }}</a>
+                {% else %}
+                  <div style="font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px">{{ item.title }}</div>
+                {% endif %}
+                <div style="font-size:10px;color:var(--text-muted);display:flex;gap:5px;align-items:center">
+                  {% if item.source %}<span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 5px;font-weight:600">{{ item.source }}</span>{% endif %}
+                  {% if item.pub_date %}<span>{{ item.pub_date[:10] if item.pub_date|length > 10 else item.pub_date }}</span>{% endif %}
+                </div>
+              </div>
+              {% if item.link %}
+                <a href="{{ item.link }}" target="_blank" rel="noopener"
+                   style="flex-shrink:0;width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:var(--text-muted);text-decoration:none;font-size:10px"
+                   title="Открыть">↗</a>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
 
         <!-- ══ SECTION 3: AI Intelligence ══ -->
         {% if (latest and latest.advice) or (latest and latest.scenarios) %}
@@ -1129,7 +1248,7 @@
       </div>{# end overview #}
 
       <!-- ══ MONITOR TAB ══ -->
-      <div class="cd-panel" id="tab-monitor">
+      <div class="cd-panel" id="tab-monitor" style="display:none!important">
         <style>
           .mon-status-grid { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
           .mon-status-card {
@@ -1243,6 +1362,45 @@
               <span>Нажмите «Загрузить новости» чтобы получить свежие данные.</span>
             </div>
           </div>
+
+          <!-- Full Analysis -->
+          <div class="mon-sec-hdr" style="margin-top:8px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Полный AI-анализ
+          </div>
+          <div style="margin-bottom:16px">
+            <button id="run-analysis-btn" onclick="runFullAnalysis()"
+              style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.35);color:#34d399;border-radius:8px;padding:9px 22px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(52,211,153,0.24)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">
+              Запустить полный анализ
+            </button>
+          </div>
+
+          <!-- Stage tracker moved to floating overlay -->
+
+          <!-- Results -->
+          <div id="full-analysis-result" style="display:none">
+            <div id="fa-summary" style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);border-radius:12px;padding:16px 20px;margin-bottom:18px;font-size:13px;line-height:1.7;color:var(--text)"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Топ важных материалов
+            </div>
+            <div id="fa-top-items" class="mon-feed" style="margin-bottom:18px"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Выявленные проблемы
+            </div>
+            <div id="fa-problems" style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:12px;padding:14px 18px;margin-bottom:18px"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Потенциальные потери
+            </div>
+            <div id="fa-losses" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:14px 18px;margin-bottom:28px"></div>
+          </div>
+
 
         </div>
       </div>
@@ -1772,12 +1930,12 @@
       <div class="cd-panel" id="tab-social">
         <div style="max-width:720px;margin:0 auto;padding:8px 0">
 
+          <div id="threads-section">
           <div class="mon-sec-hdr">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             Threads
             <span id="threads-count" style="display:none"></span>
           </div>
-
           <div style="margin-bottom:12px">
             <button id="load-threads-btn" onclick="loadThreads()"
               style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
@@ -1785,42 +1943,20 @@
               Загрузить посты
             </button>
           </div>
-
           <div id="threads-feed" class="mon-feed">
             <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
               <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🧵</div>
               <span>Нажмите «Загрузить посты» чтобы найти упоминания в Threads.</span>
             </div>
           </div>
-
-          <div class="mon-sec-hdr" style="margin-top:20px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-            YouTube
-            <span id="youtube-count" style="display:none"></span>
           </div>
 
-          <div style="margin-bottom:12px">
-            <button id="load-youtube-btn" onclick="loadYouTube()"
-              style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.35);color:#f87171;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
-              onmouseover="this.style.background='rgba(220,38,38,0.24)'" onmouseout="this.style.background='rgba(220,38,38,0.12)'">
-              Загрузить видео
-            </button>
-          </div>
-
-          <div id="youtube-feed" class="mon-feed">
-            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
-              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div>
-              <span>Нажмите «Загрузить видео» чтобы найти упоминания на YouTube.</span>
-            </div>
-          </div>
-
-          <!-- Instagram -->
+          <div id="instagram-section">
           <div class="mon-sec-hdr" style="margin-top:20px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
             Instagram
             <span id="instagram-count" style="display:none"></span>
           </div>
-
           <div style="margin-bottom:12px">
             <button id="load-instagram-btn" onclick="loadInstagram()"
               style="background:rgba(225,48,108,0.12);border:1px solid rgba(225,48,108,0.35);color:#f472b6;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
@@ -1828,12 +1964,12 @@
               Загрузить посты
             </button>
           </div>
-
           <div id="instagram-feed" class="mon-feed">
             <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
               <div style="font-size:24px;margin-bottom:8px;opacity:0.3">📸</div>
               <span>Нажмите «Загрузить посты» чтобы найти упоминания в Instagram.</span>
             </div>
+          </div>
           </div>
 
           <!-- Reddit -->
@@ -1876,25 +2012,6 @@
             </div>
           </div>
 
-          <!-- Telegram -->
-          <div class="mon-sec-hdr" style="margin-top:20px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            Telegram
-            <span id="telegram-count" style="display:none"></span>
-          </div>
-          <div style="margin-bottom:12px">
-            <button id="load-telegram-btn" onclick="loadSocial('telegram','telegram-feed','telegram-count','load-telegram-btn','Ищем в Telegram каналах…','✈️')"
-              style="background:rgba(0,136,204,0.12);border:1px solid rgba(0,136,204,0.35);color:#38bdf8;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
-              onmouseover="this.style.background='rgba(0,136,204,0.24)'" onmouseout="this.style.background='rgba(0,136,204,0.12)'">
-              Загрузить посты
-            </button>
-          </div>
-          <div id="telegram-feed" class="mon-feed">
-            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
-              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">✈️</div>
-              <span>Нажмите «Загрузить посты» чтобы найти упоминания в Telegram.</span>
-            </div>
-          </div>
 
         </div>
       </div>
@@ -1924,6 +2041,9 @@ const riskRuns = {{ risk_runs | tojson | safe }};
 
 const COMPANY_ID   = '{{ company.id }}';
 const COMPANY_NAME = '{{ company.name | replace("'", "\\'") }}';
+const COMPANY_INDUSTRY = '{{ (company.industry or "") | replace("'", "\\'") }}';
+const COMPANY_LOCATION = '{{ (company.location or "") | replace("'", "\\'") }}';
+const COMPANY_DESCRIPTION = '{{ (company.description or "") | replace("'", "\\'") | replace("\n", " ") | truncate(300, false) }}';
 const APIFY_TOKEN  = '{{ settings.APIFY_TOKEN }}';
 let lastEmailIds = new Set({{ emails | map(attribute='id') | list | tojson | safe }});
 
@@ -2813,6 +2933,281 @@ async function loadCompanyNews() {
     btn.disabled = false;
     btn.textContent = 'Обновить';
   }
+}
+
+
+const SOURCE_ICONS = { news:'📰', reddit:'🟠', youtube:'▶️', instagram:'📸', threads:'🧵' };
+
+function setStage(id, state, status) {
+  const el = document.getElementById('stage-' + id);
+  if (!el) return;
+  el.className = 'analysis-stage stage-' + state;
+  el.querySelector('.stage-status').textContent = status;
+  if (state === 'loading') el.querySelector('.stage-icon').textContent = '🔄';
+  else if (state === 'done')  el.querySelector('.stage-icon').textContent = '✅';
+  else if (state === 'error') el.querySelector('.stage-icon').textContent = '❌';
+  else if (state === 'skip')  el.querySelector('.stage-icon').textContent = '⏸';
+  else el.querySelector('.stage-icon').textContent = '⏳';
+}
+
+async function runFullAnalysis() {
+  const btn = document.getElementById('run-analysis-btn');
+  btn.disabled = true;
+  btn.textContent = 'Идёт анализ…';
+  document.getElementById('analysis-stages').style.display = 'block';
+  document.getElementById('full-analysis-result').style.display = 'none';
+
+  // Reset stages
+  ['news','reddit','youtube','instagram','threads','ai'].forEach(s => setStage(s, 'pending', 'ожидание…'));
+
+  const collected = { news:[], reddit:[], youtube:[], instagram:[], threads:[] };
+
+  // Fetch all sources in parallel
+  const tasks = {
+    news: async () => {
+      setStage('news', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/news`);
+      const d = await r.json();
+      collected.news = d.news || [];
+      setStage('news', 'done', `найдено ${collected.news.length}`);
+    },
+    reddit: async () => {
+      setStage('reddit', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/reddit`);
+      const d = await r.json();
+      collected.reddit = d.posts || [];
+      setStage('reddit', 'done', `найдено ${collected.reddit.length}`);
+    },
+    youtube: async () => {
+      setStage('youtube', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/youtube-api`);
+      const d = await r.json();
+      collected.youtube = d.posts || [];
+      setStage('youtube', 'done', `найдено ${collected.youtube.length}`);
+    },
+    instagram: async () => {
+      setStage('instagram', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/instagram`);
+      const d = await r.json();
+      collected.instagram = d.posts || [];
+      if (d.error) setStage('instagram', 'error', d.error.slice(0,40));
+      else setStage('instagram', 'done', `найдено ${collected.instagram.length}`);
+    },
+    threads: async () => {
+      if (!APIFY_TOKEN) { setStage('threads', 'error', 'нет токена'); return; }
+      setStage('threads', 'loading', 'загружаем…');
+      const payload = { keywords:[COMPANY_NAME], proxyConfiguration:{useApifyProxy:false}, sortByRecent:true };
+      const r = await fetch(
+        `https://api.apify.com/v2/acts/watcher.data~search-threads-by-keywords/run-sync-get-dataset-items?token=${APIFY_TOKEN}&timeout=30`,
+        { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }
+      );
+      const items = await r.json();
+      collected.threads = Array.isArray(items) ? items : [];
+      setStage('threads', 'done', `найдено ${collected.threads.length}`);
+    },
+  };
+
+  const results = await Promise.allSettled(Object.values(tasks).map(fn => fn().catch(e => {
+    // mark error on uncaught
+  })));
+
+  // AI analysis — 3-agent pipeline
+  setStage('ai', 'loading', '🔍 Агент 1: отбор материалов…');
+  try {
+    const companyInfo = {
+      company_name: COMPANY_NAME,
+      industry: COMPANY_INDUSTRY,
+      location: COMPANY_LOCATION,
+      description: COMPANY_DESCRIPTION,
+      ...collected
+    };
+
+    // Start background job
+    const startR = await fetch(`/companies/${COMPANY_ID}/analyze-combined`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(companyInfo),
+    });
+    const startData = await startR.json();
+    if (startData.error) { setStage('ai', 'error', startData.error.slice(0,60)); btn.disabled=false; btn.textContent='Повторить анализ'; return; }
+
+    const jobId = startData.job_id;
+    setStage('ai', 'loading', '🔍 Анализ запущен, обрабатываем статьи…');
+
+    // Poll until done
+    const data = await new Promise((resolve, reject) => {
+      const poll = async () => {
+        try {
+          const pr = await fetch(`/companies/${COMPANY_ID}/analyze-status/${jobId}`);
+          const pj = await pr.json();
+          if (pj.status === 'done') { resolve(pj.result); return; }
+          if (pj.status === 'error') { reject(new Error(pj.error || 'Ошибка анализа')); return; }
+          if (pj.status === 'not_found') { reject(new Error('Задача не найдена')); return; }
+          // Still processing — update stage text from server
+          if (pj.stage) setStage('ai', 'loading', pj.stage);
+          setTimeout(poll, 5000);
+        } catch(e) { setTimeout(poll, 5000); } // network hiccup — keep polling
+      };
+      poll();
+    });
+
+    setStage('ai', 'done', `готово · ${data.total_items||0} материалов`);
+
+    // Summary
+    const total = data.total_items || 0;
+    document.getElementById('fa-summary').innerHTML =
+      `<strong style="color:#a78bfa">Общий вывод</strong><br><br>${data.overall_summary || '—'}` +
+      (data.recommendation ? `<br><br><div style="background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.2);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--text-muted)">💡 ${data.recommendation}</div>` : '') +
+      `<br><span style="font-size:11px;color:var(--text-muted)">Проанализировано материалов: ${total}</span>`;
+
+    // Top items
+    const items = data.top_items || [];
+    document.getElementById('fa-top-items').innerHTML = items.length
+      ? items.map((n,i) => `
+          <div class="mon-item">
+            <div class="mon-icon mon-icon-new" style="font-size:13px">${SOURCE_ICONS[n.source] || '📄'}</div>
+            <div class="mon-body">
+              <a href="${n.url||'#'}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+              <div class="mon-meta">
+                <span class="mon-badge mon-badge-src">${n.source}</span>
+                ${n.date ? `<span>·</span><span>${n.date}</span>` : ''}
+              </div>
+              ${n.importance ? `<div style="font-size:12px;color:var(--text-muted);margin-top:5px;line-height:1.5">${n.importance}</div>` : ''}
+            </div>
+          </div>`).join('')
+      : '<div style="padding:20px;color:var(--text-muted);font-size:13px">Нет данных</div>';
+
+    // Problems
+    const problems = data.problems || [];
+    document.getElementById('fa-problems').innerHTML = problems.length
+      ? problems.map(p=>`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:13px;line-height:1.5;color:var(--text)"><span style="color:#f87171;flex-shrink:0">✕</span>${p}</div>`).join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">Проблем не выявлено</div>';
+
+    // Losses
+    const losses = data.potential_losses || [];
+    document.getElementById('fa-losses').innerHTML = losses.length
+      ? losses.map(l=>`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:13px;line-height:1.5;color:var(--text)"><span style="color:#fbbf24;flex-shrink:0">⚠</span>${l}</div>`).join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">Значительных потерь не выявлено</div>';
+
+    btn.textContent = 'Обновить анализ';
+    btn.disabled = false;
+
+    // ── Hide overlay then reload page to show fresh data ─────────
+    setTimeout(() => {
+      document.getElementById('analysis-stages').style.display = 'none';
+      window.location.reload();
+    }, 1500);
+
+  } catch(e) {
+    setStage('ai', 'error', 'ошибка запроса');
+    document.getElementById('analysis-stages').style.display = 'none';
+    btn.textContent = 'Повторить анализ';
+    btn.disabled = false;
+  }
+  btn.disabled = false;
+}
+
+function updateOverviewWithAnalysis(data) {
+  const sec = document.getElementById('ov-ai-section');
+  if (!sec) return;
+
+  // Summary
+  const sumEl = document.getElementById('ov-ai-summary');
+  if (sumEl && data.overall_summary) {
+    sumEl.textContent = data.overall_summary;
+    sec.style.display = 'block';
+  }
+
+  // Recommendation
+  const recEl = document.getElementById('ov-ai-recommendation');
+  if (recEl && data.recommendation) {
+    recEl.textContent = '💡 ' + data.recommendation;
+    recEl.style.display = 'block';
+  }
+
+  // Problems
+  const probEl = document.getElementById('ov-ai-problems');
+  const probList = document.getElementById('ov-ai-problems-list');
+  if (probList && data.problems?.length) {
+    probList.innerHTML = data.problems.map(p =>
+      `<div style="display:flex;gap:7px;margin-bottom:6px;font-size:12.5px;line-height:1.5;color:var(--text)"><span style="color:#f87171;flex-shrink:0">✕</span>${p}</div>`
+    ).join('');
+    probEl.style.display = 'block';
+  }
+
+  // Losses
+  const lossEl = document.getElementById('ov-ai-losses');
+  const lossList = document.getElementById('ov-ai-losses-list');
+  if (lossList && data.potential_losses?.length) {
+    lossList.innerHTML = data.potential_losses.map(l =>
+      `<div style="display:flex;gap:7px;margin-bottom:6px;font-size:12.5px;line-height:1.5;color:var(--text)"><span style="color:#fbbf24;flex-shrink:0">⚠</span>${l}</div>`
+    ).join('');
+    lossEl.style.display = 'block';
+  }
+
+  // Date
+  const dateEl = document.getElementById('ov-ai-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  // Top items feed
+  const topFeed = document.getElementById('ov-top-feed');
+  if (topFeed && data.top_items?.length) {
+    const SRC = { news:'📰', reddit:'🟠', youtube:'▶️', instagram:'📸', threads:'🧵', kase:'📊' };
+    topFeed.innerHTML = data.top_items.map(n => `
+      <div class="mon-item">
+        <div class="mon-icon mon-icon-new" style="font-size:14px">${SRC[n.source]||'📄'}</div>
+        <div class="mon-body">
+          <a href="${n.url||'#'}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+          <div class="mon-meta">
+            <span class="mon-badge mon-badge-src">${n.source}</span>
+            ${n.date ? `<span>·</span><span>${n.date}</span>` : ''}
+          </div>
+          ${n.importance ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">${n.importance}</div>` : ''}
+        </div>
+      </div>`).join('');
+    const cnt = document.getElementById('ov-top-count');
+    if (cnt) cnt.textContent = `${data.top_items.length} материалов · только что`;
+  }
+
+  // ── Update risk category cards (rcat-nav) and overview bars ──────
+  const cats = data.categories || {};
+  const CAT_COLORS = {media:'#93bbff', hr:'#4ade80', gr:'#f87171', pr:'#c084fc', market:'#fbbf24'};
+
+  for (const [key] of Object.entries(CAT_COLORS)) {
+    const cat = cats[key] || {};
+    const score = (cat.score != null) ? Math.round(cat.score) : null;
+    const firstRisk = cat.risks?.[0]?.text || '';
+
+    // rcat-nav card score + bar + desc
+    const scoreEl = document.getElementById(`rcat-score-${key}`);
+    if (scoreEl) scoreEl.textContent = score ?? '—';
+    const barEl = document.getElementById(`rcat-bar-${key}`);
+    if (barEl) barEl.style.width = `${score || 0}%`;
+    const descEl = document.getElementById(`rcat-desc-${key}`);
+    if (descEl && firstRisk) descEl.textContent = firstRisk.length > 55 ? firstRisk.substring(0, 55) + '…' : firstRisk;
+
+    // Risk Overview breakdown (ro-cats)
+    const roFill = document.getElementById(`ro-fill-${key}`);
+    if (roFill) roFill.style.width = `${score || 0}%`;
+    const roScore = document.getElementById(`ro-score-${key}`);
+    if (roScore) roScore.textContent = score ?? '—';
+  }
+
+  // Overall score gauge number
+  if (data.score != null) {
+    const gaugeEl = document.getElementById('ro-gauge-score');
+    if (gaugeEl) gaugeEl.textContent = Math.round(data.score);
+  }
+}
+
+// Entry point for header button and overview placeholder button
+function launchFullAnalysis(triggerBtn) {
+  if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Анализ…'; }
+  const btn = document.getElementById('run-analysis-btn');
+  if (btn && !btn.disabled) {
+    btn.click();
+  }
+  if (triggerBtn) setTimeout(() => { triggerBtn.disabled = false; triggerBtn.textContent = 'Запустить анализ'; }, 500);
 }
 
 

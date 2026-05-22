@@ -1,23 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Investment Market Analysis — {{ company.name }} — {{ app_name }}{% endblock %}
+{% block title %}Market Analysis — {{ company.name }} — {{ app_name }}{% endblock %}
 
 {% block body %}
 {% if not embed %}<div class="sidebar-layout">
 
-  <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div style="display:flex;align-items:center;gap:10px">
-
-        <a href="/dashboard" style="display:block;line-height:0">
-          <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
-        </a>
-      </div>
+      <a href="/dashboard" style="display:block;line-height:0">
+        <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+      </a>
     </div>
     <nav class="sidebar-nav">
-      <a href="/companies/{{ company.id }}" class="sidebar-item">
-        <span class="sidebar-item-icon">◎</span> Risk Intelligence
-      </a>
+      <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
       <a href="/companies/{{ company.id }}/market" class="sidebar-item active">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span> Market Analysis
       </a>
@@ -25,22 +19,17 @@
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span> CI Monitor
       </a>
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
-        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></span> Crisis Protection Center
       </a>
       <div class="sidebar-section-label">Система</div>
-      <a href="/logout" class="sidebar-item">
-        <span class="sidebar-item-icon">⚙</span> Выйти
-      </a>
+      <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
     </nav>
   </aside>
 
-  <!-- Main content -->
   <div class="sidebar-content">
-
-    <!-- Topbar -->
     <div class="sidebar-topbar">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">Investment Market Analysis</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Market Analysis</div>
         <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
           {{ company.name }}
           {% if cache_updated_at %}
@@ -54,908 +43,300 @@
           {% endif %}
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        {% if finance and finance.market_indices %}
-          {% set primary = finance.market_indices[0] %}
-          {% set pri_chg = primary.get('change_pct') %}
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12)">
-            <span style="font-size:11px;color:var(--text-muted);font-weight:600">{{ primary.get('name', primary.get('symbol', '')) }}</span>
-            <span style="font-size:13px;font-weight:700">{{ "%.0f"|format(primary.get('last')) if primary.get('last') else '—' }}</span>
-            {% if pri_chg is not none %}
-              <span style="font-size:12px;font-weight:700;{% if pri_chg > 0 %}color:#34d399{% elif pri_chg < 0 %}color:#f87171{% endif %}">
-                {% if pri_chg > 0 %}▲{% elif pri_chg < 0 %}▼{% endif %}{{ "%.2f"|format(pri_chg|abs) }}%
-              </span>
-            {% endif %}
-          </div>
-        {% endif %}
+      <div style="display:flex;gap:10px">
         <button id="refresh-btn" onclick="triggerRefresh()" class="btn btn-secondary btn-sm">↻ Обновить</button>
         <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
       </div>
     </div>
-  {% endif %}{# /embed topbar+sidebar #}
+  {% endif %}
 
-    <div class="sidebar-wrap" {% if embed %}style="padding:24px 28px"{% endif %}>
-      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <div class="sidebar-wrap" {% if embed %}style="padding:24px 28px"{% endif %}>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-      <style>
-        .mkt-card, .ai-block { box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+    <style>
+      @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+      .skeleton { background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%); background-size:400px 100%; animation:shimmer 1.4s infinite; border-radius:6px; }
 
-        /* Skeleton */
-        @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
-        .skeleton {
-          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
-          background-size: 400px 100%;
-          animation: shimmer 1.4s infinite;
-          border-radius: 6px;
-        }
-        .skeleton-card { height: 90px; border-radius: var(--radius); }
-        .skeleton-block { height: 160px; border-radius: var(--radius); }
-        .skeleton-line { height: 14px; margin-bottom: 8px; }
-        .skeleton-line.short { width: 40%; }
-        .skeleton-line.medium { width: 70%; }
+      .mkt-block { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:20px 22px; margin-bottom:16px; }
+      .mkt-label { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
 
+      .mkt-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+      @media(max-width:800px){ .mkt-two-col { grid-template-columns:1fr; } }
 
-        /* Top metrics */
-        .mkt-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-        @media(max-width:900px){.mkt-metrics{grid-template-columns:repeat(2,1fr);}}
-        .mkt-card { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
-        .mkt-card-label { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
-        .mkt-card-value { font-size:26px; font-weight:800; line-height:1; margin-bottom:4px; }
-        .mkt-card-sub { font-size:11px; color:var(--text-muted); margin-top:4px; }
-        .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
-        .badge-bull { background:rgba(52,211,153,0.10); color:#34d399; border:1px solid rgba(52,211,153,0.28); }
-        .badge-bear { background:rgba(124,58,237,0.12); color:#f87171; border:1px solid rgba(248,113,113,0.28); }
-        .badge-neutral { background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.50); border:1px solid rgba(255,255,255,0.15); }
+      .mkt-pos-point { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--text); line-height:1.5; margin-bottom:6px; }
+      .mkt-pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#7c3aed; flex-shrink:0; margin-top:6px; }
 
-        /* Summary banner */
-        .summary-banner {
-          background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04));
-          border:1px solid rgba(124,58,237,0.25); border-left:3px solid #7c3aed;
-          border-radius:var(--radius); padding:14px 18px; margin-bottom:20px;
-          display:flex; align-items:center; gap:12px;
-        }
-        .summary-banner-icon { font-size:20px; flex-shrink:0; }
-        .summary-banner-text { font-size:13px; font-weight:500; line-height:1.5; }
+      .risk-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
+      .risk-row:last-child { border-bottom:none; }
+      .risk-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+      .dot-high { background:#f87171; } .dot-medium { background:#fbbf24; } .dot-low { background:#34d399; }
+      .risk-sev { font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+      .sev-high { background:rgba(248,113,113,0.12); color:#f87171; }
+      .sev-medium { background:rgba(251,191,36,0.12); color:#fbbf24; }
+      .sev-low { background:rgba(52,211,153,0.10); color:#34d399; }
 
-        /* Two-col */
-        .mkt-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-        @media(max-width:800px){.mkt-two-col{grid-template-columns:1fr;}}
-        .mkt-three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
-        @media(max-width:900px){.mkt-three-col{grid-template-columns:1fr 1fr;}}
-        @media(max-width:600px){.mkt-three-col{grid-template-columns:1fr;}}
+      .opp-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; color:var(--text); line-height:1.4; }
+      .opp-row:last-child { border-bottom:none; }
+      .opp-row::before { content:'✦'; color:#34d399; font-size:11px; flex-shrink:0; margin-top:2px; }
 
-        /* AI block */
-        .ai-block { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
-        .blk-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+      .swot-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
+      .swot-q { padding:16px 18px; }
+      .swot-q:nth-child(1) { background:rgba(22,163,74,0.05); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+      .swot-q:nth-child(2) { background:rgba(124,58,237,0.05); border-bottom:1px solid var(--border); }
+      .swot-q:nth-child(3) { background:rgba(37,99,235,0.05); border-right:1px solid var(--border); }
+      .swot-q:nth-child(4) { background:rgba(217,119,6,0.05); }
+      .swot-hdr { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+      .swot-letter { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0; }
+      .s-s .swot-letter { background:rgba(22,163,74,0.15); color:#34d399; }
+      .s-w .swot-letter { background:rgba(248,113,113,0.15); color:#f87171; }
+      .s-o .swot-letter { background:rgba(37,99,235,0.15); color:#60a5fa; }
+      .s-t .swot-letter { background:rgba(251,191,36,0.15); color:#fbbf24; }
+      .swot-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); }
+      .swot-item { display:flex; align-items:flex-start; gap:6px; font-size:12px; color:var(--text); line-height:1.4; margin-bottom:5px; }
+      .swot-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+      .s-s .swot-dot { background:#34d399; } .s-w .swot-dot { background:#f87171; }
+      .s-o .swot-dot { background:#60a5fa; } .s-t .swot-dot { background:#fbbf24; }
+      @media(max-width:560px){ .swot-grid { grid-template-columns:1fr; } .swot-q:nth-child(odd) { border-right:none; } .swot-q:not(:last-child) { border-bottom:1px solid var(--border); } }
+    </style>
 
-        /* Position block */
-        .pos-summary { font-size:13px; color:var(--text); margin-bottom:10px; line-height:1.5; }
-        .pos-points { display:flex; flex-direction:column; gap:6px; }
-        .pos-point { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text); }
-        .pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#f87171; flex-shrink:0; }
-
-        /* Competitors */
-        .comp-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
-        .comp-item:last-child { border-bottom:none; padding-bottom:0; }
-        .comp-name { font-size:13px; font-weight:600; flex:1; }
-        .comp-note { font-size:11px; color:var(--text-muted); }
-        .comp-status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
-        .status-stronger { background:rgba(124,58,237,0.12); color:#f87171; }
-        .status-weaker { background:rgba(52,211,153,0.10); color:#34d399; }
-        .status-similar { background:rgba(255,255,255,0.07); color:rgba(255,255,255,0.50); }
-
-        /* Risks */
-        .risk-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
-        .risk-row:last-child { border-bottom:none; padding-bottom:0; }
-        .risk-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .dot-high { background:#f87171; }
-        .dot-medium { background:#fbbf24; }
-        .dot-low { background:#34d399; }
-        .risk-label { font-size:13px; font-weight:500; flex:1; }
-        .risk-sev-badge { font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
-        .sev-high { background:rgba(124,58,237,0.12); color:#f87171; }
-        .sev-medium { background:rgba(217,119,6,0.1); color:#fbbf24; }
-        .sev-low { background:rgba(52,211,153,0.10); color:#34d399; }
-
-        /* Opportunities */
-        .opp-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
-        .opp-row:last-child { border-bottom:none; padding-bottom:0; }
-        .opp-icon { color:#34d399; font-size:14px; flex-shrink:0; }
-        .opp-label { font-size:13px; font-weight:500; }
-
-        /* SWOT */
-        .swot-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); margin-bottom:16px; }
-        .swot-quad { padding:16px 18px; }
-        .swot-quad:nth-child(1) { background:rgba(22,163,74,0.05); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
-        .swot-quad:nth-child(2) { background:rgba(124,58,237,0.05); border-bottom:1px solid var(--border); }
-        .swot-quad:nth-child(3) { background:rgba(37,99,235,0.05); border-right:1px solid var(--border); }
-        .swot-quad:nth-child(4) { background:rgba(217,119,6,0.05); }
-        .swot-quad-hdr { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
-        .swot-letter { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0; }
-        .swot-s .swot-letter { background:rgba(22,163,74,0.15); color:#34d399; }
-        .swot-w .swot-letter { background:rgba(124,58,237,0.15); color:#f87171; }
-        .swot-o .swot-letter { background:rgba(37,99,235,0.15); color:#2563eb; }
-        .swot-t .swot-letter { background:rgba(217,119,6,0.15); color:#fbbf24; }
-        .swot-quad-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); }
-        .swot-items { display:flex; flex-direction:column; gap:5px; }
-        .swot-item { display:flex; align-items:flex-start; gap:7px; font-size:12px; color:var(--text); line-height:1.4; }
-        .swot-item-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; margin-top:5px; }
-        .swot-s .swot-item-dot { background:#34d399; }
-        .swot-w .swot-item-dot { background:#f87171; }
-        .swot-o .swot-item-dot { background:#2563eb; }
-        .swot-t .swot-item-dot { background:#fbbf24; }
-        @media(max-width:600px){ .swot-grid { grid-template-columns:1fr; } .swot-quad:nth-child(1),.swot-quad:nth-child(3) { border-right:none; } .swot-quad:nth-child(1),.swot-quad:nth-child(2),.swot-quad:nth-child(3) { border-bottom:1px solid var(--border); } }
-
-        /* Stocks table */
-        .stocks-table { width:100%; border-collapse:collapse; }
-        .stocks-table th { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; padding:8px 12px; text-align:left; border-bottom:2px solid var(--border); white-space:nowrap; }
-        .stocks-table td { padding:9px 12px; border-bottom:1px solid var(--border); font-size:13px; }
-        .stocks-table tr:last-child td { border-bottom:none; }
-        .stocks-table tr:hover td { background:#f8f6f2; }
-        .ticker-cell { font-family:monospace; font-weight:700; }
-        .chg-pos { color:#34d399; font-weight:700; }
-        .chg-neg { color:#f87171; font-weight:700; }
-
-        /* Section dot header */
-        .sec-hdr { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-        .sec-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .sec-title { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; }
-      </style>
-
-      {% if loading %}
-      <!-- Skeleton state -->
-      <div id="skeleton-view">
-        <div class="mkt-metrics" style="margin-bottom:20px">
-          <div class="skeleton skeleton-card"></div>
-          <div class="skeleton skeleton-card"></div>
-          <div class="skeleton skeleton-card"></div>
-          <div class="skeleton skeleton-card"></div>
-        </div>
-        <div class="skeleton" style="height:52px;margin-bottom:16px;border-radius:var(--radius)"></div>
-        <div class="mkt-two-col" style="margin-bottom:16px">
-          <div class="skeleton skeleton-block"></div>
-          <div class="skeleton skeleton-block"></div>
-        </div>
-        <div class="mkt-two-col">
-          <div class="skeleton skeleton-block"></div>
-          <div class="skeleton skeleton-block"></div>
-        </div>
-        <div style="text-align:center;margin-top:32px;color:var(--text-muted);font-size:13px">
-          <div style="font-size:22px;margin-bottom:8px">⏳</div>
-          Собираем данные и анализируем рынок...<br>
-          <span style="font-size:11px">Обычно занимает 20–40 секунд</span>
-        </div>
+    {% if loading %}
+    <div id="skeleton-view">
+      <div class="skeleton" style="height:90px;margin-bottom:16px;border-radius:var(--radius)"></div>
+      <div class="skeleton" style="height:260px;margin-bottom:16px;border-radius:var(--radius)"></div>
+      <div class="skeleton" style="height:60px;margin-bottom:16px;border-radius:var(--radius)"></div>
+      <div class="mkt-two-col">
+        <div class="skeleton" style="height:180px;border-radius:var(--radius)"></div>
+        <div class="skeleton" style="height:180px;border-radius:var(--radius)"></div>
       </div>
-      <div id="data-view" style="display:none"></div>
+      <div style="text-align:center;margin-top:24px;color:var(--text-muted);font-size:13px">
+        <div style="font-size:22px;margin-bottom:8px">⏳</div>
+        Анализируем рыночную позицию компании...<br>
+        <span style="font-size:11px">Обычно 20–40 секунд</span>
+      </div>
+    </div>
+    <div id="data-view" style="display:none"></div>
 
+    {% else %}
+
+    {% set stock = finance.stock if finance and finance.found else none %}
+    {% set ai = ai_analysis %}
+    {% set hist = finance.price_history if finance else [] %}
+
+    <!-- ══ STOCK CARD ══ -->
+    <div class="mkt-block" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:16px;padding:16px 22px">
+      {% if stock %}
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Компания на бирже</div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:22px;font-weight:800;color:var(--text)">{{ stock.get('ticker') }}</span>
+            <span style="font-size:26px;font-weight:800">{{ stock.get('last') or '—' }}</span>
+            <span style="font-size:11px;color:var(--text-muted)">{{ stock.get('currency','') }}</span>
+            {% set chg = stock.get('change_pct') %}
+            {% if chg is not none %}
+              <span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:6px;{% if chg > 0 %}background:rgba(52,211,153,0.12);color:#34d399{% elif chg < 0 %}background:rgba(248,113,113,0.12);color:#f87171{% else %}background:rgba(255,255,255,0.06);color:var(--text-muted){% endif %}">
+                {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
+              </span>
+            {% endif %}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ stock.get('source','') }} · {{ stock.get('exchange','') }}</div>
+        </div>
       {% else %}
-
-      {% set stock = finance.stock if finance and finance.found else none %}
-      {% set ai = ai_analysis %}
-      {# support both new key (top_stocks) and old cached key (trending) #}
-      {% set top = (finance.top_stocks or finance.trending) if finance else [] %}
-
-      <!-- Top metrics -->
-      <div class="mkt-metrics">
-
-        <div class="mkt-card">
-          <div class="mkt-card-label">Компания на бирже</div>
-          {% if stock %}
-            <div class="mkt-card-value" style="font-size:18px">{{ stock.get('ticker') }}</div>
-            {% set chg = stock.get('lasttoprevprice') or stock.get('change') %}
-            <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-              <span style="font-size:20px;font-weight:800">{{ stock.get('last') or '—' }}</span>
-              {% if chg is not none %}
-                <span style="font-size:12px;font-weight:700;{% if chg > 0 %}color:#34d399{% elif chg < 0 %}color:#f87171{% endif %}">
-                  {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-                </span>
-              {% endif %}
-            </div>
-            <div class="mkt-card-sub">{{ stock.get('source') }}</div>
-          {% else %}
-            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
-            <div class="mkt-card-sub">Не торгуется публично</div>
-          {% endif %}
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Компания на бирже</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text-muted)">Не торгуется публично</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Биржевые данные недоступны</div>
         </div>
+      {% endif %}
 
-        <div class="mkt-card">
-          <div class="mkt-card-label">Индексы рынков</div>
-          {% set indices = finance.market_indices if finance else [] %}
-          {% if indices %}
-            <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px">
-              {% for idx in indices[:3] %}
-                {% set chg = idx.get('change_pct') %}
-                <div style="display:flex;align-items:center;gap:6px;font-size:12px">
-                  <span style="font-weight:700;color:var(--text);min-width:68px;white-space:nowrap">{{ idx.get('name', idx.get('symbol', '')) }}</span>
-                  <span style="font-weight:600;color:var(--text)">{{ "%.0f"|format(idx.get('last')) if idx.get('last') else '—' }}</span>
-                  {% if chg is not none %}
-                    <span style="font-size:11px;font-weight:700;margin-left:auto;{% if chg > 0 %}color:#34d399{% elif chg < 0 %}color:#f87171{% else %}color:var(--text-muted){% endif %}">
-                      {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-                    </span>
-                  {% endif %}
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
-            <div class="mkt-card-sub">Данные недоступны</div>
-          {% endif %}
-        </div>
-
-        <div class="mkt-card">
-          <div class="mkt-card-label">Рыночный риск</div>
-          {% if ai %}
-            {% set rs = ai.risk_score | int %}
-            <div class="mkt-card-value" style="{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">{{ rs }}<span style="font-size:13px;font-weight:500">/100</span></div>
-            <span class="badge {% if rs < 35 %}badge-bull{% elif rs < 65 %}badge-neutral{% else %}badge-bear{% endif %}">
-              {% if rs < 35 %}Low Risk{% elif rs < 65 %}Moderate{% else %}High Risk{% endif %}
-            </span>
-          {% else %}
-            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
-          {% endif %}
-        </div>
-
-        <div class="mkt-card">
-          <div class="mkt-card-label">Тренд рынка</div>
-          {% if ai %}
-            {% set trend = ai.trend | default('neutral') %}
-            <div class="mkt-card-value" style="font-size:32px;{% if trend == 'bullish' %}color:#34d399{% elif trend == 'bearish' %}color:#f87171{% else %}color:#fbbf24{% endif %}">
+      {% if ai %}
+        {% set rs = ai.risk_score | int if ai.risk_score is not none else 0 %}
+        <div style="margin-left:auto;display:flex;gap:16px;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Риск</div>
+            <div style="font-size:24px;font-weight:800;{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">{{ rs }}<span style="font-size:12px;color:var(--text-muted)">/100</span></div>
+          </div>
+          {% set trend = ai.trend | default('neutral') %}
+          <div style="text-align:center">
+            <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Тренд</div>
+            <div style="font-size:28px;{% if trend == 'bullish' %}color:#34d399{% elif trend == 'bearish' %}color:#f87171{% else %}color:#fbbf24{% endif %}">
               {% if trend == 'bullish' %}↗{% elif trend == 'bearish' %}↘{% else %}→{% endif %}
             </div>
-            <span class="badge {% if trend == 'bullish' %}badge-bull{% elif trend == 'bearish' %}badge-bear{% else %}badge-neutral{% endif %}">
-              {% if trend == 'bullish' %}Bullish{% elif trend == 'bearish' %}Bearish{% else %}Neutral{% endif %}
-            </span>
-          {% else %}
-            <div class="mkt-card-value" style="color:var(--text-muted)">—</div>
-          {% endif %}
-        </div>
-
-      </div>
-
-      <!-- ══ EXTENDED MARKET METRICS ══ -->
-      <style>
-        .mkt-ext-grid {
-          display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;
-        }
-        @media(max-width:900px){ .mkt-ext-grid { grid-template-columns:repeat(2,1fr); } }
-        @media(max-width:560px){ .mkt-ext-grid { grid-template-columns:1fr; } }
-
-        .mkt-ext-card {
-          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10);
-          border-radius:var(--radius); padding:16px 18px; position:relative; overflow:hidden;
-          transition:border-color .15s;
-        }
-        .mkt-ext-card:hover { border-color:rgba(255,255,255,0.18); }
-        .mkt-ext-card::before {
-          content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-          background:var(--mc,rgba(255,255,255,0.15));
-        }
-        .mkt-ext-lbl {
-          font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
-          color:rgba(255,255,255,0.38); margin-bottom:7px; display:flex; align-items:center; gap:5px;
-        }
-        .mkt-ext-val { font-size:24px; font-weight:800; line-height:1; margin-bottom:4px; }
-        .mkt-ext-sub { font-size:11px; color:rgba(255,255,255,0.32); line-height:1.4; }
-
-        .mkt-ext-bar { height:5px; border-radius:3px; background:rgba(255,255,255,0.07); overflow:hidden; margin:6px 0 4px; }
-        .mkt-ext-bar-fill { height:100%; border-radius:3px; }
-
-        .mkt-sentiment-pill {
-          display:inline-flex; align-items:center; gap:5px;
-          font-size:12px; font-weight:700; padding:4px 12px; border-radius:99px; margin-bottom:5px;
-        }
-        .mkt-news-impact-row { display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap; }
-        .mkt-news-chip {
-          font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap;
-        }
-      </style>
-
-      {% if ai %}
-        {% set rs = ai.risk_score | int if ai.risk_score is not none else 50 %}
-        {% set trend = ai.trend | default('neutral') %}
-
-        <!-- Compute derived metrics -->
-        {% set stock_chg = (finance.stock.get('lasttoprevprice') or finance.stock.get('change') or 0) | float if finance and finance.stock else 0 %}
-
-        <!-- Demand Trends -->
-        {% if trend == 'bullish' or stock_chg > 1 %}
-          {% set demand_arrow = '↑' %}{% set demand_label = 'Растёт'    %}{% set demand_color = '#34d399' %}{% set demand_pct = [100, (50 + rs * 0.3) | int] | min %}
-          {% set demand_sub   = 'Интерес к сектору увеличивается' %}
-        {% elif trend == 'bearish' or stock_chg < -1 %}
-          {% set demand_arrow = '↓' %}{% set demand_label = 'Снижается' %}{% set demand_color = '#f87171' %}{% set demand_pct = [99, (rs * 0.7) | int] | min %}
-          {% set demand_sub   = 'Спрос замедляется' %}
-        {% else %}
-          {% set demand_arrow = '→' %}{% set demand_label = 'Стабильно' %}{% set demand_color = '#fbbf24' %}{% set demand_pct = 55 %}
-          {% set demand_sub   = 'Боковая динамика спроса' %}
-        {% endif %}
-
-        <!-- Brand Strength: inverse of risk, boosted by bullish signals -->
-        {% set brand_raw   = [100, 100 - rs + (15 if trend == 'bullish' else -10 if trend == 'bearish' else 0)] | min %}
-        {% set brand_score = [0, brand_raw] | max %}
-        {% if brand_score >= 65 %}{% set brand_lbl = 'Сильный' %}{% set brand_color = '#34d399' %}
-        {% elif brand_score >= 40 %}{% set brand_lbl = 'Средний' %}{% set brand_color = '#fbbf24' %}
-        {% else %}{% set brand_lbl = 'Слабый' %}{% set brand_color = '#f87171' %}{% endif %}
-
-        <!-- Market Sentiment -->
-        {% if rs < 35 %}
-          {% set sent_label = 'Позитивный' %}{% set sent_color = '#34d399' %}{% set sent_icon = '↑' %}
-        {% elif rs < 60 %}
-          {% set sent_label = 'Осторожный' %}{% set sent_color = '#fbbf24' %}{% set sent_icon = '→' %}
-        {% else %}
-          {% set sent_label = 'Негативный' %}{% set sent_color = '#f87171' %}{% set sent_icon = '↓' %}
-        {% endif %}
-
-        <!-- Investor Sentiment: based on stock change + indices -->
-        {% set _idxns = namespace(avg=0, count=0) %}
-        {% if finance and finance.market_indices %}
-          {% for idx in finance.market_indices %}
-            {% if idx.get('change_pct') is not none %}
-              {% set _idxns.avg = _idxns.avg + idx.get('change_pct') | float %}
-              {% set _idxns.count = _idxns.count + 1 %}
-            {% endif %}
-          {% endfor %}
-        {% endif %}
-        {% set idx_avg = (_idxns.avg / _idxns.count) if _idxns.count > 0 else 0 %}
-        {% set inv_signal = stock_chg * 0.6 + idx_avg * 0.4 %}
-        {% if inv_signal > 0.5 %}
-          {% set inv_label = 'Позитивный' %}{% set inv_color = '#34d399' %}{% set inv_icon = '▲' %}
-        {% elif inv_signal < -0.5 %}
-          {% set inv_label = 'Негативный' %}{% set inv_color = '#f87171' %}{% set inv_icon = '▼' %}
-        {% else %}
-          {% set inv_label = 'Нейтральный' %}{% set inv_color = '#fbbf24' %}{% set inv_icon = '■' %}
-        {% endif %}
-
-        <!-- Capital Risk -->
-        {% set cap_risk_score = (rs * 0.85) | int %}
-        {% set cap_loss_est = (cap_risk_score / 100 * 25) | round(1) %}
-        {% if cap_risk_score >= 65 %}{% set cap_color = '#f87171' %}
-        {% elif cap_risk_score >= 35 %}{% set cap_color = '#fbbf24' %}
-        {% else %}{% set cap_color = '#34d399' %}{% endif %}
-
-        <!-- News Impact -->
-        {% set news_count = company_news | length if company_news else 0 %}
-        {% if rs >= 65 %}
-          {% set news_impact_lbl = 'Высокий' %}{% set news_impact_color = '#f87171' %}
-          {% set news_impact_sub = 'Новости давят на оценку' %}
-        {% elif rs >= 35 %}
-          {% set news_impact_lbl = 'Умеренный' %}{% set news_impact_color = '#fbbf24' %}
-          {% set news_impact_sub = 'Нейтральный медиафон' %}
-        {% else %}
-          {% set news_impact_lbl = 'Минимальный' %}{% set news_impact_color = '#34d399' %}
-          {% set news_impact_sub = 'Позитивное освещение' %}
-        {% endif %}
-
-        <div class="mkt-ext-grid">
-
-          <!-- Demand Trends -->
-          <div class="mkt-ext-card" style="--mc:{{ demand_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ demand_color }}" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-              Demand Trends
-            </div>
-            <div class="mkt-ext-val" style="color:{{ demand_color }}">{{ demand_arrow }} {{ demand_label }}</div>
-            <div class="mkt-ext-bar">
-              <div class="mkt-ext-bar-fill" style="width:{{ demand_pct }}%;background:{{ demand_color }};opacity:0.75"></div>
-            </div>
-            <div class="mkt-ext-sub">{{ demand_sub }}</div>
           </div>
-
-          <!-- Brand Strength -->
-          <div class="mkt-ext-card" style="--mc:{{ brand_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ brand_color }}" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-              Brand Strength
-            </div>
-            <div class="mkt-ext-val" style="color:{{ brand_color }}">{{ brand_score }}<span style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.28)">/100</span></div>
-            <div class="mkt-ext-bar">
-              <div class="mkt-ext-bar-fill" style="width:{{ brand_score }}%;background:{{ brand_color }};opacity:0.75"></div>
-            </div>
-            <div class="mkt-ext-sub">Узнаваемость: <span style="color:{{ brand_color }};font-weight:600">{{ brand_lbl }}</span></div>
-          </div>
-
-          <!-- Market Sentiment -->
-          <div class="mkt-ext-card" style="--mc:{{ sent_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ sent_color }}" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-              Market Sentiment
-            </div>
-            <div class="mkt-sentiment-pill" style="background:{{ sent_color }}1a;border:1px solid {{ sent_color }}44">
-              <span style="font-size:14px">{{ sent_icon }}</span>
-              <span style="color:{{ sent_color }}">{{ sent_label }}</span>
-            </div>
-            <div class="mkt-ext-sub">Настроение рынка · риск {{ rs }}/100</div>
-          </div>
-
-          <!-- Investor Sentiment -->
-          <div class="mkt-ext-card" style="--mc:{{ inv_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ inv_color }}" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-              Investor Sentiment
-            </div>
-            <div class="mkt-ext-val" style="color:{{ inv_color }}">{{ inv_icon }} {{ inv_label }}</div>
-            <div class="mkt-ext-sub">
-              Акция: {% if stock_chg > 0 %}+{% endif %}{{ "%.2f"|format(stock_chg) }}% ·
-              Индексы: {% if idx_avg > 0 %}+{% endif %}{{ "%.2f"|format(idx_avg) }}%
-            </div>
-          </div>
-
-          <!-- Capital Risk -->
-          <div class="mkt-ext-card" style="--mc:{{ cap_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ cap_color }}" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-              Capital Risk
-            </div>
-            <div class="mkt-ext-val" style="color:{{ cap_color }}">{{ cap_risk_score }}<span style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.28)">/100</span></div>
-            <div class="mkt-ext-bar">
-              <div class="mkt-ext-bar-fill" style="width:{{ cap_risk_score }}%;background:linear-gradient(90deg,{{ cap_color }}88,{{ cap_color }})"></div>
-            </div>
-            <div class="mkt-ext-sub">Риск снижения оценки ≈ {{ cap_loss_est }}%</div>
-          </div>
-
-          <!-- News Impact on Valuation -->
-          <div class="mkt-ext-card" style="--mc:{{ news_impact_color }}">
-            <div class="mkt-ext-lbl">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ news_impact_color }}" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              News Impact on Valuation
-            </div>
-            <div class="mkt-ext-val" style="color:{{ news_impact_color }}">{{ news_impact_lbl }}</div>
-            <div class="mkt-news-impact-row">
-              <span class="mkt-news-chip" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.50)">{{ news_count }} новостей</span>
-              <span class="mkt-news-chip" style="background:{{ news_impact_color }}18;border:1px solid {{ news_impact_color }}33;color:{{ news_impact_color }}">{{ news_impact_sub }}</span>
-            </div>
-          </div>
-
         </div>
       {% endif %}
-      <!-- ══ END EXTENDED METRICS ══ -->
+    </div>
 
-      <!-- Price history chart — full width, with tab switcher -->
-      {% set hist        = finance.price_history   if finance else [] %}
-      {% set idx_history = finance.indices_history if finance else {} %}
-      <div class="ai-block" style="margin-bottom:16px;padding:20px 22px">
-
-        <!-- Header row: label + price + tabs -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-
-          <!-- Left: stat for active tab -->
-          <div style="display:flex;align-items:baseline;gap:10px">
-            <span id="chart-name" style="font-size:15px;font-weight:800;color:var(--text)">
-              {{ stock.get('ticker') if stock else '—' }}
-            </span>
-            <span id="chart-price" style="font-size:22px;font-weight:800">
-              {{ stock.get('last') if stock else '' }}
-            </span>
-            {% if stock %}
-              <span style="font-size:11px;color:var(--text-muted)">{{ stock.get('currency','') }}</span>
-              {% set chg = stock.get('change_pct') %}
-              {% if chg is not none %}
-                <span id="chart-chg" style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:6px;{% if chg > 0 %}background:rgba(52,211,153,0.12);color:#34d399{% elif chg < 0 %}background:rgba(248,113,113,0.12);color:#f87171{% else %}background:rgba(255,255,255,0.06);color:var(--text-muted){% endif %}">
-                  {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-                </span>
-              {% endif %}
-            {% endif %}
-          </div>
-
-          <!-- Right: tab pills -->
-          <div id="chart-tabs" style="display:flex;gap:6px;flex-wrap:wrap">
-            {% if stock %}
-              <button class="chart-tab active" data-key="stock" style="padding:5px 14px;border-radius:999px;border:1px solid rgba(124,58,237,0.6);background:rgba(124,58,237,0.18);color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer">
-                {{ stock.get('ticker') }}
-              </button>
-            {% endif %}
-            {% for name in idx_history %}
-              <button class="chart-tab" data-key="{{ name }}" style="padding:5px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer">
-                {{ name }}
-              </button>
-            {% endfor %}
-            {% if not stock and not idx_history %}
-              <span style="font-size:12px;color:var(--text-muted)">—</span>
-            {% endif %}
-          </div>
+    <!-- ══ PRICE CHART ══ -->
+    <div class="mkt-block" style="padding:20px 22px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+        <span style="font-size:13px;font-weight:800;color:var(--text)">{{ stock.get('ticker') if stock else company.name }}</span>
+        {% if stock %}<span style="font-size:11px;color:var(--text-muted)">60 дней</span>{% endif %}
+      </div>
+      {% if hist and hist | length > 1 %}
+        <div style="position:relative;height:240px">
+          <canvas id="priceChart"></canvas>
         </div>
+      {% else %}
+        <div style="height:200px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border:1px dashed rgba(255,255,255,0.1);border-radius:10px">
+          <div style="font-size:13px;color:var(--text-muted)">
+            {% if stock %}График цен недоступен{% else %}Компания не торгуется на публичных биржах{% endif %}
+          </div>
+          {% if not stock %}
+            <div style="font-size:11px;color:var(--text-muted)">Данные KASE и прочих бирж подгружаются из новостей</div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
 
-        <!-- Canvas -->
-        {% if (hist and hist | length > 1) or idx_history %}
-          <div style="position:relative;height:220px">
-            <canvas id="priceChart"></canvas>
-          </div>
-        {% else %}
-          <div style="height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border:1px dashed rgba(255,255,255,0.1);border-radius:10px">
-            <div style="font-size:12px;color:var(--text-muted)">Нет исторических данных</div>
-            <button onclick="triggerRefresh()" class="btn btn-secondary btn-sm">↻ Загрузить</button>
-          </div>
+    {% if ai %}
+
+    <!-- ══ AI SUMMARY ══ -->
+    {% if ai.summary %}
+    <div style="background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04));border:1px solid rgba(124,58,237,0.25);border-left:3px solid #7c3aed;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
+      <span style="font-size:18px;flex-shrink:0">🤖</span>
+      <div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text)">{{ ai.summary }}</div>
+    </div>
+    {% endif %}
+
+    <!-- ══ MARKET POSITION + RISKS ══ -->
+    <div class="mkt-two-col">
+
+      <div class="mkt-block" style="margin-bottom:0">
+        <div class="mkt-label">◎ Позиция на рынке</div>
+        {% if ai.market_position %}
+          <div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px">{{ ai.market_position }}</div>
         {% endif %}
-
-      </div>
-
-      <!-- AI Summary banner -->
-      {% if ai and ai.summary %}
-      <div class="summary-banner">
-        <div class="summary-banner-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 15h.01M16 15h.01"/></svg></div>
-        <div class="summary-banner-text">{{ ai.summary }}</div>
-      </div>
-      {% endif %}
-
-      {% if ai %}
-      <!-- Charts row: Risk gauge + Competitor landscape -->
-      <div class="mkt-two-col" style="margin-bottom:16px">
-
-        <!-- Risk gauge -->
-        <div class="ai-block">
-          <div class="blk-title">Risk Score</div>
-          {% set rs = ai.risk_score | int %}
-          <div style="display:flex;align-items:center;gap:24px">
-            <div style="position:relative;width:120px;height:66px;flex-shrink:0">
-              <canvas id="riskGauge" width="120" height="66"></canvas>
-              <div style="position:absolute;bottom:-4px;left:0;right:0;text-align:center">
-                <span style="font-size:22px;font-weight:800;{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">{{ rs }}</span>
-                <span style="font-size:11px;color:var(--text-muted);font-weight:500">/100</span>
-              </div>
-            </div>
-            {% set low_w = [rs, 33] | min %}
-            {% set mid_raw = [rs - 33, 0] | max %}
-            {% set mid_w = [mid_raw, 34] | min %}
-            {% set hi_raw = [rs - 67, 0] | max %}
-            {% set hi_w = [hi_raw, 33] | min %}
-            <div style="flex:1">
-              <div style="font-size:20px;font-weight:800;margin-bottom:4px;{% if rs < 35 %}color:#34d399{% elif rs < 65 %}color:#fbbf24{% else %}color:#f87171{% endif %}">
-                {% if rs < 35 %}Low Risk{% elif rs < 65 %}Moderate{% else %}High Risk{% endif %}
-              </div>
-              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
-                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#34d399;width:{{ low_w * 3 }}px;min-width:4px"></div>
-                  <span style="color:var(--text-muted)">Low 0–33</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#fbbf24;width:{{ mid_w * 3 }}px;min-width:4px"></div>
-                  <span style="color:var(--text-muted)">Mid 34–66</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
-                  <div style="height:4px;border-radius:2px;background:#f87171;width:{{ hi_w * 3 }}px;min-width:4px"></div>
-                  <span style="color:var(--text-muted)">High 67–100</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Competitor landscape donut -->
-        <div class="ai-block">
-          <div class="blk-title">Конкурентный расклад</div>
-          {% if ai.competitors %}
-            {% set ns = namespace(stronger=0, weaker=0, similar=0) %}
-            {% for c in ai.competitors %}
-              {% if c.status == 'stronger' %}{% set ns.stronger = ns.stronger + 1 %}
-              {% elif c.status == 'weaker' %}{% set ns.weaker = ns.weaker + 1 %}
-              {% else %}{% set ns.similar = ns.similar + 1 %}{% endif %}
-            {% endfor %}
-            <div style="display:flex;align-items:center;gap:24px">
-              <div style="position:relative;width:100px;height:100px;flex-shrink:0">
-                <canvas id="compChart" width="100" height="100"></canvas>
-                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
-                  <div style="font-size:18px;font-weight:800">{{ ai.competitors | length }}</div>
-                  <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">конк.</div>
-                </div>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;gap:12px">
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:10px;height:10px;border-radius:50%;background:#f87171;flex-shrink:0"></div>
-                  <div style="flex:1;font-size:13px;color:var(--text-muted)">Сильнее</div>
-                  <div style="font-size:18px;font-weight:800;color:#f87171">{{ ns.stronger }}</div>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:10px;height:10px;border-radius:50%;background:#71717a;flex-shrink:0"></div>
-                  <div style="flex:1;font-size:13px;color:var(--text-muted)">Схоже</div>
-                  <div style="font-size:18px;font-weight:800;color:rgba(255,255,255,0.50)">{{ ns.similar }}</div>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:10px;height:10px;border-radius:50%;background:#34d399;flex-shrink:0"></div>
-                  <div style="flex:1;font-size:13px;color:var(--text-muted)">Слабее</div>
-                  <div style="font-size:18px;font-weight:800;color:#34d399">{{ ns.weaker }}</div>
-                </div>
-              </div>
-            </div>
-          {% else %}
-            <div style="color:var(--text-muted);font-size:13px">Нет данных</div>
-          {% endif %}
-        </div>
-
-      </div>
-
-      <!-- Market position + Competitors -->
-      <div class="mkt-two-col">
-
-        <div class="ai-block">
-          <div class="blk-title">Позиция на рынке</div>
-          {% if ai.market_position %}
-            <div class="pos-summary">{{ ai.market_position }}</div>
-          {% endif %}
-          {% if ai.market_position_points %}
-            <div class="pos-points">
-              {% for p in ai.market_position_points %}
-                <div class="pos-point">{{ p }}</div>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-
-        <div class="ai-block">
-          <div class="blk-title">Конкуренты</div>
-          {% if ai.competitors %}
-            {% for c in ai.competitors %}
-              <div class="comp-item">
-                <div class="comp-name">{{ c.name }}</div>
-                <div class="comp-note">{{ c.note }}</div>
-                <span class="comp-status status-{{ c.status | default('similar') }}">
-                  {% if c.status == 'stronger' %}↑ Сильнее
-                  {% elif c.status == 'weaker' %}↓ Слабее
-                  {% else %}≈ Схоже{% endif %}
-                </span>
-              </div>
-            {% endfor %}
-          {% else %}
-            <div style="color:var(--text-muted);font-size:13px">Данных недостаточно</div>
-          {% endif %}
-        </div>
-
-      </div>
-
-      <!-- Risks + Opportunities -->
-      <div class="mkt-two-col">
-
-        <div class="ai-block">
-          <div class="blk-title">Риски</div>
-          {% for r in ai.market_risks %}
-            <div class="risk-row">
-              <div class="risk-dot dot-{{ r.severity | default('medium') }}"></div>
-              <div class="risk-label">{{ r.title }}</div>
-              <span class="risk-sev-badge sev-{{ r.severity | default('medium') }}">{{ r.severity | default('medium') }}</span>
-            </div>
-          {% else %}
-            <div style="color:var(--text-muted);font-size:13px">Нет данных</div>
+        {% if ai.market_position_points %}
+          {% for p in ai.market_position_points %}
+            <div class="mkt-pos-point">{{ p }}</div>
           {% endfor %}
-        </div>
-
-        <div class="ai-block">
-          <div class="blk-title">Возможности</div>
-          {% for o in ai.market_opportunities %}
-            <div class="opp-row">
-              
-              <div class="opp-label">{{ o.title }}</div>
-            </div>
-          {% else %}
-            <div style="color:var(--text-muted);font-size:13px">Нет данных</div>
-          {% endfor %}
-        </div>
-
-      </div>
-
-      {% endif %}{# end if ai #}
-
-      <!-- SWOT Analysis -->
-      {% if ai and ai.swot %}
-      <div style="margin-bottom:16px">
-        <div class="blk-title" style="margin-bottom:10px">
-          <span style="font-size:14px">◈</span> SWOT-анализ
-        </div>
-        <div class="swot-grid">
-
-          <!-- Strengths -->
-          <div class="swot-quad swot-s">
-            <div class="swot-quad-hdr">
-              <div class="swot-letter">S</div>
-              <div class="swot-quad-title">Сильные стороны</div>
-            </div>
-            <div class="swot-items">
-              {% for item in ai.swot.strengths %}
-                <div class="swot-item">
-                  <div class="swot-item-dot"></div>
-                  <span>{{ item }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Weaknesses -->
-          <div class="swot-quad swot-w">
-            <div class="swot-quad-hdr">
-              <div class="swot-letter">W</div>
-              <div class="swot-quad-title">Слабые стороны</div>
-            </div>
-            <div class="swot-items">
-              {% for item in ai.swot.weaknesses %}
-                <div class="swot-item">
-                  <div class="swot-item-dot"></div>
-                  <span>{{ item }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Opportunities -->
-          <div class="swot-quad swot-o">
-            <div class="swot-quad-hdr">
-              <div class="swot-letter">O</div>
-              <div class="swot-quad-title">Возможности</div>
-            </div>
-            <div class="swot-items">
-              {% for item in ai.swot.opportunities %}
-                <div class="swot-item">
-                  <div class="swot-item-dot"></div>
-                  <span>{{ item }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Threats -->
-          <div class="swot-quad swot-t">
-            <div class="swot-quad-hdr">
-              <div class="swot-letter">T</div>
-              <div class="swot-quad-title">Угрозы</div>
-            </div>
-            <div class="swot-items">
-              {% for item in ai.swot.threats %}
-                <div class="swot-item">
-                  <div class="swot-item-dot"></div>
-                  <span>{{ item }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Market leaders table + Chart side by side -->
-      {% if top %}
-      <div class="mkt-two-col">
-
-        <div class="ai-block" style="margin-bottom:0">
-          <div class="sec-hdr">
-            <div class="sec-dot" style="background:#f87171"></div>
-            <div class="sec-title">Топ акций рынка</div>
-            <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">по объёму</span>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="stocks-table">
-              <thead>
-                <tr>
-                  <th>Тикер</th>
-                  <th>Цена</th>
-                  <th>Изм.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for s in top[:8] %}
-                  {% set chg = s.get('change') %}
-                  <tr>
-                    <td><span class="ticker-cell">{{ s.ticker }}</span></td>
-                    <td style="font-weight:600">{{ s.get('last') or '—' }}</td>
-                    <td>
-                      {% if chg is not none %}
-                        <span class="{% if chg > 0 %}chg-pos{% elif chg < 0 %}chg-neg{% endif %}">
-                          {% if chg > 0 %}+{% endif %}{{ "%.2f"|format(chg) }}%
-                        </span>
-                      {% else %}
-                        <span style="color:var(--text-muted)">—</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="ai-block" style="margin-bottom:0">
-          <div class="sec-hdr">
-            <div class="sec-dot" style="background:#2563eb"></div>
-            <div class="sec-title">Изменение цены (%)</div>
-          </div>
-          <div style="position:relative;height:200px">
-            <canvas id="peersChart"></canvas>
-          </div>
-        </div>
-
-      </div>
-      {% endif %}
-
-      <!-- News -->
-      <div class="ai-block" style="margin-top:16px">
-        <div class="sec-hdr">
-          <div class="sec-dot" style="background:#fbbf24"></div>
-          <div class="sec-title">Новости</div>
-        </div>
-        {% if company_news %}
-          {% for n in company_news[:12] %}
-            {% set src = n.source or '' %}
-            <div style="padding:8px 0;border-bottom:1px solid var(--border){% if loop.last %};border-bottom:none{% endif %}">
-              <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:500;line-height:1.4;display:block;color:var(--text)">{{ n.title }}</a>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                {% if 'reddit' in src.lower() %}
-                  <span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:5px;background:rgba(255,69,0,0.15);border:1px solid rgba(255,69,0,0.3);color:#ff6314;font-size:10px;font-weight:700">
-                    <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="10"/><path fill="#fff" d="M16.67 10a1.46 1.46 0 0 0-2.47-1 7.12 7.12 0 0 0-3.85-1.23l.65-3.08 2.13.45a1 1 0 1 0 .14-.61l-2.38-.5a.19.19 0 0 0-.22.14l-.73 3.44a7.14 7.14 0 0 0-3.89 1.23 1.46 1.46 0 1 0-1.61 2.39 2.87 2.87 0 0 0 0 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a2.87 2.87 0 0 0 0-.44 1.46 1.46 0 0 0 .57-1.17zm-10 1a1 1 0 1 1 1 1 1 1 0 0 1-1-1zm5.58 2.65a3.56 3.56 0 0 1-2.25.65 3.56 3.56 0 0 1-2.25-.65.19.19 0 0 1 .27-.27 3.2 3.2 0 0 0 2 .54 3.2 3.2 0 0 0 2-.54.19.19 0 0 1 .27.27zm-.16-1.65a1 1 0 1 1 1-1 1 1 0 0 1-1 1z"/></svg>
-                    {{ src }}
-                  </span>
-                  {% if n.get('score') %}<span style="color:rgba(255,69,0,0.7)">▲ {{ n.score }}</span>{% endif %}
-                {% else %}
-                  <span>{{ src }}</span>
-                {% endif %}
-                {% if src and n.pub_date %}<span>·</span>{% endif %}
-                <span>{{ n.pub_date or '' }}</span>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div style="color:var(--text-muted);font-size:13px;padding:12px 0;text-align:center">Новости не найдены</div>
+        {% endif %}
+        {% if not ai.market_position and not ai.market_position_points %}
+          <div style="color:var(--text-muted);font-size:13px">Нет данных</div>
         {% endif %}
       </div>
 
-      {% endif %}{# end loading/else #}
+      <div class="mkt-block" style="margin-bottom:0">
+        <div class="mkt-label">⚑ Риски</div>
+        {% for r in ai.market_risks %}
+          <div class="risk-row">
+            <div class="risk-dot dot-{{ r.severity | default('medium') }}"></div>
+            <div style="flex:1;font-size:13px;font-weight:500;color:var(--text)">{{ r.title }}</div>
+            <span class="risk-sev sev-{{ r.severity | default('medium') }}">{{ r.severity | default('medium') }}</span>
+          </div>
+        {% else %}
+          <div style="color:var(--text-muted);font-size:13px">Нет данных</div>
+        {% endfor %}
+      </div>
 
     </div>
+
+    <!-- ══ OPPORTUNITIES ══ -->
+    {% if ai.market_opportunities %}
+    <div class="mkt-block">
+      <div class="mkt-label">✦ Возможности</div>
+      {% for o in ai.market_opportunities %}
+        <div class="opp-row">{{ o.title }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ══ SWOT ══ -->
+    {% if ai.swot %}
+    <div class="mkt-block">
+      <div class="mkt-label">◈ SWOT-анализ</div>
+      <div class="swot-grid">
+        <div class="swot-q s-s">
+          <div class="swot-hdr"><div class="swot-letter">S</div><div class="swot-title">Сильные стороны</div></div>
+          {% for i in ai.swot.strengths %}<div class="swot-item"><div class="swot-dot"></div><span>{{ i }}</span></div>{% endfor %}
+        </div>
+        <div class="swot-q s-w">
+          <div class="swot-hdr"><div class="swot-letter">W</div><div class="swot-title">Слабые стороны</div></div>
+          {% for i in ai.swot.weaknesses %}<div class="swot-item"><div class="swot-dot"></div><span>{{ i }}</span></div>{% endfor %}
+        </div>
+        <div class="swot-q s-o">
+          <div class="swot-hdr"><div class="swot-letter">O</div><div class="swot-title">Возможности</div></div>
+          {% for i in ai.swot.opportunities %}<div class="swot-item"><div class="swot-dot"></div><span>{{ i }}</span></div>{% endfor %}
+        </div>
+        <div class="swot-q s-t">
+          <div class="swot-hdr"><div class="swot-letter">T</div><div class="swot-title">Угрозы</div></div>
+          {% for i in ai.swot.threats %}<div class="swot-item"><div class="swot-dot"></div><span>{{ i }}</span></div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+      <div style="font-size:28px;margin-bottom:10px">📊</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">Нет данных анализа</div>
+      <div style="font-size:12px">Нажмите ↻ Обновить чтобы загрузить рыночный анализ</div>
+    </div>
+    {% endif %}
+
+    <!-- ══ NEWS SOURCES ══ -->
+    {% if company_news %}
+    <div class="mkt-block" style="margin-top:8px">
+      <div class="mkt-label">
+        📰 Источники анализа
+        <span style="font-size:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:99px;padding:1px 8px;font-weight:600;margin-left:6px">{{ company_news|length }}</span>
+      </div>
+      {% set src_icons_m = {"news":"📰","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵","kase":"📊"} %}
+      {% for item in company_news %}
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.last %}border-bottom:none{% endif %}">
+        <span style="font-size:14px;flex-shrink:0;margin-top:2px">{{ src_icons_m.get((item.source or '')|lower|replace(' ',''), '📄') }}</span>
+        <div style="flex:1;min-width:0">
+          {% if item.link %}
+            <a href="{{ item.link }}" target="_blank" rel="noopener"
+               style="font-size:12px;font-weight:500;color:var(--text);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;margin-bottom:2px"
+               onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">{{ item.title }}</a>
+          {% else %}
+            <div style="font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px">{{ item.title }}</div>
+          {% endif %}
+          <div style="font-size:10px;color:var(--text-muted);display:flex;gap:5px;align-items:center">
+            {% if item.source %}<span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 5px;font-weight:600">{{ item.source }}</span>{% endif %}
+            {% if item.pub_date %}<span>{{ item.pub_date[:10] if item.pub_date|length > 10 else item.pub_date }}</span>{% endif %}
+          </div>
+        </div>
+        {% if item.link %}
+          <a href="{{ item.link }}" target="_blank" rel="noopener"
+             style="flex-shrink:0;width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:var(--text-muted);text-decoration:none;font-size:10px"
+             title="Открыть">↗</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endif %}{# /loading #}
+
   </div>
-</div>
+  {% if not embed %}</div></div>{% endif %}
 
 <script>
-// ── Price history chart with tab switcher ──
+{% if not loading %}
+{% set hist = finance.price_history if finance else [] %}
+{% if hist and hist | length > 1 %}
 (function(){
-  const stockHist    = {{ (finance.price_history or []) | tojson | safe }};
-  const indicesHist  = {{ (finance.indices_history or {}) | tojson | safe }};
-  const stockTicker  = {{ (stock.get('ticker') if stock else '') | tojson | safe }};
-  const stockCurrency= {{ (stock.get('currency','') if stock else '') | tojson | safe }};
-
-  // Build datasets map: key → {labels, closes, currency, name}
-  const datasets = {};
-  if (stockHist.length > 1) {
-    datasets['stock'] = {
-      labels:   stockHist.map(d => d.date.slice(5)),
-      closes:   stockHist.map(d => d.close),
-      currency: stockCurrency,
-      name:     stockTicker,
-      price:    stockHist[stockHist.length - 1]?.close,
-    };
-  }
-  for (const [name, rows] of Object.entries(indicesHist)) {
-    if (rows && rows.length > 1) {
-      datasets[name] = {
-        labels:   rows.map(d => d.date.slice(5)),
-        closes:   rows.map(d => d.close),
-        currency: '',
-        name,
-        price:    rows[rows.length - 1]?.close,
-      };
-    }
-  }
-
-  const ctx = document.getElementById('priceChart');
-  if (!ctx || !Object.keys(datasets).length) return;
-
-  // Determine first active tab
-  const firstKey = Object.keys(datasets)[0];
-
-  function makeDataset(closes) {
-    const isUp = closes[closes.length - 1] >= closes[0];
-    return {
-      data: closes,
-      borderColor:            isUp ? '#34d399' : '#f87171',
-      backgroundColor:        isUp ? 'rgba(52,211,153,0.07)' : 'rgba(248,113,113,0.07)',
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      pointHoverBackgroundColor: isUp ? '#34d399' : '#f87171',
-      fill: true,
-      tension: 0.35,
-    };
-  }
-
-  const chart = new Chart(ctx, {
+  const data  = {{ hist | tojson | safe }};
+  const ctx   = document.getElementById('priceChart');
+  if (!ctx) return;
+  const closes = data.map(d => d.close);
+  const isUp   = closes[closes.length-1] >= closes[0];
+  new Chart(ctx, {
     type: 'line',
     data: {
-      labels:   datasets[firstKey].labels,
-      datasets: [makeDataset(datasets[firstKey].closes)],
+      labels:   data.map(d => d.date.slice(5)),
+      datasets: [{
+        data: closes,
+        borderColor:     isUp ? '#34d399' : '#f87171',
+        backgroundColor: isUp ? 'rgba(52,211,153,0.07)' : 'rgba(248,113,113,0.07)',
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: true,
+        tension: 0.35,
+      }]
     },
     options: {
       responsive: true,
@@ -968,168 +349,19 @@
           borderColor: 'rgba(255,255,255,0.1)',
           borderWidth: 1,
           padding: 10,
-          callbacks: {
-            label: c => ` ${c.raw.toLocaleString('en-US', {minimumFractionDigits: 2})}`,
-          }
+          callbacks: { label: c => ` ${c.raw.toLocaleString('en-US', {minimumFractionDigits:2})}` }
         }
       },
       scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: '#52525b', font: { size: 10 }, maxTicksLimit: 8 },
-          border: { display: false },
-        },
-        y: {
-          position: 'right',
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#52525b', font: { size: 10 },
-            callback: v => v.toLocaleString('en-US', {minimumFractionDigits: 2}) },
-          border: { display: false },
-        }
+        x: { grid:{display:false}, ticks:{color:'#52525b',font:{size:10},maxTicksLimit:8}, border:{display:false} },
+        y: { position:'right', grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#52525b',font:{size:10},callback:v=>v.toLocaleString('en-US',{minimumFractionDigits:2})}, border:{display:false} }
       }
-    }
-  });
-
-  // Tab click handler
-  document.querySelectorAll('.chart-tab').forEach(btn => {
-    // Hide tabs for datasets without data
-    const key = btn.dataset.key;
-    if (!datasets[key]) { btn.style.display = 'none'; return; }
-
-    btn.addEventListener('click', () => {
-      const d = datasets[key];
-      // Update chart
-      chart.data.labels = d.labels;
-      chart.data.datasets[0] = makeDataset(d.closes);
-      chart.update('active');
-
-      // Update header stat
-      const nameEl  = document.getElementById('chart-name');
-      const priceEl = document.getElementById('chart-price');
-      const chgEl   = document.getElementById('chart-chg');
-      if (nameEl)  nameEl.textContent  = d.name;
-      if (priceEl) priceEl.textContent = d.price?.toLocaleString('en-US', {minimumFractionDigits: 2}) ?? '';
-      if (chgEl) {
-        const first = d.closes[0], last = d.closes[d.closes.length - 1];
-        const pct = first ? ((last - first) / first * 100) : 0;
-        const sign = pct > 0 ? '+' : '';
-        chgEl.textContent = `${sign}${pct.toFixed(2)}%`;
-        chgEl.style.color = pct > 0 ? '#34d399' : pct < 0 ? '#f87171' : 'var(--text-muted)';
-        chgEl.style.background = pct > 0 ? 'rgba(52,211,153,0.12)' : pct < 0 ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.06)';
-      }
-
-      // Active tab style
-      document.querySelectorAll('.chart-tab').forEach(b => {
-        b.style.borderColor = 'rgba(255,255,255,0.12)';
-        b.style.background  = 'transparent';
-        b.style.color       = 'var(--text-muted)';
-      });
-      btn.style.borderColor = 'rgba(124,58,237,0.6)';
-      btn.style.background  = 'rgba(124,58,237,0.18)';
-      btn.style.color       = '#a78bfa';
-    });
-  });
-})();
-
-{% if ai_analysis %}
-// Risk gauge
-(function(){
-  const rs = {{ ai_analysis.risk_score | default(50) | int }};
-  const gaugeColor = rs < 35 ? '#34d399' : rs < 65 ? '#fbbf24' : '#f87171';
-  const ctx = document.getElementById('riskGauge');
-  if (!ctx) return;
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      datasets: [{
-        data: [rs, 100 - rs],
-        backgroundColor: [gaugeColor, '#e8e4dd'],
-        borderWidth: 0,
-        circumference: 180,
-        rotation: 270,
-      }]
-    },
-    options: {
-      responsive: false,
-      cutout: '75%',
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      animation: { duration: 900 }
-    }
-  });
-})();
-
-{% if ai_analysis.competitors %}
-// Competitor donut
-(function(){
-  const comps = {{ ai_analysis.competitors | tojson | safe }};
-  let stronger = 0, similar = 0, weaker = 0;
-  comps.forEach(c => {
-    if (c.status === 'stronger') stronger++;
-    else if (c.status === 'weaker') weaker++;
-    else similar++;
-  });
-  const ctx2 = document.getElementById('compChart');
-  if (!ctx2) return;
-  new Chart(ctx2, {
-    type: 'doughnut',
-    data: {
-      labels: ['Сильнее', 'Схоже', 'Слабее'],
-      datasets: [{
-        data: [stronger || 0.01, similar || 0.01, weaker || 0.01],
-        backgroundColor: ['rgba(248,113,113,0.8)', 'rgba(113,113,122,0.5)', 'rgba(52,211,153,0.8)'],
-        borderColor: ['#f87171', '#71717a', '#34d399'],
-        borderWidth: 1.5,
-        hoverOffset: 4,
-      }]
-    },
-    options: {
-      responsive: false,
-      cutout: '60%',
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw === 0.01 ? 0 : c.raw}` } } },
-      animation: { duration: 700 }
     }
   });
 })();
 {% endif %}
 {% endif %}
 
-{% set _top = finance.top_stocks or finance.trending if finance else [] %}
-{% if _top %}
-(function(){
-  const peersData = {{ _top | tojson | safe }};
-  const labels  = peersData.map(s => s.ticker || s.symbol || '');
-  const changes = peersData.map(s => {
-    const v = s.change_pct !== undefined ? s.change_pct : s.change;
-    return v !== null && v !== undefined ? parseFloat((+v).toFixed(2)) : 0;
-  });
-  const colors  = changes.map(v => v > 0 ? 'rgba(52,211,153,0.25)' : v < 0 ? 'rgba(248,113,113,0.25)' : 'rgba(113,113,122,0.2)');
-  const borders = changes.map(v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#71717a');
-  const ctx = document.getElementById('peersChart');
-  if (!ctx) return;
-  new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets: [{ label: '%', data: changes, backgroundColor: colors, borderColor: borders, borderWidth: 1.5, borderRadius: 4 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(15,15,20,0.92)',
-          borderColor: 'rgba(255,255,255,0.1)',
-          borderWidth: 1,
-          callbacks: { label: c => ` ${c.raw > 0 ? '+' : ''}${c.raw}%` }
-        }
-      },
-      scales: {
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#52525b', font: { size: 10 }, callback: v => `${v > 0 ? '+' : ''}${v}%` }, border: { display: false } },
-        x: { grid: { display: false }, ticks: { color: '#71717a', font: { size: 10, weight: '600' }, maxRotation: 0 }, border: { display: false } }
-      }
-    }
-  });
-})();
-{% endif %}
-
-// ── Polling & Refresh ──
 const COMPANY_ID = '{{ company.id }}';
 const IS_LOADING = {{ 'true' if loading else 'false' }};
 
@@ -1137,7 +369,7 @@ async function triggerRefresh() {
   const btn = document.getElementById('refresh-btn');
   if (btn) { btn.textContent = '↻ Обновляю...'; btn.disabled = true; }
   const badge = document.getElementById('updated-badge') || document.getElementById('loading-badge');
-  if (badge) { badge.textContent = '⏳ обновляется...'; badge.style.background='rgba(251,191,36,0.12)'; badge.style.color='#a16207'; badge.style.borderColor='rgba(251,191,36,0.28)'; }
+  if (badge) { badge.textContent = '⏳ обновляется...'; badge.style.color='#a16207'; }
   try {
     await fetch(`/companies/${COMPANY_ID}/market/refresh`, { method: 'POST' });
     setTimeout(() => pollForData(20), 5000);
@@ -1154,23 +386,14 @@ async function pollForData(attempts) {
   }
   try {
     const r = await fetch(`/companies/${COMPANY_ID}/market/data`);
-    if (!r.ok) { setTimeout(() => pollForData(attempts - 1), 3000); return; }
-    const data = await r.json();
-    if (data.status === 'ready') {
-      window.location.reload();
-      return;
+    if (r.ok) {
+      const data = await r.json();
+      if (data.status === 'ready') { window.location.reload(); return; }
     }
   } catch(e) {}
   setTimeout(() => pollForData(attempts - 1), 5000);
 }
 
-// Auto-start polling if no cache
-if (IS_LOADING) {
-  pollForData(30);
-}
+if (IS_LOADING) pollForData(30);
 </script>
-{% if not embed %}
-  </div>{# sidebar-content #}
-</div>{# sidebar-layout #}
-{% endif %}
 {% endblock %}

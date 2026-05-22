@@ -49,6 +49,9 @@ class Settings:
     TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
     FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
 
+    # SerpAPI (Google SERP scraping)
+    SERPAPI_KEY: str = os.getenv("SERPAPI_KEY", "")
+
     # Anthropic
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 

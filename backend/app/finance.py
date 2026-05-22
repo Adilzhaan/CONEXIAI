@@ -37,20 +37,45 @@ async def close() -> None:
 
 _PREFERRED_EXCHANGES = {"KAZ", "AIX", "NYQ", "NMS", "NGM", "LSE", "FRA", "AMS"}
 
+_STOP_WORDS = {"group", "holding", "holdings", "corp", "corporation", "ltd", "limited",
+               "llc", "inc", "company", "co", "plc", "group", "груп", "групп",
+               "казахстан", "kazakhstan", "гмбх"}
+
+
+def _name_matches(query: str, candidate: str) -> bool:
+    """Check if candidate ticker name is genuinely the same company as query."""
+    if not candidate:
+        return False
+    q_words = [w for w in query.lower().split() if len(w) >= 3 and w not in _STOP_WORDS]
+    c_lower = candidate.lower()
+    if not q_words:
+        # Short/generic name — require exact phrase match
+        return query.lower() in c_lower
+    # At least half the significant query words must appear in the candidate name
+    matches = sum(1 for w in q_words if w in c_lower)
+    return matches >= max(1, len(q_words) // 2)
+
 
 def _yf_search_sync(company_name: str) -> str | None:
-    """Find best ticker for a company name using yfinance Search."""
+    """Find best ticker for a company name using yfinance Search.
+    Validates that the returned ticker actually matches the company name."""
     try:
-        results = yf.Search(company_name, max_results=8, news_count=0).quotes
-        # 1st pass: preferred exchanges
-        for q in results:
-            if q.get("quoteType") in ("EQUITY", "ETF") and q.get("exchange") in _PREFERRED_EXCHANGES:
+        results = yf.Search(company_name, max_results=10, news_count=0).quotes
+        # Filter to only results whose name actually matches our company
+        matched = [
+            q for q in results
+            if q.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND")
+            and _name_matches(company_name, q.get("longname") or q.get("shortname") or "")
+        ]
+        # 1st pass: preferred exchanges among matched
+        for q in matched:
+            if q.get("exchange") in _PREFERRED_EXCHANGES:
                 return q.get("symbol")
-        # 2nd pass: any equity
-        for q in results:
-            if q.get("quoteType") in ("EQUITY", "ETF"):
-                return q.get("symbol")
-        return results[0].get("symbol") if results else None
+        # 2nd pass: any matched equity
+        if matched:
+            return matched[0].get("symbol")
+        # No validated match found — return None rather than wrong company
+        return None
     except Exception as e:
         logger.debug("yfinance search failed for '%s': %s", company_name, e)
         return None
@@ -245,21 +270,24 @@ async def _fetch_global_indices() -> list[dict[str, Any]]:
 
 
 async def _fetch_kase_index() -> dict[str, Any] | None:
-    """Fetch KASE composite index from the KASE public API."""
+    """Fetch KASE composite index via yfinance (^KASE ticker)."""
     try:
-        r = await _http.get("https://api.kase.kz/api/indices", timeout=8)
-        r.raise_for_status()
-        items = r.json()
-        if not items:
-            return None
-        item = items[0]
-        return {
-            "name":       item.get("name") or "KASE Index",
-            "symbol":     item.get("code", "KASE"),
-            "last":       item.get("lastValue") or item.get("value"),
-            "change_pct": item.get("change"),
-            "exchange":   "KASE",
-        }
+        def _sync():
+            fi = yf.Ticker("^KASE").fast_info
+            price = getattr(fi, "last_price", None)
+            if not price:
+                return None
+            prev = getattr(fi, "previous_close", None)
+            chg = round(((price - prev) / prev) * 100, 2) if prev else None
+            return {
+                "name":       "KASE Index",
+                "symbol":     "^KASE",
+                "last":       round(price, 2),
+                "change_pct": chg,
+                "exchange":   "KASE",
+            }
+        result = await asyncio.to_thread(_sync)
+        return result
     except Exception as e:
         logger.debug("KASE index fetch failed: %s", e)
         return None
@@ -270,27 +298,34 @@ async def _fetch_kase_index() -> dict[str, Any] | None:
 # ──────────────────────────────────────────────
 
 async def _fetch_kase_data(company_name: str) -> dict[str, Any] | None:
+    """Try to find company on KASE via yfinance with exchange filter."""
     try:
-        r = await _http.get(
-            "https://api.kase.kz/api/securities/search",
-            params={"query": company_name, "limit": 3},
-        )
-        r.raise_for_status()
-        items = r.json()
-        if not items:
+        def _sync():
+            results = yf.Search(company_name, max_results=10, news_count=0).quotes
+            for q in results:
+                if q.get("exchange") in ("KAZ", "AIX") and _name_matches(
+                    company_name, q.get("longname") or q.get("shortname") or ""
+                ):
+                    sym = q.get("symbol")
+                    fi = yf.Ticker(sym).fast_info
+                    price = getattr(fi, "last_price", None)
+                    if not price:
+                        return None
+                    prev = getattr(fi, "previous_close", None)
+                    chg = round(((price - prev) / prev) * 100, 2) if prev else None
+                    return {
+                        "ticker":     sym,
+                        "name":       q.get("longname") or q.get("shortname") or company_name,
+                        "last":       round(price, 4),
+                        "change_pct": chg,
+                        "source":     "KASE (Yahoo Finance)",
+                        "exchange":   q.get("exchange", "KASE"),
+                        "currency":   getattr(fi, "currency", "KZT"),
+                    }
             return None
-        item = items[0]
-        return {
-            "ticker":     item.get("code") or item.get("ticker", ""),
-            "name":       item.get("name", company_name),
-            "last":       item.get("lastPrice"),
-            "change_pct": item.get("change"),
-            "source":     "KASE",
-            "exchange":   "KASE",
-            "currency":   "KZT",
-        }
+        return await asyncio.to_thread(_sync)
     except Exception as e:
-        logger.debug("KASE fetch failed: %s", e)
+        logger.debug("KASE company fetch failed: %s", e)
         return None
 
 

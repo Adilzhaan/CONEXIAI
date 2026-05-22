@@ -178,12 +178,17 @@ async def fetch_threads_posts(
             author   = item.get("username") or ""
             date     = item.get("takenAtFormatted") or ""
             posts.append({
-                "postUrl":  url_post,
-                "username": author,
-                "text":     text[:500],
-                "likes":    item.get("likeCount", 0),
-                "date":     date,
-                "platform": "threads",
+                "postUrl":    url_post,
+                "url":        url_post,
+                "username":   author,
+                "author":     author,
+                "captionText": text,
+                "text":       text[:500],
+                "likes":      item.get("likeCount", 0),
+                "date":       date,
+                "pub_date":   date,
+                "platform":   "threads",
+                "source":     "Threads",
             })
         logger.info("Threads: %d posts for '%s'", len(posts), company_name)
         return posts
