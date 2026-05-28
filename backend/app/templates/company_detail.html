@@ -747,6 +747,9 @@
         <button class="cd-tab" onclick="showTab('sources', this)">
           <span>Источники</span>
         </button>
+        <button class="cd-tab" onclick="showTab('archive', this); loadArchive()">
+          <span>Архив</span>
+        </button>
       </div>
 
       <!-- ══ OVERVIEW TAB ══ -->
@@ -2167,6 +2170,29 @@
         </div>
       </div>
 
+      <!-- ══ ARCHIVE TAB ══ -->
+      <div class="cd-panel" id="tab-archive">
+        <div style="max-width:860px;margin:0 auto;padding:8px 0">
+          <div class="panel-hdr" style="margin-bottom:20px">
+            <div class="panel-hdr-title">Архив новостей</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="archive-search" type="text" placeholder="Поиск по заголовку…"
+                oninput="filterArchive()"
+                style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--text);width:200px;outline:none">
+              <button id="archive-refresh-btn" onclick="loadArchive()"
+                style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">
+                ↻ Обновить
+              </button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+            Все статьи найденные в предыдущих анализах. При новом анализе повторно не загружаются.
+          </div>
+          <div id="archive-stats" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+          <div id="archive-feed"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -3569,6 +3595,54 @@ async function createMeet() {
     btn.disabled = false;
     btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg> Собрать совещание';
   }
+}
+
+// ── Archive tab ──────────────────────────────────────────────────────────────
+function loadArchive() {
+  var feed  = document.getElementById('archive-feed');
+  var stats = document.getElementById('archive-stats');
+  var btn   = document.getElementById('archive-refresh-btn');
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Загружаем…</div>';
+  stats.textContent = '';
+  btn.disabled = true;
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/companies/' + COMPANY_ID + '/archive', true);
+  xhr.onload = function() {
+    btn.disabled = false;
+    if (xhr.status !== 200) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171">Ошибка HTTP ' + xhr.status + '</div>';
+      return;
+    }
+    var data = JSON.parse(xhr.responseText);
+    var items = data.items || [];
+    stats.textContent = 'Всего статей: ' + items.length;
+    if (!items.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Архив пуст — запустите анализ.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var a = items[i];
+      html += '<div class="mon-item">' +
+        '<div class="mon-icon mon-icon-new">📰</div>' +
+        '<div class="mon-body">' +
+          '<a href="' + (a.url || '#') + '" target="_blank" rel="noopener" class="mon-title">' + (a.title || '—') + '</a>' +
+          '<div class="mon-meta">' +
+            (a.source ? '<span class="mon-badge mon-badge-src">' + a.source + '</span>' : '') +
+            (a.pub_date ? '<span> · </span><span>' + a.pub_date + '</span>' : '') +
+            (a.seen_at ? '<span> · </span><span style="opacity:0.6">' + a.seen_at.slice(0,10) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    feed.innerHTML = html;
+  };
+  xhr.onerror = function() {
+    btn.disabled = false;
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171">Ошибка сети</div>';
+  };
+  xhr.send();
 }
 
 </script>

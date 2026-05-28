@@ -991,6 +991,28 @@ _analysis_jobs: dict[str, dict] = {}  # job_id → {status, stage, result, error
 _NEWS_CACHE_TTL = 5 * 60  # 5 minutes
 
 
+@app.get("/companies/{company_id}/archive")
+async def company_archive_api(req: Request, company_id: str):
+    """Return all news_archive rows for the company."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    if not settings.SUPABASE_SERVICE_KEY:
+        return {"items": []}
+    try:
+        rows = await supabase.rest_select_service(
+            table="news_archive",
+            service_key=settings.SUPABASE_SERVICE_KEY,
+            select="url,title,source,pub_date,seen_at",
+            query_params={"company_id": f"eq.{company_id}", "order": "seen_at.desc"},
+        )
+        logger.info("archive fetch: %d rows for company %s", len(rows or []), company_id)
+        return {"items": rows or []}
+    except Exception as e:
+        logger.warning("archive fetch failed: %s", e)
+        return {"items": [], "error": str(e)}
+
+
 @app.get("/companies/{company_id}/news")
 async def company_news_api(req: Request, company_id: str):
     """Fetch news for a company lazily (called from frontend after page load)."""
@@ -1038,6 +1060,21 @@ async def _run_combined_job(
     from datetime import datetime, timezone
 
     try:
+        # ── Load seen URLs from news archive ─────────────────────────────────
+        _seen_urls: set[str] = set()
+        if settings.SUPABASE_SERVICE_KEY:
+            try:
+                _archive_rows = await supabase.rest_select_service(
+                    table="news_archive",
+                    service_key=settings.SUPABASE_SERVICE_KEY,
+                    select="url",
+                    query_params={"company_id": f"eq.{company_id}"},
+                )
+                _seen_urls = {r["url"] for r in (_archive_rows or []) if r.get("url")}
+                logger.info("[job %s] news_archive: %d seen URLs", job_id, len(_seen_urls))
+            except Exception as _ae:
+                logger.warning("[job %s] news_archive load failed: %s", job_id, _ae)
+
         # ── Extra server-side sources (SerpAPI, Bing, Yahoo, GDELT) + finance fundamentals ──
         _analysis_jobs[job_id]["stage"] = "📡 Загрузка дополнительных источников…"
         extra_news: list = []
@@ -1222,17 +1259,17 @@ async def _run_combined_job(
         orig_items: list[dict] = [] # original item dicts (parallel index)
         src_types: list[str] = []   # source type per item (parallel index)
 
-        # Pre-filter: at least one word from company name must appear in title
-        _name_words = [w.lower() for w in company_name.split() if len(w) > 2]
+        # Pre-filter: full company name must appear in title/text
+        _name_lower = company_name.lower()
 
         def _name_match(item: dict) -> bool:
-            if not _name_words:
-                return True
             text = (
                 item.get("title") or item.get("text") or
                 item.get("captionText") or item.get("caption") or ""
             ).lower()
-            return any(w in text for w in _name_words)
+            return _name_lower in text
+
+        _new_archive_urls: list[dict] = []  # URLs to save to archive after analysis
 
         for _src, _items in [
             ("news", news_items), ("reddit", reddit_items),
@@ -1243,6 +1280,10 @@ async def _run_combined_job(
             for item in _items:
                 if not _name_match(item):
                     continue
+                _url = item.get("url") or item.get("link") or ""
+                # Skip already seen URLs
+                if _url and _url in _seen_urls:
+                    continue
                 art_id = str(_uuid.uuid4())
                 title = (item.get("title") or item.get("text") or "")[:120]
                 db_rows.append({
@@ -1250,7 +1291,7 @@ async def _run_combined_job(
                     "company_id":  company_id,
                     "job_id":      job_id,
                     "title":       title or "—",
-                    "url":         item.get("url") or item.get("link") or "",
+                    "url":         _url,
                     "source":      item.get("source") or item.get("channel") or item.get("subreddit") or _src,
                     "source_type": _src,
                     "excerpt":     (item.get("text") or item.get("description") or "")[:300],
@@ -1259,6 +1300,15 @@ async def _run_combined_job(
                 })
                 orig_items.append(item)
                 src_types.append(_src)
+                if _url:
+                    _seen_urls.add(_url)
+                    _new_archive_urls.append({
+                        "company_id": company_id,
+                        "url":        _url,
+                        "title":      title or "—",
+                        "source":     item.get("source") or _src,
+                        "pub_date":   item.get("pub_date") or item.get("date") or "",
+                    })
 
         # ── Build competitor DB rows ──────────────────────────────────────
         comp_db_rows: list[dict] = []
@@ -1301,6 +1351,20 @@ async def _run_combined_job(
                 except Exception as _ie:
                     logger.error("[job %s] insert competitor articles batch %d failed: %s", job_id, _i, _ie)
             logger.info("[job %s] phase 1: inserted %d main + %d competitor rows", job_id, len(db_rows), len(comp_db_rows))
+
+        # ── Save new URLs to news_archive (upsert — ignore duplicates) ───────
+        if settings.SUPABASE_SERVICE_KEY and _new_archive_urls:
+            try:
+                for _i in range(0, len(_new_archive_urls), 100):
+                    await supabase.rest_upsert_service(
+                        table="news_archive",
+                        service_key=settings.SUPABASE_SERVICE_KEY,
+                        rows=_new_archive_urls[_i:_i + 100],
+                        on_conflict="company_id,url",
+                    )
+                logger.info("[job %s] news_archive: saved %d new URLs", job_id, len(_new_archive_urls))
+            except Exception as _ae:
+                logger.warning("[job %s] news_archive save failed: %s", job_id, _ae)
 
         # ── Phase 2a: AI filter — main articles ───────────────────────────
         _analysis_jobs[job_id]["stage"] = "🔍 ИИ проверяет статьи…"
