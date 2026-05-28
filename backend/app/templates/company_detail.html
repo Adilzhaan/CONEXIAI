@@ -689,17 +689,35 @@
         {% endfor %}
 
         <!-- CI Monitor card -->
+        {% set _ci_scores = [] %}
+        {% if ci_report and ci_report.competitors_data %}
+          {% for _cd in ci_report.competitors_data %}
+            {% if _cd.risk and _cd.risk.score is not none %}
+              {% set _ = _ci_scores.append(_cd.risk.score) %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% set _ci_threat = (_ci_scores | max) if _ci_scores else none %}
+        {% set _ci_color = '#f87171' if _ci_threat is not none and _ci_threat >= 65 else '#fbbf24' if _ci_threat is not none and _ci_threat >= 40 else '#06b6d4' %}
         <a href="#" onclick="event.preventDefault();showTab('ci',null)"
            style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
-                  background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-left:3px solid #06b6d4;
+                  background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-left:3px solid {{ _ci_color }};
                   border-radius:var(--radius);text-decoration:none;color:inherit;
                   transition:box-shadow .15s,transform .15s;position:relative;overflow:hidden"
            onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)';this.style.transform='translateY(-2px)'"
            onmouseout="this.style.boxShadow='';this.style.transform=''">
           <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">CI Monitor</div>
-          <div style="font-size:28px;font-weight:800;line-height:1;color:#06b6d4">→</div>
-          <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)"></div>
-          <div data-i18n="ci_sub" style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Конкурентная разведка</div>
+          {% if _ci_threat is not none %}
+            <div style="font-size:28px;font-weight:800;line-height:1;color:{{ _ci_color }}">{{ _ci_threat | round | int }}</div>
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)">
+              <div style="height:100%;width:{{ _ci_threat }}%;border-radius:2px;background:{{ _ci_color }}"></div>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Угроза бизнесу</div>
+          {% else %}
+            <div style="font-size:28px;font-weight:800;line-height:1;color:#06b6d4">→</div>
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)"></div>
+            <div data-i18n="ci_sub" style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Конкурентная разведка</div>
+          {% endif %}
         </a>
 
       </div>
@@ -725,6 +743,9 @@
         <!-- Monitor tab hidden temporarily -->
         <button class="cd-tab" onclick="showTab('social', this)">
           <span data-i18n="tab_social">Соцсети</span>
+        </button>
+        <button class="cd-tab" onclick="showTab('sources', this)">
+          <span>Источники</span>
         </button>
       </div>
 
@@ -898,8 +919,25 @@
               <div class="ri-sec-title">
                 <div class="ri-sec-title-icon">◎</div> Risk Overview
               </div>
-              <div style="font-size:11px;color:var(--text-muted)">
-                {% if latest.created_at %}Обновлено {{ latest.created_at[:10] }}{% endif %}
+              <div style="display:flex;align-items:center;gap:10px">
+                {% if s >= 65 %}
+                <button onclick="createMeet()" id="meet-btn"
+                  style="display:flex;align-items:center;gap:6px;padding:5px 12px;
+                         background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);
+                         border-radius:8px;color:#f87171;font-size:11px;font-weight:700;
+                         cursor:pointer;transition:all .15s"
+                  onmouseover="this.style.background='rgba(239,68,68,0.25)'"
+                  onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/>
+                    <rect x="3" y="8" width="12" height="8" rx="2"/>
+                  </svg>
+                  Собрать совещание
+                </button>
+                {% endif %}
+                <div style="font-size:11px;color:var(--text-muted)">
+                  {% if latest.created_at %}Обновлено {{ latest.created_at[:10] }}{% endif %}
+                </div>
               </div>
             </div>
 
@@ -1140,6 +1178,101 @@
           </div>
           {% endif %}
         </div>
+
+        <!-- ══ SECTION 2b2: Competitor News ══ -->
+        {% if comp_news_map %}
+        <div class="ri-section" id="ov-comp-news-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">⚔</div>
+              <span>Новости конкурентов</span>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">{{ comp_news_map|length }} конкурент{{ 'а' if comp_news_map|length in [2,3,4] else ('ов' if comp_news_map|length > 4 else '') }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            {% for comp_name, comp_articles in comp_news_map.items() %}
+            <div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+              <div style="padding:8px 14px;background:rgba(167,139,250,0.07);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between">
+                <div style="font-size:12px;font-weight:700;color:#a78bfa">{{ comp_name }}</div>
+                <div style="font-size:10px;color:var(--text-muted)">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" style="vertical-align:middle;margin-right:3px"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  {{ comp_articles|length }} отобрано AI
+                </div>
+              </div>
+              {% for art in comp_articles[:6] %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.05);{% if loop.last %}border-bottom:none{% endif %}">
+                <span style="font-size:13px;flex-shrink:0;margin-top:1px">📰</span>
+                <div style="flex:1;min-width:0">
+                  <a href="{{ art.url }}" target="_blank" rel="noopener"
+                     style="font-size:12px;font-weight:500;color:var(--text);text-decoration:none;display:block;line-height:1.4;margin-bottom:2px"
+                     onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">{{ art.title }}</a>
+                  <div style="font-size:10px;color:var(--text-muted);display:flex;gap:5px;align-items:center">
+                    {% if art.source %}<span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 5px;font-weight:600">{{ art.source }}</span>{% endif %}
+                    {% if art.pub_date %}<span>{{ art.pub_date[:10] if art.pub_date|length > 10 else art.pub_date }}</span>{% endif %}
+                  </div>
+                </div>
+                {% if art.url %}
+                <a href="{{ art.url }}" target="_blank" rel="noopener"
+                   style="flex-shrink:0;width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:var(--text-muted);text-decoration:none;font-size:10px">↗</a>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- ══ SECTION 2b2: CI Mini-Report ══ -->
+        {% if ci_report and ci_report.ai %}
+        {% set _ci = ci_report.ai %}
+        <div class="ri-section" id="ov-ci-mini-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">🔍</div>
+              <span>Конкурентная разведка</span>
+            </div>
+            <a href="/companies/{{ company.id }}/ci" style="font-size:11px;color:var(--accent);text-decoration:none">Подробнее →</a>
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+            <!-- Summary + threat -->
+            <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px">
+              {% set _tl = _ci.threat_level|default('medium') %}
+              {% if _tl == 'high' %}
+                <span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">HIGH</span>
+              {% elif _tl == 'low' %}
+                <span style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">LOW</span>
+              {% else %}
+                <span style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">MEDIUM</span>
+              {% endif %}
+              <span style="font-size:12px;color:var(--text-muted)">{{ _ci.summary }}</span>
+            </div>
+            <!-- Competitors row -->
+            {% if _ci.competitors %}
+            <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;gap:8px">
+              {% for _cc in _ci.competitors %}
+              {% set _ct = _cc.threat|default('medium') %}
+              <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:5px 10px">
+                <span style="font-size:11px;font-weight:600;color:var(--text)">{{ _cc.name }}</span>
+                {% if _ct == 'high' %}<span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>
+                {% elif _ct == 'low' %}<span style="width:6px;height:6px;border-radius:50%;background:#34d399;flex-shrink:0"></span>
+                {% else %}<span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;flex-shrink:0"></span>{% endif %}
+                {% if _cc.key_move %}<span style="font-size:10px;color:var(--text-muted)">{{ _cc.key_move[:50] }}</span>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <!-- Risks -->
+            {% if _ci.risks %}
+            <div style="padding:10px 16px">
+              {% for _r in _ci.risks[:5] %}
+              <div style="font-size:11px;color:var(--text-muted);padding:2px 0;display:flex;gap:6px"><span style="color:#ef4444;flex-shrink:0">▲</span>{{ _r }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
 
         <!-- ══ SECTION 2c: News Sources ══ -->
         {% set all_news = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
@@ -2016,11 +2149,32 @@
         </div>
       </div>
 
+      <!-- ══ SOURCES TAB ══ -->
+      <div class="cd-panel" id="tab-sources">
+        <div style="max-width:720px;margin:0 auto;padding:8px 0">
+          <div class="panel-hdr" style="margin-bottom:20px">
+            <div class="panel-hdr-title">Рекомендуемые источники</div>
+            <button id="suggest-sources-btn" onclick="loadSuggestedSources()"
+              style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.35);color:#34d399;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(52,211,153,0.24)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">
+              🤖 Подобрать источники
+            </button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            ИИ проанализирует компанию и подберёт финансовые порталы, отраслевые СМИ, регуляторные сайты и другие источники для мониторинга.
+          </div>
+          <div id="suggested-sources-feed"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
 
 <script>
+let _suggestedSources = [];
+const _companyNameForSources = '{{ company.name | replace("'", "\\'") }}';
+
 // ── Tabs ──
 const _iframeLoaded = {};
 const _tabLoaded = {};
@@ -2830,6 +2984,164 @@ async function loadYouTube() {
 }
 
 
+
+async function checkSource(idx) {
+  const s = _suggestedSources[idx];
+  if (!s) return;
+  const btn    = document.getElementById(`check-btn-${idx}`);
+  const result = document.getElementById(`src-result-${idx}`);
+  btn.disabled = true;
+  btn.textContent = '⏳ Ищу…';
+  result.style.display = 'block';
+  result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Ищем упоминания…</div>';
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/check-source`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: s.name, url: s.url, company_name: _companyNameForSources }),
+    });
+    const d = await r.json();
+
+    if (d.error) {
+      result.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:#f87171">${d.error}</div>`;
+      btn.textContent = '🔍 Проверить'; btn.disabled = false; return;
+    }
+
+    if (!d.found) {
+      result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Упоминаний не найдено</div>';
+      btn.textContent = '— Пусто'; return;
+    }
+
+    const a = d.analysis || {};
+    const lvlColor = { high: '#f87171', medium: '#fbbf24', low: '#34d399', none: '#71717a' };
+    const lvl = a.risk_level || 'none';
+    const col = lvlColor[lvl] || '#71717a';
+
+    const risksHtml = (a.risks || []).map(r =>
+      `<div style="display:flex;gap:6px;font-size:12px;color:var(--text);margin-bottom:4px"><span style="color:#f87171;flex-shrink:0">✕</span>${r}</div>`
+    ).join('');
+    const posHtml = (a.positives || []).map(p =>
+      `<div style="display:flex;gap:6px;font-size:12px;color:var(--text);margin-bottom:4px"><span style="color:#34d399;flex-shrink:0">✓</span>${p}</div>`
+    ).join('');
+    const articlesHtml = (d.articles || []).map(art =>
+      `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <a href="${art.link||'#'}" target="_blank" rel="noopener"
+           style="font-size:11px;color:var(--text);text-decoration:none;display:block;line-height:1.4"
+           onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">${art.title}</a>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${art.pub_date || ''}</div>
+      </div>`
+    ).join('');
+
+    result.innerHTML = `
+      <div style="padding:12px 14px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
+                       background:rgba(0,0,0,0.3);border:1px solid ${col};color:${col}">
+            ${lvl === 'high' ? '⚠ Высокий риск' : lvl === 'medium' ? '⚡ Средний риск' : lvl === 'low' ? '✓ Низкий риск' : '— Нет данных'}
+          </span>
+          <span style="font-size:11px;color:var(--text-muted)">${d.found} материалов найдено</span>
+        </div>
+        ${a.verdict ? `<div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.5;font-style:italic">"${a.verdict}"</div>` : ''}
+        ${risksHtml ? `<div style="margin-bottom:8px">${risksHtml}</div>` : ''}
+        ${posHtml ? `<div style="margin-bottom:8px">${posHtml}</div>` : ''}
+        <details style="margin-top:8px">
+          <summary style="font-size:11px;color:var(--accent);cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px">
+            📰 Показать статьи (${d.found})
+          </summary>
+          <div style="margin-top:8px">${articlesHtml}</div>
+        </details>
+      </div>`;
+    btn.textContent = '✓ Проверено'; btn.disabled = false;
+  } catch(e) {
+    result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#f87171">Ошибка сети</div>';
+    btn.textContent = '🔍 Проверить'; btn.disabled = false;
+  }
+}
+
+async function loadSuggestedSources() {
+  const btn  = document.getElementById('suggest-sources-btn');
+  const feed = document.getElementById('suggested-sources-feed');
+  btn.disabled = true;
+  btn.textContent = '⏳ ИИ подбирает источники…';
+  feed.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:13px">Анализируем компанию…</div>';
+
+  const _CAT_COLORS = {
+    'финансы':    { bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.25)',  color: '#34d399',  icon: '📈' },
+    'СМИ':        { bg: 'rgba(96,165,250,0.08)',   border: 'rgba(96,165,250,0.25)',  color: '#60a5fa',  icon: '📰' },
+    'регулятор':  { bg: 'rgba(251,191,36,0.08)',   border: 'rgba(251,191,36,0.25)',  color: '#fbbf24',  icon: '⚖️' },
+    'соцсети':    { bg: 'rgba(167,139,250,0.08)',  border: 'rgba(167,139,250,0.25)', color: '#a78bfa',  icon: '💬' },
+    'официальный':{ bg: 'rgba(255,255,255,0.05)',  border: 'rgba(255,255,255,0.12)', color: '#e4e4e7',  icon: '🏢' },
+    'биржа':      { bg: 'rgba(248,113,113,0.08)',  border: 'rgba(248,113,113,0.25)', color: '#f87171',  icon: '📊' },
+    'отрасль':    { bg: 'rgba(251,146,60,0.08)',   border: 'rgba(251,146,60,0.25)',  color: '#fb923c',  icon: '🏭' },
+  };
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/suggest-sources`);
+    if (!r.ok) { feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка сервера: ${r.status}</div>`; btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return; }
+    const d = await r.json();
+    if (d.error) { feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка: ${d.error}</div>`; btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return; }
+
+    const sources = d.sources || [];
+    if (!sources.length) {
+      feed.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:13px">Источники не найдены</div>';
+      btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return;
+    }
+
+    _suggestedSources = sources;
+
+    const _DEFAULT_C = { bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)', color: '#60a5fa', icon: '📰' };
+    feed.innerHTML = sources.map((s, i) => {
+      const cat = (s.category || '').toLowerCase();
+      const match = Object.entries(_CAT_COLORS).find(([k]) => cat.includes(k));
+      const c = match ? match[1] : _DEFAULT_C;
+      return `
+        <div id="src-card-${i}" style="margin-bottom:10px;border-radius:12px;overflow:hidden;border:1px solid ${c.border}">
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:${c.bg}">
+            <span style="font-size:18px;flex-shrink:0;margin-top:1px">${c.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
+                <a href="${s.url || '#'}" target="_blank" rel="noopener"
+                   style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                   onmouseover="this.style.color='${c.color}'" onmouseout="this.style.color='var(--text)'">
+                  ${s.name || s.url}
+                </a>
+                <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;
+                             background:${c.bg};border:1px solid ${c.border};color:${c.color};flex-shrink:0">
+                  ${s.category || ''}
+                </span>
+              </div>
+              ${s.description ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.4">${s.description}</div>` : ''}
+              ${s.url ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.url}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button onclick="checkSource(${i})" id="check-btn-${i}"
+                style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;
+                       background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.35);color:#a78bfa;
+                       transition:background .15s;white-space:nowrap"
+                onmouseover="this.style.background='rgba(167,139,250,0.25)'" onmouseout="this.style.background='rgba(167,139,250,0.12)'">
+                🔍 Проверить
+              </button>
+              ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener"
+                style="width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);
+                       display:flex;align-items:center;justify-content:center;color:var(--text-muted);
+                       text-decoration:none;font-size:10px" title="Открыть">↗</a>` : ''}
+            </div>
+          </div>
+          <div id="src-result-${i}" style="display:none"></div>
+        </div>`;
+    }).join('');
+
+    btn.textContent = '🔄 Обновить';
+    btn.disabled = false;
+  } catch(e) {
+    console.error('loadSuggestedSources error:', e);
+    feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка: ${e.message}</div>`;
+    btn.textContent = '🤖 Подобрать источники';
+    btn.disabled = false;
+  }
+}
+
 async function loadThreads() {
   const btn     = document.getElementById('load-threads-btn');
   const feed    = document.getElementById('threads-feed');
@@ -3095,8 +3407,9 @@ async function runFullAnalysis() {
     // ── Hide overlay then reload page to show fresh data ─────────
     setTimeout(() => {
       document.getElementById('analysis-stages').style.display = 'none';
-      window.location.reload();
-    }, 1500);
+      // cache-bust so browser always fetches fresh HTML from server
+      window.location.href = window.location.pathname + '?t=' + Date.now();
+    }, 2500);
 
   } catch(e) {
     setStage('ai', 'error', 'ошибка запроса');
@@ -3210,6 +3523,53 @@ function launchFullAnalysis(triggerBtn) {
   if (triggerBtn) setTimeout(() => { triggerBtn.disabled = false; triggerBtn.textContent = 'Запустить анализ'; }, 500);
 }
 
+async function createMeet() {
+  const btn = document.getElementById('meet-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Создаю встречу…';
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/meet`, { method: 'POST' });
+    const d = await r.json();
+    if (d.error) {
+      alert('Ошибка: ' + d.error);
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg> Собрать совещание';
+      return;
+    }
+    // Show modal
+    const names = (d.invited || []).map(e => e.name || e.email).join(', ');
+    const html = `
+      <div id="meet-modal" onclick="if(event.target===this)this.remove()"
+           style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center">
+        <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px;max-width:440px;width:90%">
+          <div style="font-size:18px;font-weight:700;margin-bottom:6px">✅ Встреча создана</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">Начало: ${d.start} (Алматы)</div>
+          <a href="${d.meet_url}" target="_blank"
+             style="display:block;text-align:center;padding:12px;background:rgba(37,99,235,0.2);
+                    border:1px solid rgba(37,99,235,0.4);border-radius:10px;color:#60a5fa;
+                    font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">
+            📹 Открыть Google Meet
+          </a>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Приглашены (${(d.invited||[]).length}):</div>
+          <div style="font-size:12px;color:var(--text);margin-bottom:18px">${names}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35)">Приглашения отправлены на email участников</div>
+          <button onclick="document.getElementById('meet-modal').remove()"
+                  style="margin-top:16px;width:100%;padding:8px;background:rgba(255,255,255,0.06);
+                         border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);cursor:pointer">
+            Закрыть
+          </button>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Встреча создана';
+  } catch(e) {
+    alert('Ошибка сети');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg> Собрать совещание';
+  }
+}
 
 </script>
 {% endblock %}

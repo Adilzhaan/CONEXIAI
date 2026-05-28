@@ -139,6 +139,92 @@ def _build_indexed(items: list[dict], prefix: str, text_key: str, url_key: str, 
     return indexed, text
 
 
+async def suggest_sources(
+    company_name: str,
+    industry: str,
+    description: str,
+    api_key: str,
+) -> list[dict[str, Any]]:
+    """Ask Haiku to recommend monitoring sources for a company."""
+    import asyncio as _aio
+    import anthropic as _a
+    prompt = (
+        f"Компания: «{company_name}»\n"
+        f"Отрасль: {industry or 'неизвестна'}\n"
+        f"Описание: {description or 'нет'}\n\n"
+        f"Порекомендуй ровно 30 конкретных источников для мониторинга этой компании.\n"
+        f"Включи разнообразные категории: финансовые порталы, отраслевые СМИ, регуляторные сайты, "
+        f"новостные агентства (местные и международные), официальный сайт компании, "
+        f"биржи (если публичная), соцсети компании (LinkedIn, Instagram, Facebook, YouTube), "
+        f"форумы и сообщества, рейтинговые агентства, государственные реестры.\n"
+        f"Для каждого источника укажи реальный рабочий URL.\n\n"
+        f"Верни JSON:\n"
+        f'{{"sources": [\n'
+        f'  {{"name": "название", "url": "https://...", "category": "финансы|СМИ|регулятор|соцсети|официальный|биржа|отрасль|форум|рейтинг|госреестр", "description": "что здесь искать (1 строка)"}}\n'
+        f']}}'
+    )
+    def _call():
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2500,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        return json.loads(raw).get("sources", [])
+    try:
+        return await _aio.to_thread(_call)
+    except Exception as e:
+        logger.warning("suggest_sources failed: %s", e)
+        return []
+
+
+async def analyze_source_findings(
+    company_name: str,
+    source_name: str,
+    articles: list[dict[str, Any]],
+    api_key: str,
+) -> dict[str, Any]:
+    """Haiku analyzes articles found on a specific source and extracts risks/signals."""
+    import asyncio as _aio
+    import anthropic as _a
+    lines = "\n".join(
+        f"- {a.get('title', '')} | {a.get('pub_date', '')} | {a.get('snippet', '')[:150]}"
+        for a in articles[:10]
+    )
+    prompt = (
+        f"Источник: {source_name}\n"
+        f"Компания: «{company_name}»\n\n"
+        f"Найденные материалы:\n{lines}\n\n"
+        f"Проанализируй эти материалы и извлеки:\n"
+        f"1. Ключевые риски или негативные сигналы\n"
+        f"2. Позитивные сигналы или возможности\n"
+        f"3. Общий вывод по источнику (1 предложение)\n\n"
+        f"Верни JSON:\n"
+        f'{{"risks": ["риск 1", "риск 2"], "positives": ["сигнал 1"], "verdict": "вывод", "risk_level": "high|medium|low|none"}}'
+    )
+    def _call():
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        return json.loads(raw)
+    try:
+        return await _aio.to_thread(_call)
+    except Exception as e:
+        logger.warning("analyze_source_findings failed: %s", e)
+        return {"risks": [], "positives": [], "verdict": "Анализ недоступен", "risk_level": "none"}
+
+
 async def analyze_market_position(
     company_name: str,
     stock: dict[str, Any] | None,
@@ -146,6 +232,7 @@ async def analyze_market_position(
     top_stocks: list[dict[str, Any]],
     news: list[dict[str, Any]],
     api_key: str,
+    fundamentals: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client = get_client(api_key)
 
@@ -181,10 +268,35 @@ async def analyze_market_position(
         f"- {n.get('title', '')} ({n.get('pub_date', '')})" for n in news[:12]
     ) or "Новостей нет."
 
+    fund = fundamentals or {}
+    fund_lines = []
+    if fund.get("sector"):       fund_lines.append(f"Сектор: {fund['sector']}")
+    if fund.get("industry"):     fund_lines.append(f"Индустрия: {fund['industry']}")
+    if fund.get("country"):      fund_lines.append(f"Страна: {fund['country']}")
+    if fund.get("market_cap_fmt"): fund_lines.append(f"Рыночная капитализация: {fund['market_cap_fmt']}")
+    if fund.get("enterprise_value_fmt"): fund_lines.append(f"EV: {fund['enterprise_value_fmt']}")
+    if fund.get("trailing_pe"):  fund_lines.append(f"P/E (TTM): {fund['trailing_pe']}")
+    if fund.get("forward_pe"):   fund_lines.append(f"Forward P/E: {fund['forward_pe']}")
+    if fund.get("price_to_book"): fund_lines.append(f"P/B: {fund['price_to_book']}")
+    if fund.get("beta"):         fund_lines.append(f"Бета: {fund['beta']} ({'высокая волатильность' if fund['beta'] > 1.5 else 'умеренная волатильность' if fund['beta'] > 1 else 'низкая волатильность'})")
+    if fund.get("dividend_yield"): fund_lines.append(f"Дивидендная доходность: {fund['dividend_yield']}")
+    if fund.get("profit_margins"): fund_lines.append(f"Маржа чистой прибыли: {fund['profit_margins']}")
+    if fund.get("revenue_growth"): fund_lines.append(f"Рост выручки (г/г): {fund['revenue_growth']}")
+    if fund.get("earnings_growth"): fund_lines.append(f"Рост прибыли (г/г): {fund['earnings_growth']}")
+    if fund.get("return_on_equity"): fund_lines.append(f"ROE: {fund['return_on_equity']}")
+    if fund.get("debt_to_equity"): fund_lines.append(f"Долг/Капитал: {fund['debt_to_equity']}")
+    if fund.get("full_time_employees"): fund_lines.append(f"Сотрудников: {fund['full_time_employees']:,}")
+    if fund.get("fifty_day_avg"): fund_lines.append(f"Скользящая средняя 50 дней: {fund['fifty_day_avg']}")
+    if fund.get("two_hundred_day_avg"): fund_lines.append(f"Скользящая средняя 200 дней: {fund['two_hundred_day_avg']}")
+    fund_text = "\n".join(fund_lines) if fund_lines else "Фундаментальные данные недоступны."
+
     prompt = f"""Ты — инвестиционный аналитик. Проведи глубокий анализ рыночной позиции компании «{company_name}».
 
 ## Биржевые данные компании
 {stock_text}
+
+## Фундаментальные показатели (Yahoo Finance / Google Finance)
+{fund_text}
 
 ## Состояние мировых рынков (KASE / AIX / NYSE / NASDAQ / LSE)
 {index_text}
@@ -632,6 +744,7 @@ async def analyze_company_risks_parallel(
     api_key: str,
     lang: str = "ru",
     on_stage: Any = None,  # optional callable(stage_text: str)
+    competitor_news: list[dict[str, Any]] | None = None,  # {competitor_name, title, source, pub_date}
 ) -> dict[str, Any]:
     """
     11-agent distributed pipeline:
@@ -744,14 +857,46 @@ async def analyze_company_risks_parallel(
     pr_e_txt = "\n".join(f"- [{e.get('position','')}] {e.get('text','')[:150]}" for e in pr_emails[:5]) or ""
     gr_e_txt = "\n".join(f"- [{e.get('position','')}] {e.get('text','')[:150]}" for e in gr_emails[:5]) or ""
 
-    stock = finance.get("stock") if finance else None
-    fin_txt = (f"Тикер: {stock.get('ticker')} | Цена: {stock.get('last')}"
-               if stock else "Не торгуется публично.")
+    finance = finance or {}
+    stock = finance.get("stock")
+    # fundamentals: either nested under "fundamentals" key (full market data)
+    # or the finance dict itself contains sector/industry (passed from _run_combined_job)
+    _fund = finance.get("fundamentals") or (finance if finance.get("sector") or finance.get("trailing_pe") else {})
+    _fin_parts = []
+    if stock:
+        _fin_parts.append(f"Тикер: {stock.get('ticker')} | Цена: {stock.get('last')}")
+    else:
+        _fin_parts.append("Не торгуется публично.")
+    if _fund.get("sector"):         _fin_parts.append(f"Сектор: {_fund['sector']}")
+    if _fund.get("industry"):       _fin_parts.append(f"Индустрия: {_fund['industry']}")
+    if _fund.get("market_cap_fmt"): _fin_parts.append(f"Рыночная кап.: {_fund['market_cap_fmt']}")
+    if _fund.get("trailing_pe"):    _fin_parts.append(f"P/E: {_fund['trailing_pe']}")
+    if _fund.get("beta"):           _fin_parts.append(f"Бета: {_fund['beta']}")
+    if _fund.get("revenue_growth"): _fin_parts.append(f"Рост выручки: {_fund['revenue_growth']}")
+    if _fund.get("profit_margins"): _fin_parts.append(f"Маржа прибыли: {_fund['profit_margins']}")
+    if _fund.get("debt_to_equity"): _fin_parts.append(f"Долг/Капитал: {_fund['debt_to_equity']}")
+    fin_txt = " | ".join(_fin_parts)
 
     if on_stage:
         on_stage("🧠 Анализ рисков по категориям…")
 
+    comp_txt = ""
+    if competitor_news:
+        by_name: dict[str, list] = {}
+        for cn in competitor_news:
+            n = cn.get("competitor_name", "?")
+            by_name.setdefault(n, []).append(cn)
+        parts = []
+        for cname, arts in list(by_name.items())[:5]:
+            lines = "\n".join(
+                f"  - {a.get('title', '')[:120]} [{a.get('source', '')}]"
+                for a in arts[:10]
+            )
+            parts.append(f"{cname}:\n{lines}")
+        comp_txt = "\n\n".join(parts)
+
     def _combined_analysis() -> dict:
+        comp_section = f"\n\n=== КОНКУРЕНТЫ (учти их активность при оценке рисков нашей компании) ===\n{comp_txt}" if comp_txt else ""
         prompt = f"""Компания: «{company_name}». Дата: {today_str}.
 
 === НОВОСТИ ({len(filtered)} релевантных) ===
@@ -773,9 +918,9 @@ YouTube: {yt_txt}
 {pr_e_txt}
 
 === РЫНОК ===
-{fin_txt}
+{fin_txt}{comp_section}
 
-Проанализируй ВСЕ 5 категорий риска и дай итоговую оценку.
+Проанализируй ВСЕ 5 категорий риска и дай итоговую оценку. Если конкуренты активны в какой-то категории — это повышает риск нашей компании в той же категории (market, pr, hr и т.д.).
 
 JSON (строго такая структура):
 {{
@@ -904,6 +1049,81 @@ def filter_articles(
 
         if bi < len(batches) - 1:
             _time.sleep(3)
+
+    return sorted(all_selected)
+
+
+def filter_competitor_articles(
+    articles: list[dict],  # list of {competitor_name, title, source, pub_date}
+    our_company: str,
+    api_key: str,
+) -> list[int]:
+    """
+    AI agent that selects competitor articles relevant to OUR company's risk.
+    Returns sorted list of selected indices (same interface as filter_articles).
+    Synchronous — call via asyncio.to_thread().
+    """
+    import anthropic as _a, time as _time
+
+    if not articles:
+        return []
+
+    c = _a.Anthropic(api_key=api_key, max_retries=0)
+
+    def _call(prompt: str) -> dict:
+        attempt = 0
+        while True:
+            try:
+                msg = c.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=512,
+                    system="JSON API. Respond ONLY with a valid JSON object. No markdown.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                raw = msg.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+                return json.loads(raw)
+            except Exception as _e:
+                if "overloaded" in str(_e):
+                    wait = min(10 * (2 ** attempt), 120)
+                    attempt += 1
+                    _time.sleep(wait)
+                else:
+                    logger.warning("filter_competitor_articles failed: %r", _e)
+                    return {"relevant": []}
+
+    all_selected: list[int] = []
+    batches = [articles[i:i + 100] for i in range(0, len(articles), 100)]
+
+    for bi, batch in enumerate(batches):
+        if not batch:
+            continue
+        lines = "\n".join(
+            f"[{i}] [{a.get('competitor_name','')}] {a.get('title','')} | {a.get('source','')} | {a.get('pub_date','')}"
+            for i, a in enumerate(batch)
+        )
+        result = _call(
+            f"Ты — аналитик рисков компании «{our_company}».\n\n"
+            f"Ниже список новостей о КОНКУРЕНТАХ. Отбери только те, которые могут создать РИСК для «{our_company}»:\n"
+            f"- Конкурент активно нанимает сотрудников (HR-риск: переманивание кадров)\n"
+            f"- Конкурент получил крупный контракт или выиграл тендер (market-риск)\n"
+            f"- Конкурент запустил новый продукт/проект (market-риск)\n"
+            f"- Конкурент получил господдержку, льготы, регуляторное преимущество (gr-риск)\n"
+            f"- Скандал у конкурента, который может переключить внимание СМИ на всю отрасль (media/pr-риск)\n"
+            f"- Банкротство/проблемы конкурента — клиенты ищут замену (market-шанс, но и риск волатильности)\n\n"
+            f"ОТКЛОНЯЙ: общий фон, нерелевантные упоминания, рекламу.\n\n"
+            f"Верни JSON: {{\"relevant\": [0, 3, 7, ...]}} — только индексы (0-based).\n\n"
+            f"{lines}"
+        )
+        indices = result.get("relevant", [])
+        offset = bi * 100
+        kept = [offset + i for i in indices if isinstance(i, int) and 0 <= i < len(batch)]
+        all_selected.extend(kept)
+        logger.info("filter_competitor_articles batch %d: %d/%d kept", bi, len(kept), len(batch))
+
+        if bi < len(batches) - 1:
+            _time.sleep(2)
 
     return sorted(all_selected)
 

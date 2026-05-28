@@ -203,8 +203,9 @@ async def analyze_ci(
 
     try:
         response = await client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1500,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            system="JSON API. Respond ONLY with a valid JSON object. No markdown, no explanation.",
             messages=[{"role": "user", "content": prompt}],
         )
         text = ""
@@ -213,12 +214,11 @@ async def analyze_ci(
                 text = block.text.strip()
                 break
         if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
+            text = "\n".join(text.split("\n")[1:]).rsplit("```", 1)[0].strip()
         import json
         return json.loads(text)
     except Exception as e:
-        logger.exception("CI analysis failed for %s", company_name)
+        logger.exception("CI analysis failed for %s: %r", company_name, e)
         return {
             "summary": "Анализ временно недоступен.",
             "threat_level": "medium",

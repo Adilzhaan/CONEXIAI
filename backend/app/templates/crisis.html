@@ -12,7 +12,7 @@
     </div>
     <nav class="sidebar-nav">
       <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Risk Intelligence</a>
-      <a href="/companies/{{ company.id }}/crisis" class="sidebar-item active"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center</a>
+<a href="/companies/{{ company.id }}/crisis" class="sidebar-item active"><span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection</a>
       <div class="sidebar-section-label">Система</div>
       <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
     </nav>
@@ -22,850 +22,185 @@
     <div class="sidebar-topbar">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">Crisis Protection Center</div>
-        <div style="font-size:11px;color:var(--text-muted)">{{ company.name }} — управление кризисными коммуникациями</div>
+        <div style="font-size:11px;color:var(--text-muted)">{{ company.name }} — автоматические действия агента</div>
       </div>
-      <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
+      <div style="display:flex;gap:8px;align-items:center">
+        {% if latest and latest.score and latest.score >= 50 %}
+        <button onclick="runAgentNow()" id="run-agent-btn"
+          style="display:flex;align-items:center;gap:6px;padding:5px 12px;
+                 background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);
+                 border-radius:8px;color:#f87171;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s"
+          onmouseover="this.style.background='rgba(239,68,68,0.25)'"
+          onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Запустить агента
+        </button>
+        {% endif %}
+        <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← Обзор</a>
+      </div>
     </div>
 
     <div class="sidebar-wrap">
       <style>
-        /* ── Urgency filter tabs ── */
-        .urgency-tabs { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
-        .urgency-tab {
-          padding:6px 16px; border-radius:8px; font-size:12px; font-weight:600;
-          cursor:pointer; border:1px solid rgba(255,255,255,0.10);
-          background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.50);
-          transition:all 0.15s; font-family:inherit;
-        }
-        .urgency-tab:hover { color:var(--text); border-color:rgba(255,255,255,0.20); }
-        .urgency-tab.active { background:rgba(124,58,237,0.18); color:#a78bfa; border-color:rgba(124,58,237,0.35); }
-        .urgency-tab.urgent.active  { background:rgba(248,113,113,0.14); color:#f87171; border-color:rgba(248,113,113,0.35); }
-        .urgency-tab.important.active { background:rgba(251,191,36,0.12); color:#fbbf24; border-color:rgba(251,191,36,0.30); }
-        .urgency-tab.soft.active { background:rgba(52,211,153,0.12); color:#34d399; border-color:rgba(52,211,153,0.28); }
-
-        /* ── Action cards ── */
-        .actions-grid { display:flex; flex-direction:column; gap:10px; margin-bottom:28px; }
-        .action-card {
-          background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.13);
-          border-radius:14px; padding:16px 18px; border-left:3px solid transparent;
-          transition:border-color 0.15s, box-shadow 0.15s, background 0.15s;
-        }
-        .action-card:hover { background:rgba(255,255,255,0.11); box-shadow:0 4px 24px rgba(0,0,0,0.25); }
-        .action-card[data-urgency="urgent"]   { border-left-color:#f87171; }
-        .action-card[data-urgency="important"]{ border-left-color:#fbbf24; }
-        .action-card[data-urgency="soft"]     { border-left-color:#34d399; }
-
-        .action-card-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-        .urgency-badge {
-          display:inline-flex; align-items:center; gap:4px;
-          font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-          padding:3px 9px; border-radius:99px;
-        }
-        .urgency-badge.urgent   { background:rgba(248,113,113,0.14); color:#f87171; }
-        .urgency-badge.important{ background:rgba(251,191,36,0.12); color:#fbbf24; }
-        .urgency-badge.soft     { background:rgba(52,211,153,0.12); color:#34d399; }
-
-        .action-scenario-tag {
-          font-size:11px; color:rgba(255,255,255,0.35); padding:2px 8px; border-radius:6px;
-          background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
-        }
-        .action-text {
-          font-size:13px; font-weight:600; color:var(--text); margin-bottom:10px; line-height:1.5;
-        }
-        .action-footer {
-          display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
-        }
-        .action-meta {
-          display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-          font-size:11px; color:rgba(255,255,255,0.35);
-        }
-        .action-meta-item { display:flex; align-items:center; gap:4px; }
-        .delegated-badge {
-          display:inline-flex; align-items:center; gap:4px;
-          font-size:11px; font-weight:600; color:#34d399;
-          background:rgba(52,211,153,0.10); border:1px solid rgba(52,211,153,0.22);
-          padding:2px 8px; border-radius:99px;
-        }
-        .delegate-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          font-size:12px; font-weight:600; padding:6px 14px; border-radius:8px;
-          background:rgba(124,58,237,0.12); color:#a78bfa;
-          border:1px solid rgba(124,58,237,0.25); cursor:pointer; transition:all 0.15s;
-          font-family:inherit; white-space:nowrap; flex-shrink:0;
-        }
-        .delegate-btn:hover { background:rgba(124,58,237,0.22); border-color:rgba(124,58,237,0.45); }
-        .delegate-btn.done { background:rgba(52,211,153,0.10); color:#34d399; border-color:rgba(52,211,153,0.22); }
-        .complete-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          font-size:12px; font-weight:600; padding:6px 14px; border-radius:8px;
-          background:rgba(52,211,153,0.08); color:#34d399;
-          border:1px solid rgba(52,211,153,0.22); cursor:pointer; transition:all 0.15s;
-          font-family:inherit; white-space:nowrap; flex-shrink:0;
-        }
-        .complete-btn:hover { background:rgba(52,211,153,0.18); border-color:rgba(52,211,153,0.40); }
-        .complete-btn.completed { background:rgba(52,211,153,0.18); color:#34d399; border-color:rgba(52,211,153,0.40); opacity:0.7; cursor:default; }
-        .action-card.completed-card { opacity:0.55; }
-        .action-card.completed-card .action-text { text-decoration:line-through; color:var(--text-muted); }
-
-        /* ── Scenario cards ── */
-        .crisis-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
-        @media(max-width:800px){ .crisis-grid { grid-template-columns:1fr; } }
-
-        .scenario-select-card {
-          background:rgba(255,255,255,0.05); border:2px solid var(--border); border-radius:var(--radius);
-          padding:18px 20px; cursor:pointer; transition:border-color 0.2s, box-shadow 0.2s;
-          position:relative; overflow:hidden;
-        }
-        .scenario-select-card:hover { box-shadow:0 4px 20px rgba(124,58,237,0.20); }
-        .scenario-select-card.active { border-color:var(--sc-color); box-shadow:0 0 0 3px var(--sc-glow); }
-        .scenario-select-card .sc-accent { position:absolute; top:0; left:0; right:0; height:3px; background:var(--sc-color); }
-        .sc-badge {
-          display:inline-flex; align-items:center; gap:5px;
-          font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
-          padding:2px 8px; border-radius:99px; margin-bottom:10px;
-          background:var(--sc-bg); color:var(--sc-color);
-        }
-        .sc-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:6px; }
-        .sc-trigger { font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:12px; }
-        .sc-steps { display:flex; flex-direction:column; gap:5px; }
-        .sc-step { display:flex; align-items:flex-start; gap:8px; font-size:11px; color:var(--text-muted); line-height:1.4; }
-        .sc-step-num {
-          width:18px; height:18px; border-radius:50%; flex-shrink:0;
-          display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700;
-          background:var(--sc-bg); color:var(--sc-color);
-        }
-        .sc-step-tags { display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; }
-        .sc-tag { font-size:9px; font-weight:600; padding:1px 5px; border-radius:3px; background:var(--bg); color:var(--text-muted); border:1px solid var(--border); }
-
-        /* ── Comm panel ── */
-        .comm-panel { background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.15); }
-        .comm-panel-hdr { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
-        .comm-panel-title { font-size:13px; font-weight:700; color:var(--text); }
-        .comm-type-tabs { display:flex; gap:6px; }
-        .comm-tab { padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--text-muted); transition:all 0.15s; font-family:inherit; }
-        .comm-tab:hover { color:var(--text); border-color:var(--text-muted); }
-        .comm-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-        .comm-body { padding:20px; }
-        .comm-textarea { width:100%; min-height:240px; padding:14px 16px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); font-size:13px; line-height:1.7; color:var(--text); font-family:inherit; resize:vertical; outline:none; transition:border-color 0.2s; }
-        .comm-textarea:focus { border-color:var(--border-focus); }
-        .comm-actions { display:flex; gap:8px; margin-top:12px; align-items:center; }
-        .generating-state { display:none; align-items:center; gap:10px; font-size:13px; color:var(--text-muted); padding:40px 0; justify-content:center; }
-        .gen-spinner { width:20px; height:20px; border:2px solid rgba(124,58,237,0.25); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
-        .copy-success { font-size:11px; color:#34d399; font-weight:600; display:none; }
-
-        /* ── Scenario editor ── */
-        .sc-edit-btn { position:absolute; top:12px; right:12px; display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.50); cursor:pointer; transition:all 0.13s; z-index:2; }
-        .sc-edit-btn:hover { border-color:rgba(255,255,255,0.22); color:#fff; background:rgba(255,255,255,0.10); }
-        .sc-edit-btn svg { width:12px; height:12px; }
-        .sc-editor { display:none; margin-top:14px; border-top:1px solid rgba(255,255,255,0.08); padding-top:14px; }
-        .sc-editor.open { display:block; }
-        .sc-field-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:rgba(255,255,255,0.40); margin-bottom:5px; }
-        .sc-input { width:100%; padding:7px 10px; border:1px solid rgba(255,255,255,0.12); border-radius:7px; font-size:13px; font-family:inherit; color:#ffffff; background:rgba(255,255,255,0.05); outline:none; transition:border-color 0.15s; box-sizing:border-box; }
-        .sc-input:focus { border-color:#93c5fd; }
-        .sc-input.small { font-size:12px; padding:5px 8px; }
-        .sc-step-editor { display:flex; gap:8px; align-items:flex-start; padding:10px 10px 10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
-        .sc-step-editor:last-child { border-bottom:none; }
-        .sc-step-drag { color:rgba(255,255,255,0.18); cursor:grab; padding-top:8px; font-size:13px; flex-shrink:0; }
-        .sc-step-fields { flex:1; display:flex; flex-direction:column; gap:6px; }
-        .sc-step-row { display:grid; grid-template-columns:1fr 120px 100px; gap:6px; }
-        .sc-step-del { width:26px; height:26px; border-radius:6px; flex-shrink:0; margin-top:4px; border:none; background:none; cursor:pointer; color:rgba(255,255,255,0.40); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
-        .sc-step-del:hover { background:rgba(248,113,113,0.12); color:#f87171; }
-        .sc-step-del svg { width:13px; height:13px; }
-        .sc-add-step { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; border:1.5px dashed rgba(255,255,255,0.18); background:none; color:rgba(255,255,255,0.50); cursor:pointer; transition:all 0.13s; margin-top:8px; width:100%; justify-content:center; }
-        .sc-add-step:hover { border-color:#93c5fd; color:#3b82f6; }
-        .sc-edit-actions { display:flex; gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); }
-        .sc-save-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 16px; border-radius:8px; font-size:13px; font-weight:600; background:#111827; color:#fff; border:none; cursor:pointer; transition:background 0.13s; }
-        .sc-save-btn:hover { background:#1f2937; }
-        .sc-save-btn:disabled { opacity:0.5; cursor:not-allowed; }
-        .sc-cancel-btn { display:inline-flex; align-items:center; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:500; background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.50); border:1px solid rgba(255,255,255,0.12); cursor:pointer; transition:all 0.13s; }
-        .sc-cancel-btn:hover { border-color:rgba(255,255,255,0.18); color:rgba(255,255,255,0.80); }
-        .sc-saved-hint { font-size:12px; color:#34d399; font-weight:600; display:none; }
-
-        /* ── Delegate modal ── */
-        .delegate-modal-overlay { display:none; position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.70); backdrop-filter:blur(8px); align-items:center; justify-content:center; padding:16px; }
-        .delegate-modal-overlay.open { display:flex; }
-        .delegate-modal { background:rgba(15,10,30,0.97); border:1px solid rgba(255,255,255,0.12); border-radius:20px; width:100%; max-width:480px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5); }
-        .delegate-modal-hdr { padding:20px 24px 16px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
-        .delegate-modal-title { font-size:15px; font-weight:700; }
-        .delegate-modal-body { padding:20px 24px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; }
-        .delegate-task-preview { background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.20); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--text); line-height:1.5; }
-        .delegate-fld label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:rgba(255,255,255,0.40); display:block; margin-bottom:8px; }
-        .delegate-fld textarea {
-          width:100%; padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.10);
-          background:rgba(255,255,255,0.05); color:#fff; font-size:13px; outline:none; font-family:inherit;
-          transition:border-color .15s; resize:vertical;
-        }
-        .delegate-fld textarea:focus { border-color:#7c3aed; }
-        .delegate-modal-footer { padding:16px 24px; border-top:1px solid rgba(255,255,255,0.08); display:flex; justify-content:flex-end; gap:10px; flex-shrink:0; }
-
-        /* member picker cards */
-        .member-picker { display:flex; flex-direction:column; gap:8px; }
-        .member-card {
-          display:flex; align-items:center; gap:12px; padding:10px 14px;
-          border-radius:12px; border:1.5px solid rgba(255,255,255,0.08);
-          background:rgba(255,255,255,0.03); cursor:pointer;
-          transition:border-color .15s, background .15s;
-        }
-        .member-card:hover { border-color:rgba(124,58,237,0.40); background:rgba(124,58,237,0.06); }
-        .member-card.selected { border-color:#7c3aed; background:rgba(124,58,237,0.12); }
-        .member-card-avatar {
-          width:36px; height:36px; border-radius:9px; flex-shrink:0;
-          display:flex; align-items:center; justify-content:center;
-          font-size:14px; font-weight:700; color:#fff;
-        }
-        .member-card-name { font-size:13px; font-weight:600; color:var(--text); }
-        .member-card-sub  { font-size:11px; color:var(--text-muted); margin-top:2px; }
-        .member-card-check {
-          margin-left:auto; width:20px; height:20px; border-radius:50%;
-          border:1.5px solid rgba(255,255,255,0.15); flex-shrink:0;
-          display:flex; align-items:center; justify-content:center; transition:all .15s;
-        }
-        .member-card.selected .member-card-check {
-          background:#7c3aed; border-color:#7c3aed;
-        }
-
-        .no-analysis { text-align:center; padding:60px 20px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:var(--radius); }
-
-        .sec-hdr-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-        .sec-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); }
-        .actions-count-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(255,255,255,0.07); color:var(--text-muted); border:1px solid rgba(255,255,255,0.10); }
+        .ca-run { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;margin-bottom:14px;overflow:hidden }
+        .ca-run-hdr { display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07);cursor:pointer }
+        .ca-run-hdr:hover { background:rgba(255,255,255,0.03) }
+        .ca-score { font-size:22px;font-weight:800;line-height:1 }
+        .ca-run-meta { flex:1 }
+        .ca-run-title { font-size:13px;font-weight:600;color:var(--text) }
+        .ca-run-sub { font-size:11px;color:var(--text-muted);margin-top:2px }
+        .ca-actions { padding:12px 18px;display:flex;flex-direction:column;gap:8px }
+        .ca-action { display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.07) }
+        .ca-action-icon { width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px }
+        .ca-action-body { flex:1;min-width:0 }
+        .ca-action-title { font-size:12px;font-weight:600;color:var(--text) }
+        .ca-action-sub { font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1.4 }
+        .ca-status { font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;flex-shrink:0;margin-top:2px }
+        .ca-status-sent { background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28) }
+        .ca-status-error { background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.28) }
+        .ca-status-logged { background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28) }
+        .ca-status-created { background:rgba(37,99,235,0.12);color:#60a5fa;border:1px solid rgba(37,99,235,0.28) }
+        .ca-empty { text-align:center;padding:60px 20px;color:var(--text-muted) }
       </style>
 
-      {% if not latest or not latest.scenarios %}
-        <div class="no-analysis">
-          <div style="margin-bottom:12px"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:6px">Нет данных для Crisis Protection Center</div>
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Сначала запустите анализ рисков, чтобы получить сценарии</div>
-          <a href="/companies/{{ company.id }}" class="btn btn-primary">← Запустить анализ</a>
-        </div>
-
-      {% else %}
-        {% set scenarios = latest.scenarios %}
-        {% set sc_meta = {
-          'low':    ('#34d399', 'rgba(52,211,153,0.10)',  'rgba(52,211,153,0.22)'),
-          'medium': ('#fbbf24', 'rgba(217,119,6,0.08)',   'rgba(217,119,6,0.15)'),
-          'high':   ('#f87171', 'rgba(248,113,113,0.10)', 'rgba(248,113,113,0.22)'),
-        } %}
-        {% set urgency_map = {'high': 'urgent', 'medium': 'important', 'low': 'soft'} %}
-        {% set urgency_label = {'high': 'Срочно', 'medium': 'Важно', 'low': 'Мягкое реагирование'} %}
-
-        <!-- ══ SECTION 1: Actions to Avoid Crisis ══ -->
-        {% set all_actions = [] %}
-        {% for sc in scenarios %}
-          {% set level = sc.level if sc.level in sc_meta else 'medium' %}
-          {% for step in sc.steps %}
-            {% set _ = all_actions.append({'sc_id': sc.id|string, 'sc_label': sc.label, 'step_idx': loop.index0, 'action': step.action, 'owner': step.owner, 'deadline': step.deadline, 'delegated_to': step.delegated_to if step.delegated_to is defined else '', 'completed': step.completed if step.completed is defined else false, 'level': level}) %}
-          {% endfor %}
-        {% endfor %}
-
-        <div style="margin-bottom:28px">
-          <div class="sec-hdr-row">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="sec-label">Действия по предотвращению кризиса</span>
-              <span class="actions-count-badge" id="actions-count">{{ all_actions|length }}</span>
-            </div>
-          </div>
-
-          <!-- Filter tabs -->
-          <div class="urgency-tabs">
-            <button class="urgency-tab active" data-filter="all" onclick="filterActions('all', this)">Все</button>
-            <button class="urgency-tab urgent" data-filter="urgent" onclick="filterActions('urgent', this)">
-              🔴 Срочно
-              <span style="margin-left:4px;font-size:10px;opacity:0.7">
-                ({{ all_actions | selectattr('level', 'eq', 'high') | list | length }})
-              </span>
-            </button>
-            <button class="urgency-tab important" data-filter="important" onclick="filterActions('important', this)">
-              🟡 Важно
-              <span style="margin-left:4px;font-size:10px;opacity:0.7">
-                ({{ all_actions | selectattr('level', 'eq', 'medium') | list | length }})
-              </span>
-            </button>
-            <button class="urgency-tab soft" data-filter="soft" onclick="filterActions('soft', this)">
-              🟢 Мягкое реагирование
-              <span style="margin-left:4px;font-size:10px;opacity:0.7">
-                ({{ all_actions | selectattr('level', 'eq', 'low') | list | length }})
-              </span>
-            </button>
-          </div>
-
-          <div class="actions-grid" id="actions-grid">
-            {% for a in all_actions %}
-              {% set urg = urgency_map.get(a.level, 'important') %}
-              {% set ulabel = urgency_label.get(a.level, 'Важно') %}
-              <div class="action-card {% if a.completed %}completed-card{% endif %}" data-urgency="{{ urg }}" data-sc="{{ a.sc_id }}" data-step="{{ a.step_idx }}" id="action-card-{{ a.sc_id }}-{{ a.step_idx }}">
-                <div class="action-card-top">
-                  <span class="urgency-badge {{ urg }}">{{ ulabel }}</span>
-                  <span class="action-scenario-tag">{{ a.sc_label }}</span>
-                </div>
-                <div class="action-text">{{ a.action }}</div>
-                <div class="action-footer">
-                  <div class="action-meta">
-                    {% if a.owner %}
-                      <span class="action-meta-item">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        {{ a.owner }}
-                      </span>
-                    {% endif %}
-                    {% if a.deadline %}
-                      <span class="action-meta-item">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        {{ a.deadline }}
-                      </span>
-                    {% endif %}
-                    {% if a.delegated_to %}
-                      <span class="delegated-badge" id="del-badge-{{ a.sc_id }}-{{ a.step_idx }}">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Делегировано: {{ a.delegated_to }}
-                      </span>
-                    {% else %}
-                      <span class="delegated-badge" id="del-badge-{{ a.sc_id }}-{{ a.step_idx }}" style="display:none">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Делегировано
-                      </span>
-                    {% endif %}
-                  </div>
-                  <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
-                    <button class="delegate-btn {% if a.delegated_to %}done{% endif %}"
-                            id="del-btn-{{ a.sc_id }}-{{ a.step_idx }}"
-                            onclick="openDelegate('{{ a.sc_id }}', {{ a.step_idx }}, {{ a.action | tojson }})">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                      {% if a.delegated_to %}Переназначить{% else %}Делегировать{% endif %}
-                    </button>
-                    <button class="complete-btn {% if a.completed %}completed{% endif %}"
-                            id="done-btn-{{ a.sc_id }}-{{ a.step_idx }}"
-                            onclick="markComplete('{{ a.sc_id }}', {{ a.step_idx }}, this)">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                      {% if a.completed %}Выполнено{% else %}Выполнено{% endif %}
-                    </button>
-                    <button class="delegate-btn"
-                            id="agent-btn-{{ a.sc_id }}-{{ a.step_idx }}"
-                            onclick="runAgentStep('{{ a.sc_id }}', {{ a.step_idx }}, this)"
-                            title="Выполнить этот шаг через AI-агента">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
-                      Агент
-                    </button>
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-
-            {% if not all_actions %}
-              <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px">
-                Нет действий для отображения
-              </div>
-            {% endif %}
+      {% if latest %}
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 20px;flex:1;min-width:140px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Текущий риск-скор</div>
+          {% set s = latest.score | int %}
+          <div style="font-size:32px;font-weight:800;color:{% if s >= 65 %}#f87171{% elif s >= 50 %}#fbbf24{% else %}#34d399{% endif %}">{{ s }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+            {% if s >= 65 %}Высокий риск — агент активен
+            {% elif s >= 50 %}Средний риск — агент мониторит
+            {% else %}Нормальный — агент в ожидании{% endif %}
           </div>
         </div>
-
-        <!-- ══ SECTION 2: Scenario selector ══ -->
-        <div style="margin-bottom:20px">
-          <div class="sec-hdr-row">
-            <span class="sec-label">Сценарии реагирования</span>
-          </div>
-          <div class="crisis-grid" id="scenario-grid">
-            {% for sc in scenarios %}
-              {% set level = sc.level if sc.level in sc_meta else 'medium' %}
-              {% set color, bg, glow = sc_meta[level] %}
-              <div class="scenario-select-card {% if loop.first %}active{% endif %}"
-                   id="sc-card-{{ sc.id }}"
-                   style="--sc-color:{{ color }};--sc-bg:{{ bg }};--sc-glow:{{ glow }}"
-                   onclick="selectScenario('{{ sc.id }}', this)">
-                <div class="sc-accent"></div>
-                <button class="sc-edit-btn" onclick="event.stopPropagation(); toggleScEdit('{{ sc.id }}')" title="Редактировать">
-                  <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.5 1.5l3 3L4 13H1v-3L9.5 1.5z"/></svg>
-                  Изменить
-                </button>
-                <div class="sc-badge">Сценарий {{ sc.id }} · {{ level }}</div>
-                <div class="sc-title" id="sc-title-{{ sc.id }}">{{ sc.label }}</div>
-                {% if sc.trigger %}
-                  <div class="sc-trigger" id="sc-trigger-{{ sc.id }}">{{ sc.trigger }}</div>
-                {% endif %}
-                <div class="sc-steps" id="sc-steps-view-{{ sc.id }}">
-                  {% for step in sc.steps[:4] %}
-                    <div class="sc-step">
-                      <div class="sc-step-num">{{ loop.index }}</div>
-                      <div>
-                        <div>{{ step.action }}</div>
-                        <div class="sc-step-tags">
-                          {% if step.owner %}<span class="sc-tag">{{ step.owner }}</span>{% endif %}
-                          {% if step.deadline %}<span class="sc-tag">⏱ {{ step.deadline }}</span>{% endif %}
-                          {% if step.delegated_to is defined and step.delegated_to %}<span class="sc-tag" style="color:#34d399;border-color:rgba(52,211,153,0.3)">✓ {{ step.delegated_to }}</span>{% endif %}
-                        </div>
-                      </div>
-                    </div>
-                  {% endfor %}
-                  {% if sc.steps|length > 4 %}
-                    <div style="font-size:11px;color:var(--text-muted);padding-left:26px">+{{ sc.steps|length - 4 }} шагов…</div>
-                  {% endif %}
-                </div>
-
-                <!-- Inline editor -->
-                <div class="sc-editor" id="sc-editor-{{ sc.id }}" onclick="event.stopPropagation()">
-                  <div style="margin-bottom:12px">
-                    <div class="sc-field-lbl">Название сценария</div>
-                    <input class="sc-input" id="sc-label-input-{{ sc.id }}" value="{{ sc.label }}" placeholder="Название" />
-                  </div>
-                  <div style="margin-bottom:14px">
-                    <div class="sc-field-lbl">Триггер (когда применять)</div>
-                    <input class="sc-input" id="sc-trigger-input-{{ sc.id }}" value="{{ sc.trigger or '' }}" placeholder="Например: падение акций более 15%" />
-                  </div>
-                  <div class="sc-field-lbl">Шаги реагирования</div>
-                  <div id="sc-steps-editor-{{ sc.id }}">
-                    {% for step in sc.steps %}
-                    <div class="sc-step-editor" data-idx="{{ loop.index0 }}">
-                      <span class="sc-step-drag">⠿</span>
-                      <div class="sc-step-fields">
-                        <input class="sc-input" placeholder="Действие" value="{{ step.action or '' }}" data-field="action" />
-                        <div class="sc-step-row">
-                          <input class="sc-input small" placeholder="Ответственный" value="{{ step.owner or '' }}" data-field="owner" />
-                          <input class="sc-input small" placeholder="Срок" value="{{ step.deadline or '' }}" data-field="deadline" />
-                          <button class="sc-step-del" onclick="removeStep(this)" title="Удалить шаг">
-                            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4 4l.7 7.5a1 1 0 001 .9h2.6a1 1 0 001-.9L10 4"/></svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    {% endfor %}
-                  </div>
-                  <button class="sc-add-step" onclick="addStep('{{ sc.id }}')">+ Добавить шаг</button>
-                  <div class="sc-edit-actions">
-                    <button class="sc-save-btn" id="sc-save-{{ sc.id }}" onclick="saveScenario('{{ sc.id }}')">Сохранить</button>
-                    <button class="sc-cancel-btn" onclick="toggleScEdit('{{ sc.id }}')">Отмена</button>
-                    <span class="sc-saved-hint" id="sc-saved-{{ sc.id }}">✓ Сохранено</span>
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 20px;flex:1;min-width:140px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Запусков агента</div>
+          <div style="font-size:32px;font-weight:800;color:var(--text)">{{ crisis_runs|length }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">за всё время</div>
         </div>
-
-        <!-- ══ SECTION 3: Communication generator ══ -->
-        <div style="margin-bottom:8px">
-          <div class="sec-hdr-row" style="margin-bottom:12px">
-            <span class="sec-label">Генератор коммуникаций</span>
-          </div>
-          <div class="comm-panel">
-            <div class="comm-panel-hdr">
-              <div class="comm-panel-title">Коммуникации</div>
-              <div class="comm-type-tabs">
-                <button class="comm-tab active" data-type="press" onclick="selectCommType('press', this)">Пресс-релиз</button>
-                <button class="comm-tab" data-type="internal" onclick="selectCommType('internal', this)">Сотрудникам</button>
-                <button class="comm-tab" data-type="regulatory" onclick="selectCommType('regulatory', this)">Регулятору</button>
-              </div>
-            </div>
-            <div class="comm-body">
-              <div class="generating-state" id="gen-state">
-                <div class="gen-spinner"></div>
-                <span>Claude генерирует текст…</span>
-              </div>
-              <textarea class="comm-textarea" id="comm-output"
-                placeholder="Выбери сценарий и нажми «Сгенерировать» — Claude напишет готовый текст коммуникации."></textarea>
-              <div class="comm-actions">
-                <button class="btn btn-primary" onclick="generateComm()" id="gen-btn">▶ Сгенерировать</button>
-                <button class="btn btn-secondary btn-sm" onclick="copyText()" id="copy-btn">⎘ Скопировать</button>
-                <span class="copy-success" id="copy-ok">✓ Скопировано</span>
-                <div style="flex:1"></div>
-                <span style="font-size:11px;color:var(--text-muted)" id="gen-meta"></span>
-              </div>
-            </div>
-          </div>
+        {% set total_actions = namespace(n=0) %}
+        {% for r in crisis_runs %}{% set total_actions.n = total_actions.n + (r.actions|length) %}{% endfor %}
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 20px;flex:1;min-width:140px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Всего действий</div>
+          <div style="font-size:32px;font-weight:800;color:var(--text)">{{ total_actions.n }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">email, meet, лог</div>
         </div>
-
-        <!-- ══ AGENT LOG MODAL ══ -->
-        <div class="delegate-modal-overlay" id="agentLogModal" onclick="if(event.target===this)closeAgentLog()">
-          <div class="delegate-modal" style="max-width:480px">
-            <div class="delegate-modal-hdr">
-              <div>
-                <div class="delegate-modal-title">Лог выполнения агента</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Что сделал AI-агент</div>
-              </div>
-              <button onclick="closeAgentLog()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">×</button>
-            </div>
-            <div id="agent-log-body" style="padding:4px 0;max-height:400px;overflow-y:auto"></div>
-          </div>
-        </div>
-
-        <!-- ══ DELEGATE MODAL ══ -->
-        <div class="delegate-modal-overlay" id="delegateModal" onclick="if(event.target===this)closeDelegateModal()">
-          <div class="delegate-modal">
-            <div class="delegate-modal-hdr">
-              <div>
-                <div class="delegate-modal-title">Делегировать задачу</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Назначить ответственного из команды</div>
-              </div>
-              <button onclick="closeDelegateModal()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:2px 6px">×</button>
-            </div>
-            <div class="delegate-modal-body">
-              <div class="delegate-task-preview" id="delegate-task-text"></div>
-
-              <div class="delegate-fld">
-                <label>Назначить участнику</label>
-                {% set avatarColors = ['#7c3aed','#2563eb','#16a34a','#d44040','#d97706','#0891b2','#be185d'] %}
-                {% set all_members = [] %}
-                {% for e in employees %}
-                  {% set _ = all_members.append({'id': e.id, 'name': e.full_name, 'sub': e.position or e.department or '', 'email': e.email or '', 'type': 'employee'}) %}
-                {% endfor %}
-                {% for m in members %}
-                  {% if not all_members | selectattr('email', 'eq', m.invited_email) | list %}
-                    {% set role_labels = {'admin': 'Admin', 'media': 'InfoField & Media', 'hr': 'Human Resources', 'gr': 'Gov. Relations', 'pr': 'PR Environment', 'market': 'Market & Industry'} %}
-                    {% set _ = all_members.append({'id': m.id, 'name': m.invited_email, 'sub': role_labels.get(m.role, m.role or 'Участник'), 'email': m.invited_email, 'type': 'member'}) %}
-                  {% endif %}
-                {% endfor %}
-
-                {% if all_members %}
-                <div class="member-picker" id="member-picker">
-                  {% for p in all_members %}
-                    {% set ac = avatarColors[loop.index0 % avatarColors|length] %}
-                    <div class="member-card"
-                         data-name="{{ p.name }}"
-                         data-email="{{ p.email }}"
-                         onclick="selectMember(this)">
-                      <div class="member-card-avatar" style="background:{{ ac }}">{{ p.name[0] | upper }}</div>
-                      <div style="min-width:0">
-                        <div class="member-card-name">{{ p.name }}</div>
-                        {% if p.sub %}<div class="member-card-sub">{{ p.sub }}</div>{% endif %}
-                      </div>
-                      <div class="member-card-check">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                      </div>
-                    </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.10)">
-                  Нет участников команды — добавьте сотрудников в разделе <a href="/companies/{{ company.id }}?tab=team" style="color:var(--accent)">Команда</a>
-                </div>
-                {% endif %}
-              </div>
-
-              <div class="delegate-fld">
-                <label>Комментарий <span style="font-weight:400;text-transform:none">(необязательно)</span></label>
-                <textarea id="delegate-note" rows="2" placeholder="Дополнительный контекст или инструкции…"></textarea>
-              </div>
-            </div>
-            <div class="delegate-modal-footer">
-              <button type="button" onclick="closeDelegateModal()" class="btn btn-ghost btn-sm">Отмена</button>
-              <button type="button" onclick="submitDelegate()" class="btn btn-primary" id="delegate-submit-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                Отправить задание
-              </button>
-            </div>
-          </div>
-        </div>
-
+      </div>
       {% endif %}
+
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:12px">
+        История действий агента
+      </div>
+
+      {% if not crisis_runs %}
+      <div class="ca-empty">
+        <div style="font-size:32px;margin-bottom:12px">🤖</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Агент ещё не запускался</div>
+        <div style="font-size:12px">Агент автоматически активируется при риск-скоре ≥ 50 после каждого анализа</div>
+      </div>
+      {% else %}
+      {% for run in crisis_runs %}
+        {% set sc = run.score | int %}
+        {% set sc_color = '#f87171' if sc >= 65 else '#fbbf24' if sc >= 50 else '#34d399' %}
+        <div class="ca-run">
+          <div class="ca-run-hdr" onclick="toggleRun('run-{{ loop.index }}')">
+            <div class="ca-score" style="color:{{ sc_color }}">{{ sc }}</div>
+            <div class="ca-run-meta">
+              <div class="ca-run-title">{{ run.summary or 'Агент выполнил действия' }}</div>
+              <div class="ca-run-sub">
+                {{ run.run_at[:10] if run.run_at else '' }}
+                {% if run.run_at and run.run_at|length > 10 %} · {{ run.run_at[11:16] }}{% endif %}
+                · {{ run.actions|length }} действий
+              </div>
+            </div>
+            <svg id="chevron-run-{{ loop.index }}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:var(--text-muted)"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="ca-actions" id="run-{{ loop.index }}" style="{% if not loop.first %}display:none{% endif %}">
+            {% if not run.actions %}
+              <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Нет выполненных действий</div>
+            {% endif %}
+            {% for action in run.actions %}
+              {% set atype = action.get('type', 'log') %}
+              <div class="ca-action" style="background:{% if atype == 'email' %}rgba(37,99,235,0.06){% elif atype == 'meet' %}rgba(124,58,237,0.06){% else %}rgba(255,255,255,0.03){% endif %}">
+                <div class="ca-action-icon" style="background:{% if atype == 'email' %}rgba(37,99,235,0.15){% elif atype == 'meet' %}rgba(124,58,237,0.15){% else %}rgba(251,191,36,0.12){% endif %}">
+                  {% if atype == 'email' %}📧
+                  {% elif atype == 'meet' %}📹
+                  {% else %}📋{% endif %}
+                </div>
+                <div class="ca-action-body">
+                  {% if atype == 'email' %}
+                    <div class="ca-action-title">Email → {{ action.get('target', '?') }}</div>
+                    <div class="ca-action-sub">{{ action.get('email', '') }}</div>
+                    {% if action.get('task') %}
+                    <div class="ca-action-sub" style="margin-top:4px;color:var(--text)">{{ action.get('task') }}</div>
+                    {% endif %}
+                  {% elif atype == 'meet' %}
+                    <div class="ca-action-title">Google Meet создан</div>
+                    <div class="ca-action-sub">Приглашены: {{ action.get('invited', [])|join(', ') }}</div>
+                    {% if action.get('meet_url') %}
+                    <a href="{{ action.get('meet_url') }}" target="_blank" style="font-size:11px;color:#60a5fa;text-decoration:none">{{ action.get('meet_url') }}</a>
+                    {% endif %}
+                  {% else %}
+                    <div class="ca-action-title">Зафиксировано</div>
+                    <div class="ca-action-sub">{{ action.get('text', '') }}</div>
+                  {% endif %}
+                </div>
+                <div>
+                  {% set st = action.get('status', '') %}
+                  <div class="ca-status ca-status-{{ st }}">
+                    {% if st == 'sent' %}✓ Отправлено
+                    {% elif st == 'created' %}✓ Создано
+                    {% elif st == 'logged' %}✓ Записано
+                    {% elif st == 'error' %}✗ Ошибка
+                    {% elif st == 'skipped' %}— Пропущено
+                    {% else %}{{ st }}{% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+      {% endif %}
+
     </div>
   </div>
 </div>
 
 <script>
-  const companyId = "{{ company.id }}";
-  const runId = "{{ latest.id if latest else '' }}";
-  let activeScenarioId = "{{ (latest.scenarios[0].id if latest and latest.scenarios else '') }}";
-  let activeCommType = "press";
-  let delegateScId = null;
-  let delegateStepIdx = null;
+const COMPANY_ID = "{{ company.id }}";
 
-  let localScenarios = {{ (latest.scenarios if latest and latest.scenarios else []) | tojson | safe }};
-
-  // ── Filter actions ──
-  function filterActions(filter, tabEl) {
-    document.querySelectorAll('.urgency-tab').forEach(t => t.classList.remove('active'));
-    tabEl.classList.add('active');
-
-    const cards = document.querySelectorAll('.action-card');
-    let visible = 0;
-    cards.forEach(c => {
-      const show = filter === 'all' || c.dataset.urgency === filter;
-      c.style.display = show ? '' : 'none';
-      if (show) visible++;
-    });
-    const countEl = document.getElementById('actions-count');
-    if (countEl) countEl.textContent = visible;
+function toggleRun(id) {
+  const el = document.getElementById(id);
+  const idx = id.split('-')[1];
+  const ch = document.getElementById('chevron-' + id);
+  if (el.style.display === 'none') {
+    el.style.display = 'flex';
+    if (ch) ch.style.transform = 'rotate(180deg)';
+  } else {
+    el.style.display = 'none';
+    if (ch) ch.style.transform = '';
   }
+}
 
-  // ── Delegate modal ──
-  function openDelegate(scId, stepIdx, actionText) {
-    delegateScId = scId;
-    delegateStepIdx = stepIdx;
-    document.getElementById('delegate-task-text').textContent = actionText;
-    document.getElementById('delegate-note').value = '';
-    document.querySelectorAll('.member-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById('delegateModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
+async function runAgentNow() {
+  const btn = document.getElementById('run-agent-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Агент работает…';
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/crisis/run-agent`, { method: 'POST' });
+    const d = await r.json();
+    if (d.error) { alert('Ошибка: ' + d.error); btn.disabled = false; btn.textContent = 'Запустить агента'; return; }
+    btn.textContent = `✅ Готово (${(d.actions||[]).length} действий)`;
+    setTimeout(() => window.location.reload(), 1500);
+  } catch(e) {
+    alert('Ошибка сети');
+    btn.disabled = false;
+    btn.textContent = 'Запустить агента';
   }
-
-  function closeDelegateModal() {
-    document.getElementById('delegateModal').classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  function selectMember(card) {
-    document.querySelectorAll('.member-card').forEach(c => c.classList.remove('selected'));
-    card.classList.add('selected');
-  }
-
-  async function submitDelegate() {
-    const selected = document.querySelector('.member-card.selected');
-    if (!selected) { alert('Выберите участника команды'); return; }
-
-    const assigneeName  = selected.dataset.name || '';
-    const assigneeEmail = selected.dataset.email || '';
-    const note = document.getElementById('delegate-note').value.trim();
-
-    const btn = document.getElementById('delegate-submit-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Отправляю…';
-
-    try {
-      const fd = new FormData();
-      fd.append('run_id', runId);
-      fd.append('scenario_id', delegateScId);
-      fd.append('step_index', delegateStepIdx);
-      fd.append('assignee_name', assigneeName);
-      fd.append('assignee_email', assigneeEmail);
-      if (note) fd.append('note', note);
-
-      const res = await fetch(`/companies/${companyId}/crisis/delegate`, { method: 'POST', body: fd });
-      const data = await res.json();
-
-      if (data.ok) {
-        // Update badge + button in the actions grid
-        const badge = document.getElementById(`del-badge-${delegateScId}-${delegateStepIdx}`);
-        const delegateBtn = document.getElementById(`del-btn-${delegateScId}-${delegateStepIdx}`);
-        if (badge) {
-          badge.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Делегировано: ${assigneeName}`;
-          badge.style.display = '';
-        }
-        if (delegateBtn) {
-          delegateBtn.classList.add('done');
-          delegateBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Переназначить`;
-        }
-        // Update localScenarios
-        const sc = localScenarios.find(s => String(s.id) === String(delegateScId));
-        if (sc && sc.steps && sc.steps[delegateStepIdx]) {
-          sc.steps[delegateStepIdx].delegated_to = assigneeName;
-        }
-        closeDelegateModal();
-      } else {
-        alert('Ошибка при делегировании. Попробуйте снова.');
-      }
-    } catch (e) {
-      alert('Ошибка соединения: ' + e.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Отправить задание';
-    }
-  }
-
-  // ── Mark complete ──
-  async function markComplete(scId, stepIdx, btn) {
-    if (btn.classList.contains('completed')) return;
-    btn.disabled = true;
-    try {
-      const fd = new FormData();
-      fd.append('run_id', runId);
-      fd.append('scenario_id', scId);
-      fd.append('step_index', stepIdx);
-      const res = await fetch(`/companies/${companyId}/crisis/complete`, { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.ok) {
-        btn.classList.add('completed');
-        const card = document.getElementById(`action-card-${scId}-${stepIdx}`);
-        if (card) card.classList.add('completed-card');
-        const sc = localScenarios.find(s => String(s.id) === String(scId));
-        if (sc && sc.steps && sc.steps[stepIdx]) sc.steps[stepIdx].completed = true;
-      }
-    } catch (e) { /* silent */ }
-    finally { btn.disabled = false; }
-  }
-
-  // ── Agent execution ──
-  async function runAgentStep(scId, stepIdx, btn) {
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Выполняю…';
-
-    try {
-      const fd = new FormData();
-      fd.append('scenario_id', scId);
-      fd.append('step_index', stepIdx);
-      const res = await fetch(`/companies/${companyId}/crisis/agent/execute`, { method: 'POST', body: fd });
-      const data = await res.json();
-      showAgentLog([data]);
-    } catch(e) {
-      showAgentLog([{status:'error', logs:[{tool:'none', error: e.message}]}]);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = orig;
-    }
-  }
-
-  function showAgentLog(results) {
-    let html = '';
-    for (const r of results) {
-      const step = r.step ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${r.step.action || ''}</div>` : '';
-      for (const log of (r.logs || [])) {
-        const ok = log.status !== 'error';
-        const icon = log.tool === 'send_telegram' ? '✈️' : log.tool === 'send_slack' ? '💬' : log.tool === 'send_email' ? '📧' : '📋';
-        const color = ok ? '#34d399' : '#f87171';
-        const summary = log.result?.summary || log.result?.to || log.result?.platform || log.error || '';
-        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
-          <span style="font-size:18px;flex-shrink:0">${icon}</span>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:${color}">${ok ? '✓' : '✗'} ${log.tool}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${summary}</div>
-            ${log.input?.message ? `<div style="font-size:11px;color:var(--text);margin-top:4px;padding:6px 10px;background:rgba(255,255,255,0.05);border-radius:6px;line-height:1.5">${log.input.message.slice(0,300)}</div>` : ''}
-            ${log.input?.subject ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Тема: ${log.input.subject}</div>` : ''}
-          </div>
-        </div>`;
-      }
-    }
-    document.getElementById('agent-log-body').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-muted)">Нет данных</div>';
-    document.getElementById('agentLogModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeAgentLog() {
-    document.getElementById('agentLogModal').classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  // ── Scenario selector ──
-  function selectScenario(id, el) {
-    activeScenarioId = id;
-    document.querySelectorAll(".scenario-select-card").forEach(c => c.classList.remove("active"));
-    el.classList.add("active");
-  }
-
-  // ── Comm generator ──
-  function selectCommType(type, el) {
-    activeCommType = type;
-    document.querySelectorAll(".comm-tab").forEach(t => t.classList.remove("active"));
-    el.classList.add("active");
-  }
-
-  async function generateComm() {
-    if (!activeScenarioId) return;
-    const btn = document.getElementById("gen-btn");
-    const genState = document.getElementById("gen-state");
-    const output = document.getElementById("comm-output");
-    const meta = document.getElementById("gen-meta");
-    btn.disabled = true;
-    btn.textContent = "Генерирую…";
-    genState.style.display = "flex";
-    output.style.display = "none";
-    output.value = "";
-    meta.textContent = "";
-    const labels = { press: "Пресс-релиз", internal: "Письмо сотрудникам", regulatory: "Письмо регулятору" };
-    try {
-      const fd = new FormData();
-      fd.append("scenario_id", activeScenarioId);
-      fd.append("comm_type", activeCommType);
-      const res = await fetch(`/companies/${companyId}/crisis/generate`, { method: "POST", body: fd });
-      const data = await res.json();
-      genState.style.display = "none";
-      output.style.display = "block";
-      if (data.text) {
-        output.value = data.text;
-        meta.textContent = `${labels[activeCommType]} · Сценарий ${activeScenarioId}`;
-      } else {
-        output.value = "Ошибка: " + (data.error || "неизвестная ошибка");
-      }
-    } catch (e) {
-      genState.style.display = "none";
-      output.style.display = "block";
-      output.value = "Ошибка соединения: " + e.message;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "▶ Сгенерировать";
-    }
-  }
-
-  function copyText() {
-    const output = document.getElementById("comm-output");
-    if (!output.value) return;
-    navigator.clipboard.writeText(output.value).then(() => {
-      const ok = document.getElementById("copy-ok");
-      ok.style.display = "inline";
-      setTimeout(() => ok.style.display = "none", 2000);
-    });
-  }
-
-  // ── Scenario editor ──
-  function toggleScEdit(scId) {
-    const editor = document.getElementById('sc-editor-' + scId);
-    const isOpen = editor.classList.contains('open');
-    document.querySelectorAll('.sc-editor.open').forEach(e => e.classList.remove('open'));
-    if (!isOpen) editor.classList.add('open');
-  }
-
-  function addStep(scId) {
-    const container = document.getElementById('sc-steps-editor-' + scId);
-    const idx = container.children.length;
-    const div = document.createElement('div');
-    div.className = 'sc-step-editor';
-    div.dataset.idx = idx;
-    div.innerHTML = `
-      <span class="sc-step-drag">⠿</span>
-      <div class="sc-step-fields">
-        <input class="sc-input" placeholder="Действие" data-field="action" />
-        <div class="sc-step-row">
-          <input class="sc-input small" placeholder="Ответственный" data-field="owner" />
-          <input class="sc-input small" placeholder="Срок" data-field="deadline" />
-          <button class="sc-step-del" onclick="removeStep(this)">
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4 4l.7 7.5a1 1 0 001 .9h2.6a1 1 0 001-.9L10 4"/></svg>
-          </button>
-        </div>
-      </div>`;
-    container.appendChild(div);
-    div.querySelector('input').focus();
-  }
-
-  function removeStep(btn) { btn.closest('.sc-step-editor').remove(); }
-
-  function readEditorSteps(scId) {
-    return [...document.getElementById('sc-steps-editor-' + scId).querySelectorAll('.sc-step-editor')].map(row => ({
-      action:   row.querySelector('[data-field="action"]').value.trim(),
-      owner:    row.querySelector('[data-field="owner"]').value.trim(),
-      deadline: row.querySelector('[data-field="deadline"]').value.trim(),
-    })).filter(s => s.action);
-  }
-
-  async function saveScenario(scId) {
-    const saveBtn = document.getElementById('sc-save-' + scId);
-    const savedHint = document.getElementById('sc-saved-' + scId);
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Сохраняю…';
-    const label   = document.getElementById('sc-label-input-' + scId).value.trim();
-    const trigger = document.getElementById('sc-trigger-input-' + scId).value.trim();
-    const steps   = readEditorSteps(scId);
-    const sc = localScenarios.find(s => String(s.id) === String(scId));
-    if (sc) { sc.label = label; sc.trigger = trigger; sc.steps = steps; }
-    try {
-      const res = await fetch(`/companies/${companyId}/risk_runs/${runId}/scenarios`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenarios: localScenarios }),
-      });
-      if (!res.ok) throw new Error();
-      document.getElementById('sc-title-' + scId).textContent = label;
-      const trigEl = document.getElementById('sc-trigger-' + scId);
-      if (trigEl) trigEl.textContent = trigger || '';
-      document.getElementById('sc-steps-view-' + scId).innerHTML = steps.slice(0, 4).map((s, i) => `
-        <div class="sc-step"><div class="sc-step-num">${i + 1}</div><div>
-          <div>${s.action}</div>
-          <div class="sc-step-tags">
-            ${s.owner ? `<span class="sc-tag">${s.owner}</span>` : ''}
-            ${s.deadline ? `<span class="sc-tag">⏱ ${s.deadline}</span>` : ''}
-          </div>
-        </div></div>`).join('') +
-        (steps.length > 4 ? `<div style="font-size:11px;color:var(--text-muted);padding-left:26px">+${steps.length - 4} шагов…</div>` : '');
-      savedHint.style.display = 'inline';
-      setTimeout(() => { savedHint.style.display = 'none'; }, 2500);
-      document.getElementById('sc-editor-' + scId).classList.remove('open');
-    } catch (e) { alert('Ошибка при сохранении.'); }
-    finally { saveBtn.disabled = false; saveBtn.textContent = 'Сохранить'; }
-  }
+}
 </script>
 {% endblock %}

@@ -325,9 +325,9 @@
 
             <!-- Competitor rows -->
             {% for cd in (report.competitors_data or []) %}
-            {% set rs = cd.risk or {} %}
-            {% set rs_score = rs.score %}
-            {% if rs_score is not none %}
+            {% set rs = cd.risk if cd.risk is mapping else {} %}
+            {% set rs_score = rs.get('score') %}
+            {% if rs_score is not none and rs_score is number %}
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
               <div style="width:120px;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">
                 {{ cd.name }}
@@ -459,13 +459,36 @@
                     {{ ai_comp.impact }}
                   </div>
                 {% endif %}
-                {% for n in c.news[:5] %}
+                {# ── Отобранные AI новости из основного анализа ── #}
+                {% set _sel_news = comp_news_by_name.get(c.name, []) %}
+                {% if _sel_news %}
+                <div style="margin-bottom:10px">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#a78bfa;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Отобрано AI · {{ _sel_news|length }} источник{{ 'а' if _sel_news|length in [2,3,4] else ('ов' if _sel_news|length > 4 else '') }}
+                  </div>
+                  {% for n in _sel_news[:8] %}
+                  <div class="news-item">
+                    <a href="{{ n.url }}" target="_blank" rel="noopener" style="font-size:12px;font-weight:500;color:var(--text);line-height:1.4;display:block">{{ n.title }}</a>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ n.source }}{% if n.pub_date %} · {{ n.pub_date }}{% endif %}</div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+
+                {# ── Новости из CI-анализа (run_ci) ── #}
+                {% if c.news %}
+                <div style="{% if _sel_news %}border-top:1px solid var(--border);padding-top:10px;margin-top:4px;{% endif %}">
+                  {% if _sel_news %}<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:6px">CI Monitor</div>{% endif %}
+                  {% for n in c.news[:5] %}
                   <div class="news-item">
                     <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:12px;font-weight:500;color:var(--text);line-height:1.4;display:block">{{ n.title }}</a>
                     <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ n.source }}{% if n.pub_date %} · {{ n.pub_date }}{% endif %}</div>
                   </div>
-                {% endfor %}
-                {% if not c.news %}
+                  {% endfor %}
+                </div>
+                {% endif %}
+                {% if not c.news and not _sel_news %}
                   <div style="font-size:12px;color:var(--text-muted)">Новостей не найдено</div>
                 {% endif %}
               </div>

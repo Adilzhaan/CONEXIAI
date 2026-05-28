@@ -322,6 +322,14 @@ async def fetch_serpapi_news(company_name: str, api_key: str, limit: int = 10) -
     return items
 
 
+async def fetch_serpapi_site(company_name: str, domain: str, api_key: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Search a specific domain for company mentions via SerpAPI."""
+    from urllib.parse import urlparse
+    host = urlparse(domain).netloc or domain.lstrip("https://").lstrip("http://").split("/")[0]
+    query = f'site:{host} "{company_name}"'
+    return await _fetch_serpapi_query(query, api_key, gl="kz", hl="ru", limit=limit)
+
+
 async def _fetch_reddit(company_name: str, limit: int = 8) -> list[dict[str, Any]]:
     """Search Reddit via Atom RSS feed — no auth required."""
     query = f'"{company_name.strip()}"'  # exact phrase search
@@ -742,55 +750,75 @@ _HH_HEADERS = {
 _HH_API = "https://api.hh.ru"  # hh.ru = parent; hh.kz redirects here
 
 
-async def fetch_hh_vacancies(company_name: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Fetch open vacancies from hh.kz for HR risk monitoring (mass hiring/layoffs signal)."""
+async def fetch_hh_vacancies(
+    company_name: str,
+    limit: int = 20,
+    serpapi_key: str = "",
+) -> list[dict[str, Any]]:
+    """Fetch hh.kz vacancies via SerpAPI (site:hh.kz) or Google RSS fallback."""
     import asyncio
 
-    async def _by_employer() -> list[dict]:
+    async def _via_serpapi() -> list[dict]:
+        if not serpapi_key:
+            return []
         try:
-            er = await _http.get(
-                f"{_HH_API}/employers?text={quote(company_name)}&per_page=5",
-                headers=_HH_HEADERS,
+            url = (
+                f"https://serpapi.com/search"
+                f"?engine=google"
+                f"&q={quote(f'site:hh.kz {company_name} вакансии')}"
+                f"&gl=kz&hl=ru&num={min(limit, 10)}"
+                f"&api_key={serpapi_key}"
             )
-            er.raise_for_status()
-            employers = er.json().get("items") or []
-            emp_id = None
-            for emp in employers:
-                if company_name.lower() in (emp.get("name") or "").lower():
-                    emp_id = emp["id"]
-                    break
-            if not emp_id and employers:
-                emp_id = employers[0]["id"]
-            if not emp_id:
-                return []
-            vr = await _http.get(
-                f"{_HH_API}/vacancies?employer_id={emp_id}&per_page={limit}&order_by=publication_time",
-                headers=_HH_HEADERS,
-            )
-            vr.raise_for_status()
-            logger.info("hh.kz employer %s: %d vacancies", emp_id, len(vr.json().get("items") or []))
-            return _parse_hh_items(vr.json().get("items") or [])
+            r = await _http.get(url)
+            r.raise_for_status()
+            results = r.json().get("organic_results") or []
+            items: list[dict] = []
+            for res in results[:limit]:
+                title = (res.get("title") or "").strip()
+                link  = res.get("link") or ""
+                if not title:
+                    continue
+                items.append({
+                    "title":    title,
+                    "link":     link,
+                    "pub_date": "",
+                    "source":   "hh.kz",
+                    "text":     (res.get("snippet") or "")[:300],
+                    "type":     "hr",
+                })
+            logger.info("hh.kz SerpAPI: %d vacancies for '%s'", len(items), company_name)
+            return items
         except Exception as e:
-            logger.warning("hh.kz employer search: %r", e)
+            logger.warning("hh.kz SerpAPI error: %r", e)
             return []
 
-    async def _by_text() -> list[dict]:
+    async def _via_rss() -> list[dict]:
         try:
-            tr = await _http.get(
-                f"{_HH_API}/vacancies?text={quote(company_name)}&per_page={limit}&order_by=publication_time",
-                headers=_HH_HEADERS,
-            )
-            tr.raise_for_status()
-            raw = [
-                v for v in (tr.json().get("items") or [])
-                if company_name.lower() in (v.get("employer") or {}).get("name", "").lower()
-            ]
-            return _parse_hh_items(raw)
+            url = f"https://news.google.com/rss/search?q={quote(f'site:hh.kz {company_name}')}&hl=ru&gl=KZ&ceid=KZ:ru"
+            r = await _http.get(url)
+            r.raise_for_status()
+            root = ET.fromstring(r.content)
+            items: list[dict] = []
+            for item in root.findall("./channel/item")[:limit]:
+                title = item.findtext("title", "").strip()
+                link  = item.findtext("link", "").strip()
+                if not title:
+                    continue
+                items.append({
+                    "title":    title,
+                    "link":     link,
+                    "pub_date": "",
+                    "source":   "hh.kz",
+                    "text":     "",
+                    "type":     "hr",
+                })
+            logger.info("hh.kz RSS fallback: %d vacancies for '%s'", len(items), company_name)
+            return items
         except Exception as e:
-            logger.warning("hh.kz text search: %r", e)
+            logger.warning("hh.kz RSS fallback error: %r", e)
             return []
 
-    results = await asyncio.gather(_by_employer(), _by_text())
+    results = await asyncio.gather(_via_serpapi(), _via_rss())
     seen: set[str] = set()
     items: list[dict[str, Any]] = []
     for batch in results:

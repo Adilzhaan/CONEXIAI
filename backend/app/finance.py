@@ -415,6 +415,112 @@ async def _twelve_top_gainers_losers(api_key: str) -> dict[str, list]:
 # Public interface
 # ──────────────────────────────────────────────
 
+def _yf_fundamentals_sync(symbol: str) -> dict[str, Any]:
+    """Fetch sector, industry, and key fundamental ratios via yfinance .info."""
+    try:
+        info = yf.Ticker(symbol).info
+        if not info:
+            return {}
+
+        def _fmt_large(v):
+            if v is None:
+                return None
+            if v >= 1_000_000_000_000:
+                return f"{v/1_000_000_000_000:.2f}T"
+            if v >= 1_000_000_000:
+                return f"{v/1_000_000_000:.2f}B"
+            if v >= 1_000_000:
+                return f"{v/1_000_000:.2f}M"
+            return str(v)
+
+        def _fmt_pct(v):
+            return f"{v*100:.2f}%" if v is not None else None
+
+        _SECTOR_RU = {
+            "Technology": "Технологии",
+            "Financial Services": "Финансовые услуги",
+            "Healthcare": "Здравоохранение",
+            "Consumer Cyclical": "Потребительский (цикличный)",
+            "Consumer Defensive": "Потребительский (защитный)",
+            "Industrials": "Промышленность",
+            "Basic Materials": "Сырьевые материалы",
+            "Energy": "Энергетика",
+            "Utilities": "Коммунальные услуги",
+            "Real Estate": "Недвижимость",
+            "Communication Services": "Телекоммуникации",
+        }
+        _INDUSTRY_RU = {
+            "Consumer Electronics": "Потребительская электроника",
+            "Software—Application": "Программное обеспечение",
+            "Software—Infrastructure": "ПО: Инфраструктура",
+            "Semiconductors": "Полупроводники",
+            "Internet Retail": "Интернет-торговля",
+            "Banks—Regional": "Региональные банки",
+            "Banks—Diversified": "Диверсифицированные банки",
+            "Insurance—Diversified": "Страхование",
+            "Asset Management": "Управление активами",
+            "Oil & Gas E&P": "Нефть и газ (разведка)",
+            "Oil & Gas Integrated": "Нефть и газ (интегрир.)",
+            "Telecom Services": "Телекоммуникации",
+            "Pharmaceutical Retailers": "Фармацевтика",
+            "Drug Manufacturers—General": "Фармацевтика (производство)",
+            "Auto Manufacturers": "Автопроизводители",
+            "Specialty Retail": "Специализированная торговля",
+            "Grocery Stores": "Продуктовые магазины",
+            "Aerospace & Defense": "Авиация и оборона",
+            "Railroads": "Железные дороги",
+            "Airlines": "Авиалинии",
+            "Real Estate—General": "Недвижимость",
+            "REIT—Retail": "REIT: Розничная",
+        }
+        _COUNTRY_RU = {
+            "United States": "США",
+            "Kazakhstan": "Казахстан",
+            "Russia": "Россия",
+            "China": "Китай",
+            "Germany": "Германия",
+            "United Kingdom": "Великобритания",
+            "Japan": "Япония",
+            "France": "Франция",
+            "Canada": "Канада",
+            "Netherlands": "Нидерланды",
+            "Switzerland": "Швейцария",
+            "South Korea": "Южная Корея",
+            "India": "Индия",
+            "Brazil": "Бразилия",
+        }
+
+        raw_sector = info.get("sector")
+        raw_industry = info.get("industry")
+        raw_country = info.get("country")
+
+        return {
+            "sector":              _SECTOR_RU.get(raw_sector, raw_sector),
+            "industry":            _INDUSTRY_RU.get(raw_industry, raw_industry),
+            "country":             _COUNTRY_RU.get(raw_country, raw_country),
+            "full_time_employees": info.get("fullTimeEmployees"),
+            "website":             info.get("website"),
+            "market_cap_fmt":      _fmt_large(info.get("marketCap")),
+            "enterprise_value_fmt":_fmt_large(info.get("enterpriseValue")),
+            "trailing_pe":         round(info["trailingPE"], 2) if info.get("trailingPE") else None,
+            "forward_pe":          round(info["forwardPE"], 2) if info.get("forwardPE") else None,
+            "price_to_book":       round(info["priceToBook"], 2) if info.get("priceToBook") else None,
+            "price_to_sales":      round(info["priceToSalesTrailing12Months"], 2) if info.get("priceToSalesTrailing12Months") else None,
+            "dividend_yield":      _fmt_pct(info.get("dividendYield")),
+            "beta":                round(info["beta"], 3) if info.get("beta") else None,
+            "fifty_day_avg":       round(info["fiftyDayAverage"], 4) if info.get("fiftyDayAverage") else None,
+            "two_hundred_day_avg": round(info["twoHundredDayAverage"], 4) if info.get("twoHundredDayAverage") else None,
+            "revenue_growth":      _fmt_pct(info.get("revenueGrowth")),
+            "earnings_growth":     _fmt_pct(info.get("earningsGrowth")),
+            "profit_margins":      _fmt_pct(info.get("profitMargins")),
+            "return_on_equity":    _fmt_pct(info.get("returnOnEquity")),
+            "debt_to_equity":      round(info["debtToEquity"], 2) if info.get("debtToEquity") else None,
+        }
+    except Exception as e:
+        logger.debug("yfinance fundamentals failed for '%s': %s", symbol, e)
+        return {}
+
+
 async def fetch_market_data(company_name: str) -> dict[str, Any]:
     """Light version used on the company overview card."""
     symbol = await _yahoo_search(company_name)
@@ -459,11 +565,14 @@ async def fetch_full_market_data(
     market_movers: dict = {"gainers": [], "losers": []}
     top_stocks: list[dict] = []
 
+    fundamentals: dict = {}
+
     if symbol:
         tasks = [
             _yahoo_peers(symbol),
             _yahoo_trending("US"),
             asyncio.to_thread(_yf_history_sync, symbol, 60),
+            asyncio.to_thread(_yf_fundamentals_sync, symbol),
         ]
         if twelve_key:
             tasks += [
@@ -480,8 +589,9 @@ async def fetch_full_market_data(
         peers         = results[0]
         top_stocks    = results[1]
         time_series   = results[2]
-        td_extra      = results[3] or {}
-        market_movers = results[4]
+        fundamentals  = results[3] or {}
+        td_extra      = results[4] or {}
+        market_movers = results[5]
 
         if stock and td_extra:
             for k, v in td_extra.items():
@@ -502,4 +612,5 @@ async def fetch_full_market_data(
         "top_stocks":      top_stocks,
         "market_indices":  market_indices,
         "market_movers":   market_movers,
+        "fundamentals":    fundamentals,
     }

@@ -9,7 +9,7 @@ create table if not exists analysis_articles (
   source_type  text        default 'news',  -- news | reddit | youtube | instagram | threads
   excerpt      text        default '',
   pub_date     text        default '',
-  status       text        default 'pending',  -- pending | selected | rejected
+  status       text        default 'pending',  -- pending | selected | rejected | competitor
   created_at   timestamptz default now()
 );
 
