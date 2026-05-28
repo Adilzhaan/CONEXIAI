@@ -97,6 +97,18 @@ templates.env.filters["tojson"] = lambda v: _Markup(
 )
 
 
+# ── Access allowlist ──────────────────────────────────────────────────────────
+_ALLOWED_EMAILS: set[str] = {
+    "aidar@berdali.com",
+}
+
+def _is_allowed(user: dict | None) -> bool:
+    if not user:
+        return False
+    email = (user.get("email") or "").lower().strip()
+    return email in _ALLOWED_EMAILS
+
+
 def _compute_delta(runs: list) -> dict:
     """Compare latest 2 risk_runs fingerprints → new/persisted/resolved/positive."""
     if len(runs) < 2:
@@ -158,7 +170,8 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
         return None
 
     try:
-        return await supabase.auth_get_user(access_token)
+        user = await supabase.auth_get_user(access_token)
+        return user if _is_allowed(user) else None
     except Exception:
         # Access token expired/invalid -> try refresh
         try:
@@ -166,9 +179,9 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
             new_access_token = refreshed.get("access_token")
             if not new_access_token:
                 return None
-            # Update cookies by letting handlers set them;
-            # here we only validate that refresh works and return user.
             user = await supabase.auth_get_user(new_access_token)
+            if not _is_allowed(user):
+                return None
             req.state.new_access_token = new_access_token
             req.state.new_refresh_token = refreshed.get("refresh_token", refresh_token)
             return user
@@ -229,6 +242,12 @@ async def login_submit(
         refresh_token = auth.get("refresh_token")
         if not access_token or not refresh_token:
             raise RuntimeError("No access/refresh token returned by Supabase.")
+        if email.lower().strip() not in _ALLOWED_EMAILS:
+            return templates.TemplateResponse(
+                req, "login.html",
+                {"error": "Доступ ограничен. Обратитесь к администратору.", "app_name": settings.APP_NAME},
+                status_code=403,
+            )
         user_id = auth.get("user", {}).get("id") or auth.get("user_id") or ""
         await _activate_pending_memberships(email, user_id, access_token)
         resp = RedirectResponse(url="/dashboard", status_code=302)
