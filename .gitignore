@@ -27,3 +27,6 @@ build/
 
 # Instagram session
 backend/instagram_session.json
+
+# One-time OAuth helper scripts (contain secrets)
+backend/get_google_token.py
