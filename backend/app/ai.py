@@ -1193,3 +1193,223 @@ async def generate_communication(
         if hasattr(block, "text"):
             return block.text.strip()
     return ""
+
+
+def analyze_with_history(
+    company_name: str,
+    own_rows: list[dict],
+    comp_rows: list[dict],
+    prev_fps: list[dict],
+    api_key: str,
+    prev_articles: list[dict] | None = None,
+) -> dict[str, Any]:
+    """
+    Risk analysis with previous-run history context.
+    own_rows / comp_rows — already AI-filtered rows from analysis_articles.
+    prev_fps — [{key, title, category, score, consecutive_runs}] from last risk_run.
+    Returns {score, advice, categories, risks, scenarios}.
+    Sync — call via asyncio.to_thread().
+    """
+    import anthropic as _a, time as _t
+    from datetime import date as _date
+
+    today = _date.today().strftime("%d.%m.%Y")
+
+    def _fmt_own(rows: list[dict]) -> str:
+        by_src: dict[str, list] = {}
+        for r in rows[:60]:
+            key = r.get("source_type") or r.get("source") or "news"
+            by_src.setdefault(key, []).append(r)
+        lines = []
+        for src, items in by_src.items():
+            lines.append(f"[{src.upper()}]")
+            for it in items[:10]:
+                lines.append(f"  - {it['title']} ({it.get('pub_date', '')})")
+        return "\n".join(lines) or "Нет материалов."
+
+    def _fmt_comp(rows: list[dict]) -> str:
+        by_name: dict[str, list] = {}
+        for r in rows:
+            n = r.get("competitor_name") or r.get("entity_name", "?")
+            by_name.setdefault(n, []).append(r)
+        parts = []
+        for name, items in list(by_name.items())[:6]:
+            arts = "\n".join(f"  - {r['title']}" for r in items[:8])
+            parts.append(f"{name}:\n{arts}")
+        return "\n\n".join(parts) or "Нет данных о конкурентах."
+
+    def _fmt_prev(fps: list[dict]) -> str:
+        if not fps:
+            return "Первый анализ — история рисков отсутствует."
+        lines = [
+            f"  [{fp.get('category','?')}] {fp.get('title','')} "
+            f"(score={fp.get('score','?')}, повторялся {fp.get('consecutive_runs',1)} раз)"
+            for fp in fps[:20]
+        ]
+        return "\n".join(lines)
+
+    def _fmt_prev_articles(articles: list[dict]) -> str:
+        if not articles:
+            return "Нет данных о предыдущих статьях."
+        lines = []
+        for a in articles[:20]:
+            note = f" | ИИ: {a['risk_note']}" if a.get("risk_note") else ""
+            lines.append(f"  - «{a.get('title','')}» [{a.get('source','')} {a.get('pub_date','')}]{note}")
+        return "\n".join(lines)
+
+    prev_arts_section = ""
+    if prev_articles:
+        prev_arts_section = f"""
+=== СТАТЬИ ИЗ ПРЕДЫДУЩЕГО ПРОГОНА (контекст, не анализировать повторно) ===
+{_fmt_prev_articles(prev_articles)}
+"""
+
+    prompt = f"""Компания: «{company_name}». Дата: {today}.
+
+=== МАТЕРИАЛЫ ПО НАШЕЙ КОМПАНИИ (прошли строгий AI-фильтр) ===
+{_fmt_own(own_rows)}
+
+=== КОНКУРЕНТЫ (прошли строгий AI-фильтр) ===
+{_fmt_comp(comp_rows)}
+
+=== РИСКИ ИЗ ПРЕДЫДУЩЕГО АНАЛИЗА ===
+{_fmt_prev(prev_fps)}{prev_arts_section}
+
+Задача:
+1. Выяви риски по 5 категориям на основе новых материалов
+2. Сравни с предыдущими рисками — повторяющийся риск важнее нового
+3. Учти активность конкурентов при оценке market-рисков
+4. Отдельно выдели ПОЛОЖИТЕЛЬНЫЕ сигналы — новости которые снижают риск компании
+
+Положительные сигналы: рост прибыли, выигранные суды, награды, расширение бизнеса,
+позитивные отзывы, успешные партнёрства, рост найма, ESG-инициативы и т.д.
+
+Верни JSON строго такой структуры:
+{{
+  "categories": {{
+    "media":  {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
+    "hr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
+    "gr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
+    "pr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
+    "market": {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}}
+  }},
+  "overall_score": 0-100,
+  "advice": "2-3 предложения руководству",
+  "risks": [
+    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "text": "описание", "severity": "high|medium|low", "score": 0-100}}
+  ],
+  "positive_signals": [
+    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "weight": "low|medium|high"}}
+  ],
+  "scenarios": [
+    {{"id":"A","label":"Мягкое реагирование","level":"low","trigger":"условие","steps":[{{"action":"...","owner":"HR|PR|GR|CEO","deadline":"сегодня|48ч|неделя"}}]}},
+    {{"id":"B","label":"Активное управление","level":"medium","trigger":"условие","steps":[]}},
+    {{"id":"C","label":"Кризисный протокол","level":"high","trigger":"условие","steps":[]}}
+  ]
+}}"""
+
+    def _call() -> dict:
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        attempt = 0
+        while True:
+            try:
+                msg = c.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=4096,
+                    system="JSON API. Respond ONLY with valid JSON. No markdown.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                raw = msg.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    from json_repair import repair_json
+                    return json.loads(repair_json(raw))
+            except Exception as e:
+                if "overloaded" in str(e):
+                    wait = min(10 * (2 ** attempt), 120)
+                    attempt += 1
+                    logger.info("analyze_with_history overloaded, waiting %ds", wait)
+                    _t.sleep(wait)
+                else:
+                    raise
+
+    try:
+        raw = _call()
+    except Exception as e:
+        logger.warning("analyze_with_history failed: %s", e)
+        raw = {}
+
+    raw_cats = raw.get("categories", {})
+    categories: dict[str, Any] = {}
+    for cat in ("media", "hr", "gr", "pr", "market"):
+        cd = raw_cats.get(cat, {})
+        score = max(0, min(100, int(cd.get("score", 50))))
+        risks = [
+            {
+                "title":    (r.get("title") or r.get("text") or "")[:100],
+                "text":     r.get("text", "")[:300],
+                "severity": r.get("severity", "medium") if isinstance(r, dict) else "medium",
+                "sources":  [],
+            }
+            for r in cd.get("risks", [])[:5]
+        ]
+        categories[cat] = {"score": score, "risks": risks}
+
+    overall = max(0, min(100, int(raw.get("overall_score",
+        sum(v["score"] for v in categories.values()) // 5 if categories else 50))))
+
+    # Flat risks list — deduplicate against categories
+    seen_titles: set[str] = set()
+    flat_risks: list[dict] = []
+    for cat, cd in categories.items():
+        for r in cd["risks"]:
+            t = r.get("title", "")[:60].lower()
+            if t and t in seen_titles:
+                continue
+            seen_titles.add(t)
+            flat_risks.append({
+                "category": cat,
+                "title":    r.get("title", ""),
+                "text":     r.get("text", ""),
+                "severity": r.get("severity", "medium"),
+                "score":    50,
+                "sources":  [],
+            })
+    for r in raw.get("risks", []):
+        if not isinstance(r, dict):
+            continue
+        t = (r.get("title") or r.get("text") or "")[:60].lower()
+        if t and t in seen_titles:
+            continue
+        seen_titles.add(t)
+        flat_risks.append({
+            "category": r.get("category", "media"),
+            "title":    (r.get("title") or r.get("text") or "")[:100],
+            "text":     r.get("text", "")[:300],
+            "severity": r.get("severity", "medium"),
+            "score":    r.get("score", 50),
+            "sources":  [],
+        })
+
+    # Validate and clean positive signals
+    positive_signals = [
+        {
+            "category": s.get("category", "media"),
+            "title":    (s.get("title") or "")[:100],
+            "weight":   s.get("weight", "low") if s.get("weight") in ("low", "medium", "high") else "low",
+        }
+        for s in raw.get("positive_signals", [])
+        if isinstance(s, dict)
+    ]
+
+    return {
+        "score":            overall,
+        "advice":           str(raw.get("advice", "")),
+        "risks":            flat_risks,
+        "categories":       categories,
+        "scenarios":        raw.get("scenarios", []),
+        "positive_signals": positive_signals,
+    }

@@ -88,7 +88,34 @@ _BASE = _os.path.dirname(_os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=_os.path.join(_BASE, "static")), name="static")
 templates = Jinja2Templates(directory=_os.path.join(_BASE, "templates"))
 import json as _json_mod
-templates.env.filters["tojson"] = lambda v: _json_mod.dumps(v, ensure_ascii=False)
+from markupsafe import Markup as _Markup
+templates.env.filters["tojson"] = lambda v: _Markup(
+    _json_mod.dumps(v, ensure_ascii=False)
+    .replace("&", "\\u0026")
+    .replace("<", "\\u003c")
+    .replace(">", "\\u003e")
+)
+
+
+def _compute_delta(runs: list) -> dict:
+    """Compare latest 2 risk_runs fingerprints → new/persisted/resolved/positive."""
+    if len(runs) < 2:
+        return {}
+    curr_fps = {fp["key"]: fp for fp in (runs[0].get("risk_fingerprints") or []) if fp.get("key")}
+    prev_fps = {fp["key"]: fp for fp in (runs[1].get("risk_fingerprints") or []) if fp.get("key")}
+    if not curr_fps and not prev_fps:
+        return {}
+    return {
+        "new":        [fp for k, fp in curr_fps.items() if k not in prev_fps],
+        "persisted":  [fp for k, fp in curr_fps.items() if k in prev_fps],
+        "resolved":   [fp for k, fp in prev_fps.items() if k not in curr_fps],
+        "positive":   runs[0].get("positive_signals") or [],
+        "has_changes": bool(
+            [k for k in curr_fps if k not in prev_fps] or
+            [k for k in prev_fps if k not in curr_fps] or
+            runs[0].get("positive_signals")
+        ),
+    }
 
 
 def _cookie_params() -> dict[str, Any]:
@@ -752,15 +779,30 @@ async def _company_detail_inner(req: Request, company_id: str):
         if not settings.SUPABASE_SERVICE_KEY:
             return []
         try:
-            return await supabase.rest_select_service(
-                table="monitoring_items",
+            rows = await supabase.rest_select_service(
+                table="analysis_articles",
                 service_key=settings.SUPABASE_SERVICE_KEY,
-                select="source,source_name,title,url,excerpt,pub_date,is_top,importance",
+                select="source_type,source,title,url,excerpt,pub_date,risk_note",
                 query_params={
-                    "company_id": f"eq.{company_id}",
-                    "order": "is_top.desc,created_at.desc",
+                    "company_id":   f"eq.{company_id}",
+                    "entity_type":  "eq.own",
+                    "order":        "published_at.desc.nullslast",
+                    "limit":        "50",
                 },
             )
+            return [
+                {
+                    "source":      r["source_type"],
+                    "source_name": r["source"],
+                    "title":       r["title"],
+                    "url":         r["url"],
+                    "excerpt":     r.get("excerpt", ""),
+                    "pub_date":    r["pub_date"],
+                    "is_top":      True,
+                    "importance":  r.get("risk_note") or "",
+                }
+                for r in (rows or [])
+            ]
         except Exception:
             return []
 
@@ -786,26 +828,25 @@ async def _company_detail_inner(req: Request, company_id: str):
                 return []
 
     async def _safe_risk_runs(token: str, cid: str):
-        try:
-            return await supabase.rest_select(
-                table="risk_runs",
-                access_token=token,
-                select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts",
-                order_by="created_at.desc",
-                query_params={"company_id": f"eq.{cid}"},
-            )
-        except Exception:
-            # social_posts column may not exist yet — fallback without it
+        _selects = [
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles",
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals",
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints",
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,risk_fingerprints",
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios",
+        ]
+        for _sel in _selects:
             try:
                 return await supabase.rest_select(
                     table="risk_runs",
                     access_token=token,
-                    select="id,status,created_at,updated_at,score,advice,risks,categories,scenarios",
+                    select=_sel,
                     order_by="created_at.desc",
-                    query_params={"company_id": f"eq.{cid}"},
+                    query_params={"company_id": f"eq.{cid}", "limit": "20"},
                 )
             except Exception:
-                return []
+                continue
+        return []
 
     company_rows, all_companies, employees, risk_runs, emails_rows, members, user_role, monitor_snapshot, monitoring_items, comp_sel_rows, _ci_cached = await asyncio.gather(
         supabase.rest_select(
@@ -882,6 +923,14 @@ async def _company_detail_inner(req: Request, company_id: str):
     msg = req.query_params.get("msg")
     error = req.query_params.get("error")
 
+    # Score history for chart (oldest → newest)
+    score_history = [
+        {"date": r["created_at"][:10], "score": int(r["score"])}
+        for r in reversed(risk_runs)
+        if r.get("score") is not None and r.get("created_at")
+    ]
+    delta = _compute_delta(risk_runs)
+
     # Compute financial impact metrics for Risk Overview
     latest_run = risk_runs[0] if risk_runs else None
     risk_impact: dict = {}
@@ -920,6 +969,8 @@ async def _company_detail_inner(req: Request, company_id: str):
             "comp_news_map": _comp_news_map,
             "ci_report": (_ci_cached.get("report") if _ci_cached else None),
             "risk_impact": risk_impact,
+            "score_history": score_history,
+            "delta": delta,
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
@@ -1050,499 +1101,120 @@ async def _run_combined_job(
     instagram_items: list, threads_items: list, total: int,
 ) -> None:
     """
-    3-phase background pipeline:
-      Phase 1 — save all fetched articles to analysis_articles (status=pending)
-      Phase 2 — AI filter: mark relevant as selected, rest as rejected
-      Phase 3 — AI risk analysis on selected articles only
+    Pipeline v2 — delegates scraping/filter/analysis to pipeline.run_pipeline().
+    Phases 4/5 (CI report, crisis agent) remain here.
     """
-    import uuid as _uuid
-    from .ai import analyze_company_risks_parallel as _parallel, filter_articles as _filter
+    from .pipeline import run_pipeline as _run_pipeline
     from datetime import datetime, timezone
 
+    def _stage(s: str) -> None:
+        _analysis_jobs[job_id]["stage"] = s
+
     try:
-        # ── Load seen URLs from news archive ─────────────────────────────────
-        _seen_urls: set[str] = set()
-        if settings.SUPABASE_SERVICE_KEY:
-            try:
-                _archive_rows = await supabase.rest_select_service(
-                    table="news_archive",
-                    service_key=settings.SUPABASE_SERVICE_KEY,
-                    select="url",
-                    query_params={"company_id": f"eq.{company_id}"},
-                )
-                _seen_urls = {r["url"] for r in (_archive_rows or []) if r.get("url")}
-                logger.info("[job %s] news_archive: %d seen URLs", job_id, len(_seen_urls))
-            except Exception as _ae:
-                logger.warning("[job %s] news_archive load failed: %s", job_id, _ae)
-
-        # ── Extra server-side sources (SerpAPI, Bing, Yahoo, GDELT) + finance fundamentals ──
-        _analysis_jobs[job_id]["stage"] = "📡 Загрузка дополнительных источников…"
-        extra_news: list = []
-        _fundamentals: dict = {}
-        try:
-            _extra_results = await asyncio.gather(
-                news_client.fetch_serpapi_news(company_name, settings.SERPAPI_KEY, limit=20) if settings.SERPAPI_KEY else asyncio.sleep(0, result=[]),
-                news_client.fetch_gdelt_news(company_name, limit=50),
-                news_client.fetch_yahoo_news(company_name, limit=30),
-                finance_client.fetch_full_market_data(company_name, twelve_key=settings.TWELVE_DATA_API_KEY),
-                return_exceptions=True,
-            )
-            for _r in _extra_results[:3]:
-                if isinstance(_r, list):
-                    extra_news.extend(_r)
-            _mkt = _extra_results[3]
-            if isinstance(_mkt, dict):
-                _fundamentals = _mkt.get("fundamentals") or {}
-                # Update market_cache in background so Market page shows fresh data too
-                if settings.SUPABASE_SERVICE_KEY:
-                    try:
-                        from datetime import datetime as _dtm, timezone as _tzm
-                        await supabase.rest_upsert_service(
-                            table="market_cache",
-                            service_key=settings.SUPABASE_SERVICE_KEY,
-                            rows=[{
-                                "company_id": company_id,
-                                "finance": _mkt,
-                                "updated_at": _dtm.now(_tzm.utc).isoformat(),
-                            }],
-                            on_conflict="company_id",
-                        )
-                    except Exception:
-                        pass
-            logger.info("[job %s] extra sources: +%d articles, fundamentals: %s", job_id, len(extra_news), bool(_fundamentals))
-        except Exception as _ex:
-            logger.warning("[job %s] extra sources failed: %s", job_id, _ex)
-        news_items = news_items + extra_news
-
-        # ── hh.kz + krisha.kz ────────────────────────────────────────────
-        _analysis_jobs[job_id]["stage"] = "🔎 hh.kz и krisha.kz…"
-        hh_items: list = []
-        krisha_items: list = []
-        try:
-            _hh, _krisha = await asyncio.gather(
-                news_client.fetch_hh_vacancies(company_name, limit=20, serpapi_key=settings.SERPAPI_KEY or ""),
-                news_client.fetch_krisha_listings(company_name, limit=10, serpapi_key=settings.SERPAPI_KEY or ""),
-                return_exceptions=True,
-            )
-            if isinstance(_hh, list):
-                hh_items = _hh
-            if isinstance(_krisha, list):
-                krisha_items = _krisha
-            logger.info("[job %s] hh.kz: %d, krisha.kz: %d", job_id, len(hh_items), len(krisha_items))
-        except Exception as _ex:
-            logger.warning("[job %s] hh/krisha failed: %s", job_id, _ex)
-
-        # ── Competitors: fetch news for each competitor ───────────────────
-        _analysis_jobs[job_id]["stage"] = "🔎 Новости конкурентов…"
-        competitor_articles: list[dict] = []
-        _comp_rows: list[dict] = []
-        try:
-            _comp_rows = await supabase.rest_select_service(
-                table="competitors",
-                service_key=settings.SUPABASE_SERVICE_KEY or "",
-                query_params={"company_id": f"eq.{company_id}"},
-            )
-            _comp_names = [r["name"] for r in (_comp_rows or []) if r.get("name")]
-            if _comp_names:
-                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-                _comp_cutoff = _dt.now(_tz.utc) - _td(days=30)
-
-                def _comp_is_fresh(pub_date_str: str) -> bool:
-                    if not pub_date_str:
-                        return True
-                    ds = pub_date_str.strip().lower()
-                    # relative dates are always fresh
-                    if any(w in ds for w in ("ago", "назад", "hour", "час", "день", "дн", "мин",
-                                              "min", "today", "сегодня", "вчера", "yesterday")):
-                        return True
-                    for _fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%S",
-                                 "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%Y.%m.%d"):
-                        try:
-                            _d = _dt.strptime(ds[:19], _fmt).replace(tzinfo=_tz.utc)
-                            return _d >= _comp_cutoff
-                        except ValueError:
-                            pass
-                    return True  # unknown format — keep
-
-                # Per competitor: Google News + GDELT + SerpAPI + Yahoo News + Instagram + Threads
-                _fetch_tasks = []
-                for cn in _comp_names:
-                    _fetch_tasks += [
-                        news_client.fetch_google_news_only(cn, limit=50),
-                        news_client.fetch_gdelt_news(cn, limit=30),
-                        news_client.fetch_serpapi_news(cn, settings.SERPAPI_KEY, limit=20) if settings.SERPAPI_KEY else asyncio.sleep(0, result=[]),
-                        news_client.fetch_yahoo_news(cn, limit=20),
-                        instagram_client.fetch_instagram_posts(cn, settings.INSTAGRAM_USERNAME, settings.INSTAGRAM_PASSWORD, limit=15)
-                        if settings.INSTAGRAM_USERNAME and settings.INSTAGRAM_PASSWORD else asyncio.sleep(0, result=[]),
-                        asyncio.sleep(0, result=[]),  # threads disabled
-                    ]
-                _fetch_results = await asyncio.gather(*_fetch_tasks, return_exceptions=True)
-
-                _SOURCES_PER_COMP = 6
-                for idx, cn in enumerate(_comp_names):
-                    base = idx * _SOURCES_PER_COMP
-                    _google_res  = _fetch_results[base]
-                    _gdelt_res   = _fetch_results[base + 1]
-                    _serp_res    = _fetch_results[base + 2]
-                    _yahoo_res   = _fetch_results[base + 3]
-                    _insta_res   = _fetch_results[base + 4]
-                    _threads_res = _fetch_results[base + 5]
-
-                    _seen_titles: set[str] = set()
-
-                    # News articles (Google + GDELT + SerpAPI + Yahoo)
-                    for art in (
-                        (_google_res  if isinstance(_google_res,  list) else []) +
-                        (_gdelt_res   if isinstance(_gdelt_res,   list) else []) +
-                        (_serp_res    if isinstance(_serp_res,    list) else []) +
-                        (_yahoo_res   if isinstance(_yahoo_res,   list) else [])
-                    ):
-                        title    = art.get("title", "")
-                        pub_date = art.get("pub_date", "") or art.get("date", "")
-                        key = title.lower()[:60]
-                        if not title or key in _seen_titles or not _comp_is_fresh(pub_date):
-                            continue
-                        _seen_titles.add(key)
-                        competitor_articles.append({
-                            "competitor_name": cn,
-                            "title":    title,
-                            "url":      art.get("link") or art.get("url", ""),
-                            "source":   art.get("source", "news"),
-                            "pub_date": pub_date,
-                            "excerpt":  (art.get("text") or art.get("description") or "")[:200],
-                        })
-
-                    # Instagram posts
-                    for post in (_insta_res if isinstance(_insta_res, list) else []):
-                        text = (post.get("text") or post.get("captionText") or "")[:120] or cn
-                        pub_date = post.get("date") or post.get("pub_date", "")
-                        key = text.lower()[:60]
-                        if key in _seen_titles or not _comp_is_fresh(pub_date):
-                            continue
-                        _seen_titles.add(key)
-                        competitor_articles.append({
-                            "competitor_name": cn,
-                            "title":    text,
-                            "url":      post.get("url", ""),
-                            "source":   "Instagram",
-                            "pub_date": pub_date,
-                            "excerpt":  "",
-                        })
-
-                    # Threads posts
-                    for post in (_threads_res if isinstance(_threads_res, list) else []):
-                        text = (post.get("captionText") or post.get("text") or "")[:120] or cn
-                        pub_date = post.get("pub_date") or post.get("date", "")
-                        key = text.lower()[:60]
-                        if key in _seen_titles or not _comp_is_fresh(pub_date):
-                            continue
-                        _seen_titles.add(key)
-                        competitor_articles.append({
-                            "competitor_name": cn,
-                            "title":    text,
-                            "url":      post.get("url", ""),
-                            "source":   "Threads",
-                            "pub_date": pub_date,
-                            "excerpt":  "",
-                        })
-
-                logger.info("[job %s] competitor articles: %d for %d competitors",
-                            job_id, len(competitor_articles), len(_comp_names))
-        except Exception as _ex:
-            logger.warning("[job %s] competitor fetch failed: %s", job_id, _ex)
-
-        # ── Phase 1: insert all articles with status=pending ─────────────
-        _analysis_jobs[job_id]["stage"] = "📥 Сохранение статей в базу…"
-        logger.info("[job %s] phase 1: building %d article rows", job_id, len(news_items) + len(reddit_items) + len(youtube_items) + len(instagram_items) + len(threads_items))
-
-        db_rows: list[dict] = []    # rows for analysis_articles table
-        orig_items: list[dict] = [] # original item dicts (parallel index)
-        src_types: list[str] = []   # source type per item (parallel index)
-
-        # Pre-filter: full company name must appear in title/text
-        _name_lower = company_name.lower()
-
-        def _name_match(item: dict) -> bool:
-            text = (
-                item.get("title") or item.get("text") or
-                item.get("captionText") or item.get("caption") or ""
-            ).lower()
-            return _name_lower in text
-
-        _new_archive_urls: list[dict] = []  # URLs to save to archive after analysis
-
-        for _src, _items in [
-            ("news", news_items), ("reddit", reddit_items),
-            ("youtube", youtube_items), ("instagram", instagram_items),
-            ("threads", threads_items), ("hr", hh_items),
-            ("real_estate", krisha_items),
-        ]:
-            for item in _items:
-                if not _name_match(item):
-                    continue
-                _url = item.get("url") or item.get("link") or ""
-                # Skip already seen URLs
-                if _url and _url in _seen_urls:
-                    continue
-                art_id = str(_uuid.uuid4())
-                title = (item.get("title") or item.get("text") or "")[:120]
-                db_rows.append({
-                    "id":          art_id,
-                    "company_id":  company_id,
-                    "job_id":      job_id,
-                    "title":       title or "—",
-                    "url":         _url,
-                    "source":      item.get("source") or item.get("channel") or item.get("subreddit") or _src,
-                    "source_type": _src,
-                    "excerpt":     (item.get("text") or item.get("description") or "")[:300],
-                    "pub_date":    item.get("pub_date") or item.get("date") or "",
-                    "status":      "pending",
-                })
-                orig_items.append(item)
-                src_types.append(_src)
-                if _url:
-                    _seen_urls.add(_url)
-                    _new_archive_urls.append({
-                        "company_id": company_id,
-                        "url":        _url,
-                        "title":      title or "—",
-                        "source":     item.get("source") or _src,
-                        "pub_date":   item.get("pub_date") or item.get("date") or "",
-                    })
-
-        # ── Build competitor DB rows ──────────────────────────────────────
-        comp_db_rows: list[dict] = []
-        for cart in competitor_articles:
-            art_id = str(_uuid.uuid4())
-            comp_db_rows.append({
-                "id":              art_id,
-                "company_id":      company_id,
-                "job_id":          job_id,
-                "title":           cart.get("title", "—")[:120] or "—",
-                "url":             cart.get("url", ""),
-                "source":          cart.get("source", "news"),
-                "source_type":     "news",
-                "excerpt":         "",
-                "pub_date":        cart.get("pub_date", ""),
-                "status":          "competitor_pending",
-                "competitor_name": cart.get("competitor_name", ""),
-            })
-
-        if settings.SUPABASE_SERVICE_KEY and (db_rows or comp_db_rows):
-            try:
-                await supabase.rest_delete_service(
-                    "analysis_articles", settings.SUPABASE_SERVICE_KEY,
-                    {"company_id": f"eq.{company_id}"},
-                )
-            except Exception:
-                pass
-            for _i in range(0, len(db_rows), 100):
-                try:
-                    await supabase.rest_insert_service(
-                        "analysis_articles", settings.SUPABASE_SERVICE_KEY, db_rows[_i:_i + 100],
-                    )
-                except Exception as _ie:
-                    logger.error("[job %s] insert main articles batch %d failed: %s", job_id, _i, _ie)
-            for _i in range(0, len(comp_db_rows), 100):
-                try:
-                    await supabase.rest_insert_service(
-                        "analysis_articles", settings.SUPABASE_SERVICE_KEY, comp_db_rows[_i:_i + 100],
-                    )
-                except Exception as _ie:
-                    logger.error("[job %s] insert competitor articles batch %d failed: %s", job_id, _i, _ie)
-            logger.info("[job %s] phase 1: inserted %d main + %d competitor rows", job_id, len(db_rows), len(comp_db_rows))
-
-        # ── Save new URLs to news_archive (upsert — ignore duplicates) ───────
-        if settings.SUPABASE_SERVICE_KEY and _new_archive_urls:
-            try:
-                for _i in range(0, len(_new_archive_urls), 100):
-                    await supabase.rest_upsert_service(
-                        table="news_archive",
-                        service_key=settings.SUPABASE_SERVICE_KEY,
-                        rows=_new_archive_urls[_i:_i + 100],
-                        on_conflict="company_id,url",
-                    )
-                logger.info("[job %s] news_archive: saved %d new URLs", job_id, len(_new_archive_urls))
-            except Exception as _ae:
-                logger.warning("[job %s] news_archive save failed: %s", job_id, _ae)
-
-        # ── Phase 2a: AI filter — main articles ───────────────────────────
-        _analysis_jobs[job_id]["stage"] = "🔍 ИИ проверяет статьи…"
-        logger.info("[job %s] phase 2a: filtering %d main articles", job_id, len(db_rows))
-
-        filter_input = [
-            {"title": row["title"], "source": row["source"], "pub_date": row["pub_date"]}
-            for row in db_rows
-        ]
-        _stage_fn = lambda s: _analysis_jobs[job_id].update({"stage": s})
-
-        selected_indices: list[int] = await asyncio.to_thread(
-            _filter, filter_input, company_name, settings.ANTHROPIC_API_KEY, _stage_fn,
-        )
-        selected_ids = [db_rows[i]["id"] for i in selected_indices]
-        logger.info("[job %s] phase 2a: %d/%d selected", job_id, len(selected_ids), len(db_rows))
-
-        if settings.SUPABASE_SERVICE_KEY:
-            if selected_ids:
-                ids_csv = ",".join(selected_ids)
-                await supabase.rest_update_service(
-                    f"rest/v1/analysis_articles?id=in.({ids_csv})",
-                    settings.SUPABASE_SERVICE_KEY,
-                    {"status": "selected"},
-                )
-            await supabase.rest_update_service(
-                f"rest/v1/analysis_articles?job_id=eq.{job_id}&status=eq.pending",
-                settings.SUPABASE_SERVICE_KEY,
-                {"status": "rejected"},
-            )
-
-        # ── Phase 2b: mark all competitor articles as selected (no AI filter) ──
-        # We show all competitor news — filtering is too aggressive and drops useful signals.
-        sel_competitor_articles: list[dict] = list(competitor_articles)
-        if competitor_articles and settings.SUPABASE_SERVICE_KEY and comp_db_rows:
-            try:
-                ids_csv = ",".join(r["id"] for r in comp_db_rows)
-                await supabase.rest_update_service(
-                    f"rest/v1/analysis_articles?id=in.({ids_csv})",
-                    settings.SUPABASE_SERVICE_KEY,
-                    {"status": "competitor_selected"},
-                )
-                logger.info("[job %s] phase 2b: %d competitor articles all marked selected", job_id, len(comp_db_rows))
-            except Exception as _ue:
-                logger.warning("[job %s] update competitor_selected failed: %s", job_id, _ue)
-
-        # ── Phase 3: AI risk analysis on selected articles only ───────────
-        _analysis_jobs[job_id]["stage"] = "🧠 Анализ рисков…"
-
-        selected_set  = set(selected_indices)
-        sel_news      = [orig_items[i] for i in selected_set if src_types[i] == "news"]
-        sel_reddit    = [orig_items[i] for i in selected_set if src_types[i] == "reddit"]
-        sel_youtube   = [orig_items[i] for i in selected_set if src_types[i] == "youtube"]
-        sel_instagram = [orig_items[i] for i in selected_set if src_types[i] == "instagram"]
-        sel_threads   = [orig_items[i] for i in selected_set if src_types[i] == "threads"]
-        sel_hh        = [orig_items[i] for i in selected_set if src_types[i] == "hr"]
-        sel_krisha    = [orig_items[i] for i in selected_set if src_types[i] == "real_estate"]
-        sel_total = len(selected_set)
-
-        logger.info("[job %s] phase 3: analysing %d selected articles", job_id, sel_total)
-        result_ai = await _parallel(
+        # ── Run pipeline (scrape → date filter → AI filter → staging → risk analysis) ──
+        pipeline_result = await _run_pipeline(
+            job_id=job_id,
+            company_id=company_id,
             company_name=company_name,
-            news=sel_news,
-            yandex_news=[],
-            threads_posts=sel_threads,
-            social={"youtube": sel_youtube, "instagram": sel_instagram, "reddit": sel_reddit},
-            vacancies=sel_hh, regulatory_news=[], market_news=sel_krisha,
-            finance=_fundamentals,
-            hr_emails=[], pr_emails=[], gr_emails=[], employees=[],
+            news_client=news_client,
+            hh_client=hh_client,
+            instagram_client=instagram_client,
+            settings=settings,
+            supabase=supabase,
             api_key=settings.ANTHROPIC_API_KEY,
-            on_stage=_stage_fn,
-            competitor_news=sel_competitor_articles or None,
+            on_stage=_stage,
+            frontend_news=news_items,
+            frontend_threads=threads_items,
+            frontend_instagram=instagram_items,
         )
 
-        _analysis_jobs[job_id]["stage"] = "💾 Сохранение результатов…"
+        staging_rows        = pipeline_result.pop("staging_rows", [])
+        sel_own             = [r for r in staging_rows if r["entity_type"] == "own"]
+        sel_competitor_rows = [r for r in staging_rows if r["entity_type"] == "competitor"]
 
-        all_risks: list[str] = []
-        for cat_data in result_ai.get("categories", {}).values():
-            for r in cat_data.get("risks", []):
-                text = r.get("text", "") if isinstance(r, dict) else str(r)
-                if text:
-                    all_risks.append(text)
+        # Convert staging rows to format expected by CI / crisis / monitoring
+        sel_competitor_articles = [
+            {
+                "competitor_name": r["competitor_name"],
+                "title":           r["title"],
+                "url":             r["url"],
+                "source":          r["source"],
+                "pub_date":        r["pub_date"],
+                "excerpt":         r.get("excerpt", ""),
+            }
+            for r in sel_competitor_rows
+        ]
 
         result = {
-            "score":            result_ai.get("score"),
-            "advice":           result_ai.get("advice", ""),
-            "categories":       result_ai.get("categories", {}),
-            "risks":            [],
-            "scenarios":        result_ai.get("scenarios", []),
-            "overall_summary":  result_ai.get("advice", ""),
-            "recommendation":   result_ai.get("advice", ""),
-            "problems":         all_risks[:6],
+            "score":           pipeline_result.get("score"),
+            "advice":          pipeline_result.get("advice", ""),
+            "categories":      pipeline_result.get("categories", {}),
+            "risks":           pipeline_result.get("risks", []),
+            "scenarios":       pipeline_result.get("scenarios", []),
+            "overall_summary": pipeline_result.get("advice", ""),
+            "recommendation":  pipeline_result.get("advice", ""),
+            "problems":        [r.get("text", "") for r in pipeline_result.get("risks", []) if r.get("severity") == "high"][:6],
             "potential_losses": [],
-            "top_items":        [
-                {
-                    "title":  db_rows[i]["title"],
-                    "url":    db_rows[i]["url"],
-                    "source": db_rows[i]["source_type"],
-                    "date":   db_rows[i]["pub_date"],
-                }
-                for i in selected_indices[:20]
+            "top_items": [
+                {"title": r["title"], "url": r["url"], "source": r["source_type"], "date": r["pub_date"]}
+                for r in sel_own[:20]
             ],
-            "total_items":      total,
-            "selected_items":   sel_total,
+            "total_items":    total,
+            "selected_items": len(sel_own),
+            "generated_at":   pipeline_result.get("generated_at"),
+            "source_stats":   pipeline_result.get("source_stats", []),
         }
 
-        # ── Save risk_runs + monitoring_snapshots ────────────────────────
+        sel_total = len(sel_own)
+
+        # ── Save risk_runs + monitoring_snapshots ─────────────────────────────
         if settings.SUPABASE_SERVICE_KEY and result.get("score") is not None:
             try:
                 _now_iso = datetime.now(timezone.utc).isoformat()
 
-                # Build recent_news from ALL db_rows (with status field for UI)
-                _seen: set = set()
-                _recent_news: list[dict] = []
-                _selected_set_ids = set(selected_ids)
-                for row in db_rows:
-                    _k = row["title"][:60].lower()
-                    if _k and _k in _seen:
-                        continue
-                    if _k:
-                        _seen.add(_k)
-                    _recent_news.append({
-                        "title":              row["title"],
-                        "link":               row["url"],
-                        "source":             row["source"],
-                        "pub_date":           row["pub_date"],
-                        "_type":              row["source_type"],
-                        "status":             "selected" if row["id"] in _selected_set_ids else "rejected",
-                        "captured_at":        _now_iso,
-                        "is_new":             True,
-                        "triggered_analysis": row["id"] in _selected_set_ids,
-                    })
-                    if len(_recent_news) >= 200:
-                        break
-
-                # Save monitoring_items from selected articles (first 20 = is_top)
-                mon_rows: list[dict] = []
-                for rank, i in enumerate(selected_indices):
-                    row = db_rows[i]
-                    mon_rows.append({
-                        "company_id":  company_id,
-                        "source":      row["source_type"],
-                        "source_name": row["source"],
-                        "title":       row["title"],
-                        "url":         row["url"],
-                        "excerpt":     row["excerpt"],
-                        "pub_date":    row["pub_date"],
-                        "is_top":      rank < 20,
-                        "importance":  "",
-                    })
-                try:
-                    await supabase.rest_delete_service(
-                        "monitoring_items", settings.SUPABASE_SERVICE_KEY,
-                        {"company_id": f"eq.{company_id}"},
-                    )
-                    if mon_rows:
-                        await supabase.rest_insert_service(
-                            "monitoring_items", settings.SUPABASE_SERVICE_KEY, mon_rows,
-                        )
-                except Exception as mi_err:
-                    logger.warning("[job %s] monitoring_items error: %s", job_id, mi_err)
-
-                await supabase.rest_delete_service(
-                    "risk_runs", settings.SUPABASE_SERVICE_KEY, {"company_id": f"eq.{company_id}"},
-                )
                 await supabase.rest_insert_service(
                     table="risk_runs",
                     service_key=settings.SUPABASE_SERVICE_KEY,
                     rows=[{
-                        "company_id": company_id, "status": "done",
-                        "score":      result["score"],
-                        "advice":     result.get("advice", ""),
-                        "risks":      result.get("risks", []),
-                        "categories": result.get("categories", {}),
-                        "scenarios":  result.get("scenarios", []),
-                        "social_posts": [],
+                        "company_id":        company_id,
+                        "status":            "done",
+                        "score":             result["score"],
+                        "advice":            result.get("advice", ""),
+                        "risks":             result.get("risks", []),
+                        "categories":        result.get("categories", {}),
+                        "scenarios":         result.get("scenarios", []),
+                        "social_posts":      [],
+                        "risk_fingerprints": pipeline_result.get("risk_fingerprints", []),
+                        "previous_run_id":   pipeline_result.get("previous_run_id"),
+                        "positive_signals":  pipeline_result.get("positive_signals", []),
+                        "top_articles": [
+                            {
+                                "title":     r["title"],
+                                "url":       r["url"],
+                                "source":    r["source_type"],
+                                "pub_date":  r.get("pub_date", ""),
+                                "risk_note": r.get("risk_note", ""),
+                            }
+                            for r in sel_own[:30]
+                        ],
                     }],
                 )
+
+                # Build recent_news for monitoring_snapshots from sel_own
+                _recent_news = [
+                    {
+                        "title":              r["title"],
+                        "link":               r["url"],
+                        "source":             r["source"],
+                        "pub_date":           r["pub_date"],
+                        "_type":              r["source_type"],
+                        "status":             "selected",
+                        "captured_at":        _now_iso,
+                        "is_new":             True,
+                        "triggered_analysis": True,
+                    }
+                    for r in sel_own[:200]
+                ]
                 await supabase.rest_upsert_service(
                     table="monitoring_snapshots",
                     service_key=settings.SUPABASE_SERVICE_KEY,
@@ -1554,39 +1226,58 @@ async def _run_combined_job(
                     }],
                     on_conflict="company_id",
                 )
+                # ── Write to news_archive (accumulates history) ──────────
+                try:
+                    archive_rows = [
+                        {
+                            "company_id": company_id,
+                            "url":        r["url"],
+                            "title":      r["title"],
+                            "source":     r["source_type"],
+                            "pub_date":   r["pub_date"],
+                            "seen_at":    _now_iso,
+                        }
+                        for r in sel_own if r.get("url")
+                    ]
+                    if archive_rows:
+                        await supabase.rest_insert_service(
+                            "news_archive", settings.SUPABASE_SERVICE_KEY, archive_rows,
+                        )
+                        logger.info("[job %s] %d rows → news_archive", job_id, len(archive_rows))
+                except Exception as _ae:
+                    logger.warning("[job %s] news_archive write failed: %s", job_id, _ae)
+
                 logger.info("[job %s] DB saves complete", job_id)
             except Exception as rr_err:
                 logger.warning("[job %s] DB save error: %s", job_id, rr_err)
 
-        # ── Phase 4: Build CI report from competitor data (no separate run_ci) ──
+        # ── Phase 4: CI report ────────────────────────────────────────────────
+        _comp_rows: list[dict] = []
+        if settings.SUPABASE_SERVICE_KEY:
+            try:
+                _comp_rows = await supabase.rest_select_service(
+                    table="competitors", service_key=settings.SUPABASE_SERVICE_KEY,
+                    query_params={"company_id": f"eq.{company_id}"},
+                ) or []
+            except Exception:
+                pass
+
         if _comp_rows and settings.SUPABASE_SERVICE_KEY:
             try:
-                _analysis_jobs[job_id]["stage"] = "📊 Сохранение CI-отчёта…"
+                _stage("📊 Сохранение CI-отчёта…")
                 from datetime import datetime, timezone as _tz2
 
-                # Group selected competitor articles by competitor_name
                 _comp_by_name: dict = {}
                 for _ca in sel_competitor_articles:
                     _cn = _ca.get("competitor_name", "")
                     if _cn:
                         _comp_by_name.setdefault(_cn, []).append(_ca)
 
-                # Fallback: for competitors with no selected articles, use all their fetched articles
-                _all_fetched_by_name: dict = {}
-                for _ca in competitor_articles:
-                    _cn = _ca.get("competitor_name", "")
-                    if _cn:
-                        _all_fetched_by_name.setdefault(_cn, []).append(_ca)
-
-                # All registered competitors (from DB), not just those with selected articles
                 _all_comp_names = [r["name"] for r in (_comp_rows or []) if r.get("name")]
-                if not _all_comp_names:
-                    _all_comp_names = list(_comp_by_name.keys())
+
                 _risk_tasks = [
                     ci_client.score_competitor(
-                        cn,
-                        _comp_by_name.get(cn) or _all_fetched_by_name.get(cn, []),
-                        settings.ANTHROPIC_API_KEY,
+                        cn, _comp_by_name.get(cn, []), settings.ANTHROPIC_API_KEY,
                     )
                     for cn in _all_comp_names
                 ]
@@ -1595,32 +1286,31 @@ async def _run_combined_job(
                 competitors_data = []
                 for _cn, _rs in zip(_all_comp_names, _risk_scores):
                     _risk = _rs if isinstance(_rs, dict) else {"score": None, "categories": {}, "summary": ""}
-                    _arts = _comp_by_name.get(_cn) or _all_fetched_by_name.get(_cn, [])
+                    _arts = _comp_by_name.get(_cn, [])
                     competitors_data.append({
                         "name":       _cn,
-                        "news":       [{"title": a["title"], "link": a.get("url", ""), "source": a["source"], "pub_date": a["pub_date"]} for a in _arts[:10]],
+                        "news":       [{"title": a.get("title",""), "link": a.get("url",""), "source": a.get("source",""), "pub_date": a.get("pub_date","")} for a in _arts[:10]],
                         "news_count": len(_arts),
                         "risk":       _risk,
                     })
 
-                # Build AI summary from competitor context + our risk categories
                 _our_cats = result.get("categories", {})
-                _threat = "high" if result.get("score", 0) >= 65 else "medium" if result.get("score", 0) >= 40 else "low"
+                _threat = "high" if (result.get("score") or 0) >= 65 else "medium" if (result.get("score") or 0) >= 40 else "low"
                 _ci_ai = {
-                    "summary": f"Анализ завершён. Наш риск-скор: {result.get('score')}. Конкурентов отслеживается: {len(competitors_data)}.",
+                    "summary":     f"Анализ завершён. Риск-скор: {result.get('score')}. Конкурентов: {len(competitors_data)}.",
                     "threat_level": _threat,
                     "competitors": [
                         {
-                            "name":      cd["name"],
-                            "activity":  "growing" if (cd["risk"].get("score") or 0) > 50 else "stable",
-                            "key_move":  (cd["news"][0]["title"][:60] if cd["news"] else ""),
-                            "threat":    "high" if (cd["risk"].get("score") or 0) >= 65 else "medium" if (cd["risk"].get("score") or 0) >= 40 else "low",
-                            "impact":    cd["risk"].get("summary", ""),
+                            "name":     cd["name"],
+                            "activity": "growing" if (cd["risk"].get("score") or 0) > 50 else "stable",
+                            "key_move": (cd["news"][0]["title"][:60] if cd["news"] else ""),
+                            "threat":   "high" if (cd["risk"].get("score") or 0) >= 65 else "medium" if (cd["risk"].get("score") or 0) >= 40 else "low",
+                            "impact":   cd["risk"].get("summary", ""),
                         }
                         for cd in competitors_data
                     ],
-                    "opportunities": [],
-                    "risks":         [r["text"] for cat in _our_cats.values() for r in cat.get("risks", []) if r.get("severity") == "high"][:5],
+                    "opportunities":   [],
+                    "risks":           [r.get("text", "") for cat in _our_cats.values() for r in cat.get("risks", []) if r.get("severity") == "high"][:5],
                     "recommendations": [],
                 }
 
@@ -1637,35 +1327,33 @@ async def _run_combined_job(
                 )
                 logger.info("[job %s] CI report saved (%d competitors)", job_id, len(competitors_data))
 
-                # Blend CI max threat into overall score (10% weight)
+                # Blend CI score (10% weight)
                 _ci_threat_scores = [
                     cd["risk"]["score"] for cd in competitors_data
                     if isinstance(cd.get("risk"), dict) and cd["risk"].get("score") is not None
                 ]
                 if _ci_threat_scores and result.get("score") is not None:
-                    _ci_max = max(_ci_threat_scores)
+                    _ci_max  = max(_ci_threat_scores)
                     _blended = round(result["score"] * 0.9 + _ci_max * 0.1)
                     result["score"] = _blended
                     result["ci_score"] = _ci_max
-                    if settings.SUPABASE_SERVICE_KEY:
-                        try:
-                            await supabase.rest_update_service(
-                                f"rest/v1/risk_runs?company_id=eq.{company_id}&status=eq.done",
-                                settings.SUPABASE_SERVICE_KEY,
-                                {"score": _blended},
-                            )
-                            logger.info("[job %s] blended score=%d (ci_max=%d)", job_id, _blended, _ci_max)
-                        except Exception as _be:
-                            logger.warning("[job %s] blend score update failed: %s", job_id, _be)
+                    try:
+                        await supabase.rest_update_service(
+                            f"rest/v1/risk_runs?company_id=eq.{company_id}&status=eq.done",
+                            settings.SUPABASE_SERVICE_KEY,
+                            {"score": _blended},
+                        )
+                        logger.info("[job %s] blended score=%d (ci_max=%d)", job_id, _blended, _ci_max)
+                    except Exception as _be:
+                        logger.warning("[job %s] blend score update failed: %s", job_id, _be)
             except Exception as _ci_err:
                 logger.warning("[job %s] CI report save error: %s", job_id, _ci_err)
 
-        # ── Phase 5: Crisis Agent ─────────────────────────────────────────
+        # ── Phase 5: Crisis Agent (temporarily disabled) ─────────────────────
         _score_now = result.get("score") or 0
-        if _score_now >= 50 and settings.SUPABASE_SERVICE_KEY:
+        if _score_now >= 75 and settings.SUPABASE_SERVICE_KEY:
             try:
-                _analysis_jobs[job_id]["stage"] = "🚨 Кризисный агент работает…"
-                # Fetch employees with email
+                _stage("🚨 Кризисный агент работает…")
                 _emp_rows = await supabase.rest_select_service(
                     table="employees",
                     service_key=settings.SUPABASE_SERVICE_KEY,
@@ -1703,13 +1391,16 @@ async def _run_combined_job(
             except Exception as _ca_err:
                 logger.warning("[job %s] crisis agent error: %s", job_id, _ca_err)
 
-        _analysis_jobs[job_id] = {"status": "done", "result": result}
-        logger.info("[job %s] done, score=%s selected=%d/%d",
-                    job_id, result.get("score"), sel_total, total)
+        _analysis_jobs[job_id] = {"status": "done", "result": result, "company_id": company_id}
+        logger.info("[job %s] done, score=%s selected=%d",
+                    job_id, result.get("score"), result.get("selected_items", 0))
 
     except Exception as e:
         logger.error("[job %s] failed: %s", job_id, e)
-        _analysis_jobs[job_id] = {"status": "error", "error": str(e)}
+        _analysis_jobs[job_id] = {"status": "error", "error": str(e), "company_id": company_id}
+
+
+_PIPELINE_V2 = True  # pipeline.py handles all scraping/filter/analysis
 
 
 @app.post("/companies/{company_id}/analyze-combined")
@@ -1722,43 +1413,22 @@ async def company_analyze_combined(req: Request, company_id: str):
 
     body = await req.json()
     company_name = body.get("company_name", "")
+    if not company_name:
+        return {"error": "company_name required"}
 
-    from datetime import datetime, timezone, timedelta as _td
-    _now = datetime.now(timezone.utc)
-    _cutoff = _now - _td(days=90)
-
-    def _keep(item: dict) -> bool:
-        ds = item.get("pub_date") or item.get("date") or ""
-        if not ds:
-            return True
-        ds = ds.strip().lower()
-        if any(w in ds for w in ("ago", "назад", "hour", "час", "день", "дн", "мин", "min", "today", "сегодня", "вчера", "yesterday")):
-            return True
-        for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y.%m.%d", "%d-%m-%Y"):
-            try:
-                return datetime.strptime(ds[:10], fmt).replace(tzinfo=timezone.utc) >= _cutoff
-            except ValueError:
-                pass
-        return True
-
-    news_items      = [i for i in body.get("news", [])      if _keep(i)]
-    reddit_items    = [i for i in body.get("reddit", [])    if _keep(i)]
-    youtube_items   = [i for i in body.get("youtube", [])   if _keep(i)]
-    instagram_items = [i for i in body.get("instagram", []) if _keep(i)]
-    threads_items   = [i for i in body.get("threads", [])   if _keep(i)]
-
-    total = len(news_items) + len(reddit_items) + len(youtube_items) + len(instagram_items) + len(threads_items)
-    if not total:
-        return {"error": "Нет данных для анализа"}
+    # Frontend may send pre-fetched items (optional — pipeline also scrapes server-side)
+    news_items     = body.get("news", [])
+    threads_items  = body.get("threads", [])
+    instagram_items = body.get("instagram", [])
 
     job_id = str(_uuid.uuid4())
     _analysis_jobs[job_id] = {"status": "processing", "stage": "🚀 Запуск…", "company_id": company_id}
     asyncio.create_task(_run_combined_job(
         job_id, company_id, company_name,
-        news_items, reddit_items, youtube_items, instagram_items, threads_items, total,
+        news_items, [], [], instagram_items, threads_items, 0,
     ))
-    logger.info("[job %s] created for company %s (%d items)", job_id, company_id, total)
-    return {"job_id": job_id, "total_items": total}
+    logger.info("[job %s] created for company %s (pipeline v2)", job_id, company_id)
+    return {"job_id": job_id}
 
 
 @app.get("/companies/{company_id}/analyze-status/{job_id}")
