@@ -37,20 +37,45 @@ async def close() -> None:
 
 _PREFERRED_EXCHANGES = {"KAZ", "AIX", "NYQ", "NMS", "NGM", "LSE", "FRA", "AMS"}
 
+_STOP_WORDS = {"group", "holding", "holdings", "corp", "corporation", "ltd", "limited",
+               "llc", "inc", "company", "co", "plc", "group", "груп", "групп",
+               "казахстан", "kazakhstan", "гмбх"}
+
+
+def _name_matches(query: str, candidate: str) -> bool:
+    """Check if candidate ticker name is genuinely the same company as query."""
+    if not candidate:
+        return False
+    q_words = [w for w in query.lower().split() if len(w) >= 3 and w not in _STOP_WORDS]
+    c_lower = candidate.lower()
+    if not q_words:
+        # Short/generic name — require exact phrase match
+        return query.lower() in c_lower
+    # At least half the significant query words must appear in the candidate name
+    matches = sum(1 for w in q_words if w in c_lower)
+    return matches >= max(1, len(q_words) // 2)
+
 
 def _yf_search_sync(company_name: str) -> str | None:
-    """Find best ticker for a company name using yfinance Search."""
+    """Find best ticker for a company name using yfinance Search.
+    Validates that the returned ticker actually matches the company name."""
     try:
-        results = yf.Search(company_name, max_results=8, news_count=0).quotes
-        # 1st pass: preferred exchanges
-        for q in results:
-            if q.get("quoteType") in ("EQUITY", "ETF") and q.get("exchange") in _PREFERRED_EXCHANGES:
+        results = yf.Search(company_name, max_results=10, news_count=0).quotes
+        # Filter to only results whose name actually matches our company
+        matched = [
+            q for q in results
+            if q.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND")
+            and _name_matches(company_name, q.get("longname") or q.get("shortname") or "")
+        ]
+        # 1st pass: preferred exchanges among matched
+        for q in matched:
+            if q.get("exchange") in _PREFERRED_EXCHANGES:
                 return q.get("symbol")
-        # 2nd pass: any equity
-        for q in results:
-            if q.get("quoteType") in ("EQUITY", "ETF"):
-                return q.get("symbol")
-        return results[0].get("symbol") if results else None
+        # 2nd pass: any matched equity
+        if matched:
+            return matched[0].get("symbol")
+        # No validated match found — return None rather than wrong company
+        return None
     except Exception as e:
         logger.debug("yfinance search failed for '%s': %s", company_name, e)
         return None
@@ -245,21 +270,24 @@ async def _fetch_global_indices() -> list[dict[str, Any]]:
 
 
 async def _fetch_kase_index() -> dict[str, Any] | None:
-    """Fetch KASE composite index from the KASE public API."""
+    """Fetch KASE composite index via yfinance (^KASE ticker)."""
     try:
-        r = await _http.get("https://api.kase.kz/api/indices", timeout=8)
-        r.raise_for_status()
-        items = r.json()
-        if not items:
-            return None
-        item = items[0]
-        return {
-            "name":       item.get("name") or "KASE Index",
-            "symbol":     item.get("code", "KASE"),
-            "last":       item.get("lastValue") or item.get("value"),
-            "change_pct": item.get("change"),
-            "exchange":   "KASE",
-        }
+        def _sync():
+            fi = yf.Ticker("^KASE").fast_info
+            price = getattr(fi, "last_price", None)
+            if not price:
+                return None
+            prev = getattr(fi, "previous_close", None)
+            chg = round(((price - prev) / prev) * 100, 2) if prev else None
+            return {
+                "name":       "KASE Index",
+                "symbol":     "^KASE",
+                "last":       round(price, 2),
+                "change_pct": chg,
+                "exchange":   "KASE",
+            }
+        result = await asyncio.to_thread(_sync)
+        return result
     except Exception as e:
         logger.debug("KASE index fetch failed: %s", e)
         return None
@@ -270,27 +298,34 @@ async def _fetch_kase_index() -> dict[str, Any] | None:
 # ──────────────────────────────────────────────
 
 async def _fetch_kase_data(company_name: str) -> dict[str, Any] | None:
+    """Try to find company on KASE via yfinance with exchange filter."""
     try:
-        r = await _http.get(
-            "https://api.kase.kz/api/securities/search",
-            params={"query": company_name, "limit": 3},
-        )
-        r.raise_for_status()
-        items = r.json()
-        if not items:
+        def _sync():
+            results = yf.Search(company_name, max_results=10, news_count=0).quotes
+            for q in results:
+                if q.get("exchange") in ("KAZ", "AIX") and _name_matches(
+                    company_name, q.get("longname") or q.get("shortname") or ""
+                ):
+                    sym = q.get("symbol")
+                    fi = yf.Ticker(sym).fast_info
+                    price = getattr(fi, "last_price", None)
+                    if not price:
+                        return None
+                    prev = getattr(fi, "previous_close", None)
+                    chg = round(((price - prev) / prev) * 100, 2) if prev else None
+                    return {
+                        "ticker":     sym,
+                        "name":       q.get("longname") or q.get("shortname") or company_name,
+                        "last":       round(price, 4),
+                        "change_pct": chg,
+                        "source":     "KASE (Yahoo Finance)",
+                        "exchange":   q.get("exchange", "KASE"),
+                        "currency":   getattr(fi, "currency", "KZT"),
+                    }
             return None
-        item = items[0]
-        return {
-            "ticker":     item.get("code") or item.get("ticker", ""),
-            "name":       item.get("name", company_name),
-            "last":       item.get("lastPrice"),
-            "change_pct": item.get("change"),
-            "source":     "KASE",
-            "exchange":   "KASE",
-            "currency":   "KZT",
-        }
+        return await asyncio.to_thread(_sync)
     except Exception as e:
-        logger.debug("KASE fetch failed: %s", e)
+        logger.debug("KASE company fetch failed: %s", e)
         return None
 
 
@@ -380,6 +415,112 @@ async def _twelve_top_gainers_losers(api_key: str) -> dict[str, list]:
 # Public interface
 # ──────────────────────────────────────────────
 
+def _yf_fundamentals_sync(symbol: str) -> dict[str, Any]:
+    """Fetch sector, industry, and key fundamental ratios via yfinance .info."""
+    try:
+        info = yf.Ticker(symbol).info
+        if not info:
+            return {}
+
+        def _fmt_large(v):
+            if v is None:
+                return None
+            if v >= 1_000_000_000_000:
+                return f"{v/1_000_000_000_000:.2f}T"
+            if v >= 1_000_000_000:
+                return f"{v/1_000_000_000:.2f}B"
+            if v >= 1_000_000:
+                return f"{v/1_000_000:.2f}M"
+            return str(v)
+
+        def _fmt_pct(v):
+            return f"{v*100:.2f}%" if v is not None else None
+
+        _SECTOR_RU = {
+            "Technology": "Технологии",
+            "Financial Services": "Финансовые услуги",
+            "Healthcare": "Здравоохранение",
+            "Consumer Cyclical": "Потребительский (цикличный)",
+            "Consumer Defensive": "Потребительский (защитный)",
+            "Industrials": "Промышленность",
+            "Basic Materials": "Сырьевые материалы",
+            "Energy": "Энергетика",
+            "Utilities": "Коммунальные услуги",
+            "Real Estate": "Недвижимость",
+            "Communication Services": "Телекоммуникации",
+        }
+        _INDUSTRY_RU = {
+            "Consumer Electronics": "Потребительская электроника",
+            "Software—Application": "Программное обеспечение",
+            "Software—Infrastructure": "ПО: Инфраструктура",
+            "Semiconductors": "Полупроводники",
+            "Internet Retail": "Интернет-торговля",
+            "Banks—Regional": "Региональные банки",
+            "Banks—Diversified": "Диверсифицированные банки",
+            "Insurance—Diversified": "Страхование",
+            "Asset Management": "Управление активами",
+            "Oil & Gas E&P": "Нефть и газ (разведка)",
+            "Oil & Gas Integrated": "Нефть и газ (интегрир.)",
+            "Telecom Services": "Телекоммуникации",
+            "Pharmaceutical Retailers": "Фармацевтика",
+            "Drug Manufacturers—General": "Фармацевтика (производство)",
+            "Auto Manufacturers": "Автопроизводители",
+            "Specialty Retail": "Специализированная торговля",
+            "Grocery Stores": "Продуктовые магазины",
+            "Aerospace & Defense": "Авиация и оборона",
+            "Railroads": "Железные дороги",
+            "Airlines": "Авиалинии",
+            "Real Estate—General": "Недвижимость",
+            "REIT—Retail": "REIT: Розничная",
+        }
+        _COUNTRY_RU = {
+            "United States": "США",
+            "Kazakhstan": "Казахстан",
+            "Russia": "Россия",
+            "China": "Китай",
+            "Germany": "Германия",
+            "United Kingdom": "Великобритания",
+            "Japan": "Япония",
+            "France": "Франция",
+            "Canada": "Канада",
+            "Netherlands": "Нидерланды",
+            "Switzerland": "Швейцария",
+            "South Korea": "Южная Корея",
+            "India": "Индия",
+            "Brazil": "Бразилия",
+        }
+
+        raw_sector = info.get("sector")
+        raw_industry = info.get("industry")
+        raw_country = info.get("country")
+
+        return {
+            "sector":              _SECTOR_RU.get(raw_sector, raw_sector),
+            "industry":            _INDUSTRY_RU.get(raw_industry, raw_industry),
+            "country":             _COUNTRY_RU.get(raw_country, raw_country),
+            "full_time_employees": info.get("fullTimeEmployees"),
+            "website":             info.get("website"),
+            "market_cap_fmt":      _fmt_large(info.get("marketCap")),
+            "enterprise_value_fmt":_fmt_large(info.get("enterpriseValue")),
+            "trailing_pe":         round(info["trailingPE"], 2) if info.get("trailingPE") else None,
+            "forward_pe":          round(info["forwardPE"], 2) if info.get("forwardPE") else None,
+            "price_to_book":       round(info["priceToBook"], 2) if info.get("priceToBook") else None,
+            "price_to_sales":      round(info["priceToSalesTrailing12Months"], 2) if info.get("priceToSalesTrailing12Months") else None,
+            "dividend_yield":      _fmt_pct(info.get("dividendYield")),
+            "beta":                round(info["beta"], 3) if info.get("beta") else None,
+            "fifty_day_avg":       round(info["fiftyDayAverage"], 4) if info.get("fiftyDayAverage") else None,
+            "two_hundred_day_avg": round(info["twoHundredDayAverage"], 4) if info.get("twoHundredDayAverage") else None,
+            "revenue_growth":      _fmt_pct(info.get("revenueGrowth")),
+            "earnings_growth":     _fmt_pct(info.get("earningsGrowth")),
+            "profit_margins":      _fmt_pct(info.get("profitMargins")),
+            "return_on_equity":    _fmt_pct(info.get("returnOnEquity")),
+            "debt_to_equity":      round(info["debtToEquity"], 2) if info.get("debtToEquity") else None,
+        }
+    except Exception as e:
+        logger.debug("yfinance fundamentals failed for '%s': %s", symbol, e)
+        return {}
+
+
 async def fetch_market_data(company_name: str) -> dict[str, Any]:
     """Light version used on the company overview card."""
     symbol = await _yahoo_search(company_name)
@@ -424,11 +565,14 @@ async def fetch_full_market_data(
     market_movers: dict = {"gainers": [], "losers": []}
     top_stocks: list[dict] = []
 
+    fundamentals: dict = {}
+
     if symbol:
         tasks = [
             _yahoo_peers(symbol),
             _yahoo_trending("US"),
             asyncio.to_thread(_yf_history_sync, symbol, 60),
+            asyncio.to_thread(_yf_fundamentals_sync, symbol),
         ]
         if twelve_key:
             tasks += [
@@ -445,8 +589,9 @@ async def fetch_full_market_data(
         peers         = results[0]
         top_stocks    = results[1]
         time_series   = results[2]
-        td_extra      = results[3] or {}
-        market_movers = results[4]
+        fundamentals  = results[3] or {}
+        td_extra      = results[4] or {}
+        market_movers = results[5]
 
         if stock and td_extra:
             for k, v in td_extra.items():
@@ -467,4 +612,5 @@ async def fetch_full_market_data(
         "top_stocks":      top_stocks,
         "market_indices":  market_indices,
         "market_movers":   market_movers,
+        "fundamentals":    fundamentals,
     }

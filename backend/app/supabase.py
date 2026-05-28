@@ -199,6 +199,20 @@ class SupabaseClient:
         r.raise_for_status()
         return r.json()
 
+    async def rest_delete_service(
+        self,
+        table: str,
+        service_key: str,
+        query_params: dict[str, str],
+    ) -> None:
+        url = f"{self._base}/rest/v1/{table}"
+        r = await self._http.delete(
+            url,
+            headers=self._headers(service_key=service_key),
+            params=query_params,
+        )
+        r.raise_for_status()
+
     async def rest_delete(
         self,
         table: str,

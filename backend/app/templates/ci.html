@@ -276,6 +276,96 @@
           </div>
           {% endif %}{# end ai metrics #}
 
+          <!-- ══ RISK COMPARISON ══ -->
+          {% set _comp_risks = [] %}
+          {% for cd in (report.competitors_data or []) %}
+            {% if cd.risk and cd.risk.score is not none %}
+              {% set _ = _comp_risks.append(cd) %}
+            {% endif %}
+          {% endfor %}
+          {% if own_score is not none or _comp_risks %}
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);padding:16px 18px;margin-bottom:16px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:14px">Сравнение риск-скора</div>
+
+            {% set _cat_labels = {'media':'Media','hr':'HR','gr':'GR','pr':'PR','market':'Market'} %}
+            {% set _cat_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c084fc','market':'#fbbf24'} %}
+
+            <!-- Our company row -->
+            {% if own_score is not none %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:120px;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">
+                ★ {{ company.name }}
+              </div>
+              <div style="flex:1;height:8px;background:rgba(255,255,255,0.07);border-radius:999px;overflow:hidden">
+                {% set _oc = '#4ade80' if own_score < 40 else '#fbbf24' if own_score < 65 else '#f87171' %}
+                <div style="height:100%;width:{{ own_score }}%;background:{{ _oc }};border-radius:999px;transition:width .5s"></div>
+              </div>
+              <div style="width:36px;text-align:right;font-size:13px;font-weight:800;flex-shrink:0;
+                          color:{% if own_score < 40 %}#4ade80{% elif own_score < 65 %}#fbbf24{% else %}#f87171{% endif %}">
+                {{ own_score }}
+              </div>
+            </div>
+            <!-- Category mini-bars for our company -->
+            {% if own_categories %}
+            <div style="display:flex;gap:6px;margin-bottom:14px;margin-left:130px">
+              {% for cat_k, cat_l in _cat_labels.items() %}
+                {% set cs = own_categories.get(cat_k, {}).score if own_categories.get(cat_k) else none %}
+                {% if cs is not none %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                  <div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center">
+                    <span style="font-size:10px;font-weight:800;color:{{ _cat_colors[cat_k] }}">{{ cs | round | int }}</span>
+                  </div>
+                  <span style="font-size:9px;color:var(--text-muted)">{{ cat_l }}</span>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Competitor rows -->
+            {% for cd in (report.competitors_data or []) %}
+            {% set rs = cd.risk if cd.risk is mapping else {} %}
+            {% set rs_score = rs.get('score') %}
+            {% if rs_score is not none and rs_score is number %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:120px;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">
+                {{ cd.name }}
+              </div>
+              <div style="flex:1;height:8px;background:rgba(255,255,255,0.07);border-radius:999px;overflow:hidden">
+                {% set _cc = '#4ade80' if rs_score < 40 else '#fbbf24' if rs_score < 65 else '#f87171' %}
+                <div style="height:100%;width:{{ rs_score }}%;background:{{ _cc }};border-radius:999px;transition:width .5s"></div>
+              </div>
+              <div style="width:36px;text-align:right;font-size:13px;font-weight:800;flex-shrink:0;
+                          color:{% if rs_score < 40 %}#4ade80{% elif rs_score < 65 %}#fbbf24{% else %}#f87171{% endif %}">
+                {{ rs_score | round | int }}
+              </div>
+            </div>
+            <!-- Category mini-bars for competitor -->
+            {% set rs_cats = rs.categories or {} %}
+            {% if rs_cats %}
+            <div style="display:flex;gap:6px;margin-bottom:10px;margin-left:130px">
+              {% for cat_k, cat_l in _cat_labels.items() %}
+                {% set cs = rs_cats.get(cat_k) %}
+                {% if cs is not none %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                  <div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center">
+                    <span style="font-size:10px;font-weight:800;color:{{ _cat_colors[cat_k] }}">{{ cs | round | int }}</span>
+                  </div>
+                  <span style="font-size:9px;color:var(--text-muted)">{{ cat_l }}</span>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% if rs.summary %}
+            <div style="font-size:11px;color:var(--text-muted);margin-left:130px;margin-bottom:12px;line-height:1.4">{{ rs.summary }}</div>
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+
           <!-- Summary -->
           {% if ai and ai.summary %}
           <div class="ci-summary">
@@ -345,7 +435,18 @@
                     </div>
                   {% endif %}
                 </div>
-                <div style="font-size:11px;color:var(--text-muted)">{{ c.news_count }} новостей</div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                  {% if c.risk and c.risk.score is not none %}
+                    {% set _rs = c.risk.score | round | int %}
+                    <div style="font-size:22px;font-weight:800;line-height:1;
+                      color:{% if _rs < 40 %}#4ade80{% elif _rs < 65 %}#fbbf24{% else %}#f87171{% endif %}">
+                      {{ _rs }}
+                    </div>
+                    <div style="font-size:9px;color:var(--text-muted);font-weight:600;text-transform:uppercase">риск-скор</div>
+                  {% else %}
+                    <div style="font-size:11px;color:var(--text-muted)">{{ c.news_count }} новостей</div>
+                  {% endif %}
+                </div>
               </div>
               <div class="ci-comp-body">
                 {% if ai_comp and ai_comp.key_move %}
@@ -358,13 +459,36 @@
                     {{ ai_comp.impact }}
                   </div>
                 {% endif %}
-                {% for n in c.news[:5] %}
+                {# ── Отобранные AI новости из основного анализа ── #}
+                {% set _sel_news = comp_news_by_name.get(c.name, []) %}
+                {% if _sel_news %}
+                <div style="margin-bottom:10px">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#a78bfa;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Отобрано AI · {{ _sel_news|length }} источник{{ 'а' if _sel_news|length in [2,3,4] else ('ов' if _sel_news|length > 4 else '') }}
+                  </div>
+                  {% for n in _sel_news[:8] %}
+                  <div class="news-item">
+                    <a href="{{ n.url }}" target="_blank" rel="noopener" style="font-size:12px;font-weight:500;color:var(--text);line-height:1.4;display:block">{{ n.title }}</a>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ n.source }}{% if n.pub_date %} · {{ n.pub_date }}{% endif %}</div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+
+                {# ── Новости из CI-анализа (run_ci) ── #}
+                {% if c.news %}
+                <div style="{% if _sel_news %}border-top:1px solid var(--border);padding-top:10px;margin-top:4px;{% endif %}">
+                  {% if _sel_news %}<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:6px">CI Monitor</div>{% endif %}
+                  {% for n in c.news[:5] %}
                   <div class="news-item">
                     <a href="{{ n.link }}" target="_blank" rel="noopener" style="font-size:12px;font-weight:500;color:var(--text);line-height:1.4;display:block">{{ n.title }}</a>
                     <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ n.source }}{% if n.pub_date %} · {{ n.pub_date }}{% endif %}</div>
                   </div>
-                {% endfor %}
-                {% if not c.news %}
+                  {% endfor %}
+                </div>
+                {% endif %}
+                {% if not c.news and not _sel_news %}
                   <div style="font-size:12px;color:var(--text-muted)">Новостей не найдено</div>
                 {% endif %}
               </div>

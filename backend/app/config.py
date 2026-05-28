@@ -31,11 +31,34 @@ class Settings:
 
     # Apify
     APIFY_TOKEN: str = os.getenv("APIFY_TOKEN", "")
+
+    # Instagram (instagrapi)
+    INSTAGRAM_USERNAME: str = os.getenv("INSTAGRAM_USERNAME", "")
+    INSTAGRAM_PASSWORD: str = os.getenv("INSTAGRAM_PASSWORD", "")
+
+    # Reddit (PRAW)
+    REDDIT_CLIENT_ID: str = os.getenv("REDDIT_CLIENT_ID", "")
+    REDDIT_CLIENT_SECRET: str = os.getenv("REDDIT_CLIENT_SECRET", "")
+
+    # YouTube Data API v3
+    YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
+
+    # Telegram (Pyrogram)
+    TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID") or "0")
+    TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
     FINANCE_ENABLED: bool = os.getenv("FINANCE_ENABLED", "true").lower() == "true"
 
+    # SerpAPI (Google SERP scraping)
+    SERPAPI_KEY: str = os.getenv("SERPAPI_KEY", "")
+
     # Anthropic
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+
+    # Google Calendar
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REFRESH_TOKEN: str = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 
     # Monitoring
     MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "false").lower() == "true"

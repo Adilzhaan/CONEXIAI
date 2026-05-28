@@ -61,14 +61,14 @@
           {% if all_companies %}
             <div class="co-drop-divider"></div>
             {% for c in all_companies %}
-              <a href="/companies/{{ c.id }}" class="co-drop-item">
+              <a href="/companies/{{ c.id }}" class="co-drop-item" onclick="event.stopPropagation();window.location.href='/companies/{{ c.id }}'">
                 <div class="co-avatar" style="width:22px;height:22px;font-size:10px;border-radius:6px;background:linear-gradient(135deg,#4f46e5,#7c3aed)">{{ c.name[0] | upper }}</div>
                 {{ c.name }}
               </a>
             {% endfor %}
           {% endif %}
           <div class="co-drop-divider"></div>
-          <a href="/dashboard" class="co-drop-item co-drop-cc">
+          <a href="/dashboard" class="co-drop-item co-drop-cc" onclick="event.stopPropagation();window.location.href='/dashboard'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
             Command Center
           </a>
@@ -84,11 +84,7 @@
         </div>
         <a href="/companies/{{ company.id }}/report.pdf" class="btn btn-secondary btn-sm" data-i18n="btn_pdf">Скачать PDF</a>
         {% if is_admin %}
-        <form method="post" action="/risks/run" id="risk-form" style="margin:0">
-          <input type="hidden" name="company_id" value="{{ company.id }}" />
-          <button type="submit" class="btn btn-primary btn-sm" id="risk-btn" data-i18n="btn_run"
-                  onclick="this.disabled=true;this.dataset.i18n='';this.textContent=document.cookie.includes('lang=en')?'Running…':'Запуск…';this.form.submit()">Запустить анализ</button>
-        </form>
+        <button class="btn btn-primary btn-sm" id="risk-btn" onclick="launchFullAnalysis(this)">Запустить анализ</button>
         {% endif %}
       </div>
     </div>
@@ -108,6 +104,129 @@
              border-radius:999px;width:5%;transition:width 0.5s ease"></div>
       </div>
     </div>
+
+    <!-- ── Analysis progress overlay ── -->
+    <div id="analysis-stages" style="display:none;position:fixed;bottom:24px;right:24px;z-index:10000;width:480px;background:#13111f;border:1px solid rgba(124,58,237,0.35);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.6);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+      <div style="display:flex;gap:0;align-items:stretch">
+
+        <!-- Robot column -->
+        <div style="width:160px;flex-shrink:0;background:rgba(124,58,237,0.08);display:flex;align-items:center;justify-content:center;padding:16px 8px;border-right:1px solid rgba(124,58,237,0.15)">
+          <svg width="140" height="160" viewBox="0 0 200 220">
+            <defs><clipPath id="scan-clip2"><rect x="62" y="108" width="76" height="76" rx="10"/></clipPath></defs>
+            <g id="robot-wrap-inner">
+              <rect x="90" y="40" width="20" height="22" rx="4" fill="#3730a3" stroke="#6366f1" stroke-width="1"/>
+              <circle cx="100" cy="38" r="4" fill="#818cf8" opacity="0.9"/>
+              <rect x="70" y="60" width="60" height="52" rx="14" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="82" y="72" width="14" height="14" rx="7" fill="#0f0d1a" stroke="#6366f1" stroke-width="1"/>
+              <rect x="104" y="72" width="14" height="14" rx="7" fill="#0f0d1a" stroke="#6366f1" stroke-width="1"/>
+              <circle id="eye-l" cx="89" cy="79" r="4" fill="#7c3aed"/>
+              <circle id="eye-r" cx="111" cy="79" r="4" fill="#7c3aed"/>
+              <circle cx="91" cy="77" r="1.5" fill="#e0e7ff"/>
+              <circle cx="113" cy="77" r="1.5" fill="#e0e7ff"/>
+              <rect x="82" y="92" width="36" height="6" rx="3" fill="#3730a3" stroke="#6366f1" stroke-width="0.5"/>
+              <rect x="86" y="94" width="6" height="2" rx="1" fill="#a78bfa" opacity="0.9"/>
+              <rect x="94" y="94" width="4" height="2" rx="1" fill="#a78bfa" opacity="0.6"/>
+              <rect x="100" y="94" width="8" height="2" rx="1" fill="#a78bfa" opacity="0.9"/>
+              <rect x="62" y="108" width="76" height="76" rx="10" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="75" y="120" width="50" height="36" rx="6" fill="#3730a3" stroke="#6366f1" stroke-width="1"/>
+              <line x1="100" y1="120" x2="100" y2="156" stroke="#7c3aed" stroke-width="1" opacity="0.6"/>
+              <rect x="77" y="164" width="10" height="6" rx="2" fill="#7c3aed" opacity="0.8"/>
+              <rect x="91" y="164" width="10" height="6" rx="2" fill="#7c3aed" opacity="0.8"/>
+              <rect x="105" y="164" width="10" height="6" rx="2" fill="#7c3aed" opacity="0.5"/>
+              <rect x="119" y="164" width="4" height="12" rx="2" fill="#6366f1"/>
+              <rect x="77" y="164" width="4" height="12" rx="2" fill="#6366f1"/>
+              <rect x="40" y="115" width="24" height="44" rx="8" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="136" y="115" width="24" height="44" rx="8" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="47" y="122" width="10" height="4" rx="2" fill="#3730a3"/>
+              <rect x="47" y="130" width="10" height="4" rx="2" fill="#3730a3"/>
+              <rect x="143" y="122" width="10" height="4" rx="2" fill="#3730a3"/>
+              <rect x="143" y="130" width="10" height="4" rx="2" fill="#3730a3"/>
+              <rect x="78" y="184" width="18" height="28" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="104" y="184" width="18" height="28" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+              <rect x="82" y="192" width="10" height="4" rx="2" fill="#3730a3"/>
+              <rect x="108" y="192" width="10" height="4" rx="2" fill="#3730a3"/>
+              <g clip-path="url(#scan-clip2)">
+                <rect id="scan-beam2" x="72" y="108" width="56" height="4" fill="#a78bfa" opacity="0.35" rx="2"/>
+              </g>
+            </g>
+            <g transform="translate(152,72)">
+              <circle class="aping-ring"  cx="0" cy="0" r="6" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0"/>
+              <circle class="aping-ring2" cx="0" cy="0" r="6" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0"/>
+              <circle cx="0" cy="0" r="5" fill="#7c3aed" opacity="0.9"/>
+              <path d="M-3 0 L0 -3 L3 0" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Info column -->
+        <div style="flex:1;min-width:0;padding:16px 16px 14px">
+          <div id="robot-title" style="font-size:14px;font-weight:600;color:#e2e8f0;min-height:22px">Запускаю анализ…</div>
+          <div id="robot-subtitle" style="font-size:11px;color:#a78bfa;margin-top:2px;min-height:16px">Инициализация агентов</div>
+
+          <!-- Step dots -->
+          <div style="display:flex;align-items:center;margin-top:12px">
+            <div class="an-dot" id="an-dot0"></div><div class="an-line"></div>
+            <div class="an-dot" id="an-dot1"></div><div class="an-line"></div>
+            <div class="an-dot" id="an-dot2"></div><div class="an-line"></div>
+            <div class="an-dot" id="an-dot3"></div><div class="an-line"></div>
+            <div class="an-dot" id="an-dot4"></div>
+          </div>
+
+          <!-- Progress bar -->
+          <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;margin-top:8px">
+            <div id="analysis-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#3b82f6);border-radius:2px;transition:width 0.6s ease"></div>
+          </div>
+
+          <!-- Log -->
+          <div id="an-log" style="margin-top:10px;display:flex;flex-direction:column;gap:3px;min-height:64px"></div>
+
+          <!-- Found items -->
+          <div id="an-found" style="margin-top:6px;display:flex;flex-direction:column;gap:5px"></div>
+
+          <!-- Elapsed -->
+          <div style="margin-top:8px;font-size:10px;color:#4b5563;text-align:right">
+            <span id="analysis-elapsed"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden stage divs for JS compatibility -->
+      <div style="display:none">
+        <div id="stage-news"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+        <div id="stage-reddit"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+        <div id="stage-youtube"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+        <div id="stage-instagram"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+        <div id="stage-threads"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+        <div id="stage-ai"><span class="stage-icon"></span><span class="stage-label"></span><span class="stage-status"></span></div>
+      </div>
+    </div>
+
+    <style>
+      @keyframes an-float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+      @keyframes an-scan     { 0%{transform:translateY(0);opacity:0.3} 100%{transform:translateY(60px);opacity:0} }
+      @keyframes an-ping     { 0%{r:6;opacity:1} 100%{r:20;opacity:0} }
+      @keyframes an-pulse-d  { 0%,100%{opacity:.4} 50%{opacity:1} }
+      @keyframes an-fadein   { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+      #robot-wrap-inner { animation: an-float 3s ease-in-out infinite; }
+      #scan-beam2       { animation: an-scan 1.2s linear infinite; }
+      .aping-ring  { animation: an-ping 1.2s ease-out infinite; }
+      .aping-ring2 { animation: an-ping 1.2s ease-out infinite 0.5s; }
+      .an-dot  { width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;transition:background 0.3s; }
+      .an-dot.active { background:#7c3aed;animation:an-pulse-d 1s infinite; }
+      .an-dot.done   { background:#34d399;animation:none; }
+      .an-line { flex:1;height:1px;background:rgba(255,255,255,0.07); }
+      .an-log-line        { font-size:11px;font-family:'SF Mono','Fira Code',monospace;color:#4b5563;animation:an-fadein 0.2s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+      .an-log-line.active { color:#a78bfa; }
+      .an-log-line.done   { color:#34d399; }
+      .an-log-line.warn   { color:#fbbf24; }
+      .an-found-item { display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);font-size:11px;color:#cbd5e1;animation:an-fadein 0.3s ease; }
+      .an-badge { font-size:10px;padding:2px 7px;border-radius:99px;font-weight:600;white-space:nowrap; }
+      .an-badge-news   { background:rgba(59,130,246,0.15);color:#93c5fd; }
+      .an-badge-social { background:rgba(124,58,237,0.15);color:#c4b5fd; }
+      .an-badge-risk   { background:rgba(239,68,68,0.15);color:#fca5a5; }
+      .an-badge-ok     { background:rgba(52,211,153,0.15);color:#6ee7b7; }
+      .an-badge-warn   { background:rgba(251,191,36,0.15);color:#fde68a; }
+    </style>
 
     <div class="sidebar-wrap" style="padding:0">
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -181,8 +300,10 @@
           display:none; position:fixed; inset:0;
           background:rgba(11,18,32,0.9); backdrop-filter:blur(4px);
           z-index:999; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+          opacity:1; transition:opacity 0.8s ease;
         }
         .analysis-loading.active { display:flex; }
+        .analysis-loading.fading { opacity:0; }
         .loading-spinner { width:44px;height:44px;border:3px solid rgba(124,58,237,0.2);border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite; }
         .loading-step { display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,0.4);transition:color 0.3s; }
         .loading-step.active { color:#fff; }
@@ -631,21 +752,19 @@
         ("pr",    "PR Environment",     "#c084fc", "rgba(124,58,237,0.1)"),
         ("market","Market & Industry",  "#fbbf24", "rgba(217,119,6,0.1)"),
       ] %}
-      {% if cats %}
       <style>
         .rcat-nav { padding:16px 32px 0; display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
         @media(max-width:1200px){ .rcat-nav { grid-template-columns:repeat(3,1fr); } }
         @media(max-width:640px) { .rcat-nav { grid-template-columns:repeat(2,1fr); padding:12px 16px 0; } }
       </style>
-      <div class="rcat-nav">
+      <div class="rcat-nav" id="rcat-nav">
         {% for key, label, color, bg in cat_meta_top %}
-          {% set score = cats[key].score if cats[key] else none %}
-          {% set risks = cats[key].risks if cats[key] else [] %}
+          {% set score = cats[key].score if cats and cats[key] else none %}
+          {% set risks = cats[key].risks if cats and cats[key] else [] %}
           {% set desc = risks[0].text if risks and risks[0] is mapping else (risks[0] if risks else '') %}
-          {% set prev_score = (risk_runs[1].categories[key].score if risk_runs|length > 1 and risk_runs[1].categories and risk_runs[1].categories[key] else none) %}
-          {% set trend = ((score | int) - (prev_score | int)) if score is not none and prev_score is not none else none %}
           <a href="{{ '#' if key == 'market' else '/companies/' + company.id + '/category/' + key }}"
              {% if key == 'market' %}onclick="event.preventDefault();showTab('market',null)"{% endif %}
+             id="rcat-card-{{ key }}"
              style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
                     background:{{ bg }};border:1px solid {{ color }}26;border-left:3px solid {{ color }};
                     border-radius:var(--radius);text-decoration:none;color:inherit;
@@ -655,34 +774,51 @@
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
               <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">{{ label }}</div>
             </div>
-            <div style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
+            <div id="rcat-score-{{ key }}" style="font-size:28px;font-weight:800;line-height:1;color:{{ color }}">
               {{ score if score is not none else '—' }}
             </div>
             <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07);overflow:hidden">
-              <div style="height:100%;border-radius:2px;background:{{ color }};opacity:0.7;width:{{ score if score is not none else 0 }}%"></div>
+              <div id="rcat-bar-{{ key }}" style="height:100%;border-radius:2px;background:{{ color }};opacity:0.7;width:{{ score if score is not none else 0 }}%"></div>
             </div>
-            {% if desc %}
-              <div style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">{{ desc[:55] }}{% if desc|length > 55 %}…{% endif %}</div>
-            {% endif %}
+            <div id="rcat-desc-{{ key }}" style="font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">
+              {% if desc %}{{ desc[:55] }}{% if desc|length > 55 %}…{% endif %}{% endif %}
+            </div>
           </a>
         {% endfor %}
 
         <!-- CI Monitor card -->
+        {% set _ci_scores = [] %}
+        {% if ci_report and ci_report.competitors_data %}
+          {% for _cd in ci_report.competitors_data %}
+            {% if _cd.risk and _cd.risk.score is not none %}
+              {% set _ = _ci_scores.append(_cd.risk.score) %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% set _ci_threat = (_ci_scores | max) if _ci_scores else none %}
+        {% set _ci_color = '#f87171' if _ci_threat is not none and _ci_threat >= 65 else '#fbbf24' if _ci_threat is not none and _ci_threat >= 40 else '#06b6d4' %}
         <a href="#" onclick="event.preventDefault();showTab('ci',null)"
            style="display:flex;flex-direction:column;gap:5px;padding:14px 16px;
-                  background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-left:3px solid #06b6d4;
+                  background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-left:3px solid {{ _ci_color }};
                   border-radius:var(--radius);text-decoration:none;color:inherit;
                   transition:box-shadow .15s,transform .15s;position:relative;overflow:hidden"
            onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)';this.style.transform='translateY(-2px)'"
            onmouseout="this.style.boxShadow='';this.style.transform=''">
           <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.50);text-transform:uppercase;letter-spacing:.06em">CI Monitor</div>
-          <div style="font-size:28px;font-weight:800;line-height:1;color:#06b6d4">→</div>
-          <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)"></div>
-          <div data-i18n="ci_sub" style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Конкурентная разведка</div>
+          {% if _ci_threat is not none %}
+            <div style="font-size:28px;font-weight:800;line-height:1;color:{{ _ci_color }}">{{ _ci_threat | round | int }}</div>
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)">
+              <div style="height:100%;width:{{ _ci_threat }}%;border-radius:2px;background:{{ _ci_color }}"></div>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Угроза бизнесу</div>
+          {% else %}
+            <div style="font-size:28px;font-weight:800;line-height:1;color:#06b6d4">→</div>
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.07)"></div>
+            <div data-i18n="ci_sub" style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4">Конкурентная разведка</div>
+          {% endif %}
         </a>
 
       </div>
-      {% endif %}
       <!-- ══ END RISK CATEGORIES NAV ══ -->
 
       <!-- Tab nav -->
@@ -702,13 +838,12 @@
           <span data-i18n="tab_history">История</span>
           {% if risk_runs %}<span class="cd-tab-badge">{{ risk_runs|length }}</span>{% endif %}
         </button>
-        <button class="cd-tab" onclick="showTab('monitor', this)">
-          <span data-i18n="tab_monitor">Мониторинг</span>
-          {% set mn = monitor_snapshot.recent_news if monitor_snapshot and monitor_snapshot.recent_news else [] %}
-          {% if mn %}<span class="cd-tab-badge">{{ mn|length }}</span>{% endif %}
-        </button>
+        <!-- Monitor tab hidden temporarily -->
         <button class="cd-tab" onclick="showTab('social', this)">
           <span data-i18n="tab_social">Соцсети</span>
+        </button>
+        <button class="cd-tab" onclick="showTab('archive', this); loadArchive()">
+          <span>Архив</span>
         </button>
       </div>
 
@@ -780,6 +915,7 @@
           font-size:12px; font-weight:700; padding:4px 12px; border-radius:99px; margin-top:6px;
         }
         .ro-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .hist-details[open] .hist-chevron { transform: rotate(180deg); }
         .ro-delta-badge {
           display:inline-flex; align-items:center; gap:3px;
           font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; margin-top:5px;
@@ -882,8 +1018,25 @@
               <div class="ri-sec-title">
                 <div class="ri-sec-title-icon">◎</div> Risk Overview
               </div>
-              <div style="font-size:11px;color:var(--text-muted)">
-                {% if latest.created_at %}Обновлено {{ latest.created_at[:10] }}{% endif %}
+              <div style="display:flex;align-items:center;gap:10px">
+                {% if s >= 65 %}
+                <button onclick="createMeet()" id="meet-btn"
+                  style="display:flex;align-items:center;gap:6px;padding:5px 12px;
+                         background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);
+                         border-radius:8px;color:#f87171;font-size:11px;font-weight:700;
+                         cursor:pointer;transition:all .15s"
+                  onmouseover="this.style.background='rgba(239,68,68,0.25)'"
+                  onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/>
+                    <rect x="3" y="8" width="12" height="8" rx="2"/>
+                  </svg>
+                  Собрать совещание
+                </button>
+                {% endif %}
+                <div style="font-size:11px;color:var(--text-muted)">
+                  {% if latest.created_at %}Обновлено {{ latest.created_at[:10] }}{% endif %}
+                </div>
               </div>
             </div>
 
@@ -903,7 +1056,7 @@
                       stroke-linecap="round" opacity="0.85"/>
                   </svg>
                   <div class="ro-gauge-num">
-                    <div class="ro-gauge-score" style="color:{{ crisis_color }}">{{ s }}</div>
+                    <div id="ro-gauge-score" class="ro-gauge-score" style="color:{{ crisis_color }}">{{ s }}</div>
                     <div class="ro-gauge-max">/ 100</div>
                   </div>
                 </div>
@@ -925,14 +1078,12 @@
                 <div class="ro-cats-title">Risk = (PR + HR + GR + MI + MK) / 5</div>
                 {% for key, lbl, color in ro_cat_meta %}
                   {% set cat_score = cats[key].score | int if cats and cats[key] and cats[key].score is not none else none %}
-                  {% set prev_cat_score = (prev.categories[key].score | int if prev and prev.categories and prev.categories[key] and prev.categories[key].score is not none else none) %}
-                  {% set cat_delta = (cat_score - prev_cat_score) if cat_score is not none and prev_cat_score is not none else none %}
                   <div class="ro-cat-row">
                     <div class="ro-cat-lbl" style="color:{{ color }}">{{ lbl }}</div>
                     <div class="ro-cat-track">
-                      <div class="ro-cat-fill" style="width:{{ cat_score if cat_score else 0 }}%;background:{{ color }};opacity:0.75"></div>
+                      <div id="ro-fill-{{ key }}" class="ro-cat-fill" style="width:{{ cat_score if cat_score else 0 }}%;background:{{ color }};opacity:0.75"></div>
                     </div>
-                    <div class="ro-cat-score" style="color:{{ color }}">
+                    <div id="ro-score-{{ key }}" class="ro-cat-score" style="color:{{ color }}">
                       {% if cat_score is not none %}{{ cat_score }}{% else %}—{% endif %}
                     </div>
                     <div class="ro-cat-delta"></div>
@@ -1052,6 +1203,130 @@
           </div>
           <!-- ══ END SECTION 1 ══ -->
 
+          <!-- ══ SECTION 1b: Score History Chart ══ -->
+          {% if score_history and score_history|length >= 2 %}
+          <div class="ri-section">
+            <div class="ri-sec-hdr">
+              <div class="ri-sec-title">
+                <div class="ri-sec-title-icon">📈</div>
+                <span>История риск-скора</span>
+              </div>
+              <span style="font-size:11px;color:var(--text-muted)">{{ score_history|length }} прогонов</span>
+            </div>
+            <div style="position:relative;height:160px;padding:4px 0">
+              <canvas id="score-history-chart"></canvas>
+            </div>
+            <script>
+            (function(){
+              try {
+                const canvas = document.getElementById('score-history-chart');
+                if (!canvas || !window.Chart) { console.warn('[chart] canvas or Chart.js missing'); return; }
+                const history = {{ score_history | tojson }};
+                if (!history || history.length < 2) return;
+                const labels = history.map(r => r.date);
+                const scores = history.map(r => r.score);
+                const colors = scores.map(s => s >= 65 ? '#f87171' : s >= 35 ? '#fbbf24' : '#34d399');
+                new Chart(canvas, {
+                  type: 'line',
+                  data: {
+                    labels,
+                    datasets: [{
+                      data: scores,
+                      borderColor: '#a78bfa',
+                      backgroundColor: 'rgba(167,139,250,0.08)',
+                      borderWidth: 2,
+                      pointBackgroundColor: colors,
+                      pointBorderColor: colors,
+                      pointRadius: 5,
+                      tension: 0.35,
+                      fill: true,
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: { callbacks: { label: c => 'Риск-скор: ' + c.parsed.y } }
+                    },
+                    scales: {
+                      x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#64748b', font: { size: 10 } }
+                      },
+                      y: {
+                        min: 0, max: 100,
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#64748b', font: { size: 10 }, stepSize: 25 }
+                      }
+                    }
+                  }
+                });
+              } catch(e) { console.error('[score-chart]', e); }
+            })();
+            </script>
+          </div>
+          {% endif %}
+
+          <!-- ══ SECTION 1c: What Changed ══ -->
+          {% if delta and delta.has_changes %}
+          <div class="ri-section">
+            <div class="ri-sec-hdr">
+              <div class="ri-sec-title">
+                <div class="ri-sec-title-icon">🔄</div>
+                <span>Что изменилось</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              {% for r in delta.new %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.18)">
+                <span style="font-size:15px;flex-shrink:0;margin-top:1px">🔴</span>
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#f87171;margin-bottom:3px">Новый риск</div>
+                  <div style="font-size:13px;color:var(--text);line-height:1.4">{{ r.get('title','') }}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ (r.get('category','') or '') | upper }} · Скор: {{ r.get('score', '—') }}</div>
+                </div>
+              </div>
+              {% endfor %}
+
+              {% for r in delta.persisted %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.15)">
+                <span style="font-size:15px;flex-shrink:0;margin-top:1px">🟡</span>
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fbbf24;margin-bottom:3px">Сохраняется</div>
+                  <div style="font-size:13px;color:var(--text);line-height:1.4">{{ r.get('title','') }}</div>
+                  {% set cr = r.get('consecutive_runs', 1) %}
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ (r.get('category','') or '') | upper }} · Скор: {{ r.get('score', '—') }} · {{ cr }} прогон{{ 'а' if cr in [2,3,4] else ('ов' if cr > 4 else '') }}</div>
+                </div>
+              </div>
+              {% endfor %}
+
+              {% for r in delta.resolved %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.15)">
+                <span style="font-size:15px;flex-shrink:0;margin-top:1px">🟢</span>
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#34d399;margin-bottom:3px">Исчез</div>
+                  <div style="font-size:13px;color:var(--text);line-height:1.4">{{ r.get('title','') }}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ (r.get('category','') or '') | upper }}</div>
+                </div>
+              </div>
+              {% endfor %}
+
+              {% for s in delta.positive %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.15)">
+                <span style="font-size:15px;flex-shrink:0;margin-top:1px">⭐</span>
+                <div>
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fde68a;margin-bottom:3px">Позитивный сигнал</div>
+                  <div style="font-size:13px;color:var(--text);line-height:1.4">{{ s.get('title','') }}</div>
+                  {% set _w = s.get('weight','low') %}
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ (s.get('category','') or '') | upper }} · −{{ {'low':5,'medium':12,'high':20}.get(_w, 5) }} к скору</div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
         {% else %}
           <!-- No analysis yet -->
           <div class="empty-box" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);margin-bottom:16px;backdrop-filter:blur(20px)">
@@ -1061,7 +1336,168 @@
           </div>
         {% endif %}
 
+        <!-- ══ SECTION 2: AI Summary (populated by JS after analysis) ══ -->
+        <div class="ri-section" id="ov-ai-section" style="display:none">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">🤖</div>
+              <span>AI Мониторинг</span>
+            </div>
+            <span id="ov-ai-date" style="font-size:11px;color:var(--text-muted)"></span>
+          </div>
+          <div id="ov-ai-summary" style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:14px 18px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:12px"></div>
+          <div id="ov-ai-recommendation" style="display:none;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--text-muted);margin-bottom:12px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div id="ov-ai-problems" style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.18);border-radius:12px;padding:12px 16px;display:none">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#f87171;margin-bottom:8px">Проблемы</div>
+              <div id="ov-ai-problems-list"></div>
+            </div>
+            <div id="ov-ai-losses" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.18);border-radius:12px;padding:12px 16px;display:none">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#fbbf24;margin-bottom:8px">Потенциальные потери</div>
+              <div id="ov-ai-losses-list"></div>
+            </div>
+          </div>
+        </div>
 
+        <!-- ══ SECTION 2b: Top Monitoring Items ══ -->
+        {% set top_items_s2 = monitoring_items | selectattr("is_top") | list if monitoring_items else [] %}
+        <div class="ri-section" id="ov-top-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">★</div>
+              <span>Топ новостей и постов</span>
+            </div>
+            {% if top_items_s2 %}
+            <span id="ov-top-count" style="font-size:11px;color:var(--text-muted)">{{ top_items_s2|length }} материалов · свежие</span>
+            {% endif %}
+          </div>
+          {% set src_icons_s2 = {"news":"📰","google_news":"📰","gdelt":"📰","yahoo_news":"📰","serpapi":"📰","hh":"💼","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵","kase":"📊"} %}
+          {% if top_items_s2 %}
+          <div id="ov-top-feed" style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+            {% for item in top_items_s2 %}
+            <div class="mon-item">
+              <div class="mon-icon mon-icon-new" style="font-size:14px">{{ src_icons_s2.get(item.source, "📄") }}</div>
+              <div class="mon-body">
+                <a href="{{ item.url or '#' }}" target="_blank" rel="noopener" class="mon-title">{{ item.title }}</a>
+                <div class="mon-meta">
+                  <span class="mon-badge mon-badge-src">{{ item.source }}</span>
+                  {% if item.source_name %}<span>·</span><span>{{ item.source_name }}</span>{% endif %}
+                  {% if item.pub_date %}<span>·</span><span>{{ item.pub_date }}</span>{% endif %}
+                </div>
+                {% if item.importance %}
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">{{ item.importance }}</div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div id="ov-top-feed" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:22px 20px;text-align:center">
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Запустите анализ чтобы получить актуальные новости и посты</div>
+            <button onclick="launchFullAnalysis(this)"
+              style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer">
+              Запустить анализ →
+            </button>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- ══ SECTION 2b2: Competitor News ══ -->
+        {% if comp_news_map %}
+        <div class="ri-section" id="ov-comp-news-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">⚔</div>
+              <span>Новости конкурентов</span>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">{{ comp_news_map|length }} конкурент{{ 'а' if comp_news_map|length in [2,3,4] else ('ов' if comp_news_map|length > 4 else '') }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            {% for comp_name, comp_articles in comp_news_map.items() %}
+            <div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+              <div style="padding:8px 14px;background:rgba(167,139,250,0.07);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between">
+                <div style="font-size:12px;font-weight:700;color:#a78bfa">{{ comp_name }}</div>
+                <div style="font-size:10px;color:var(--text-muted)">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" style="vertical-align:middle;margin-right:3px"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  {{ comp_articles|length }} отобрано AI
+                </div>
+              </div>
+              {% for art in comp_articles[:6] %}
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.05);{% if loop.last %}border-bottom:none{% endif %}">
+                <span style="font-size:13px;flex-shrink:0;margin-top:1px">📰</span>
+                <div style="flex:1;min-width:0">
+                  <a href="{{ art.url }}" target="_blank" rel="noopener"
+                     style="font-size:12px;font-weight:500;color:var(--text);text-decoration:none;display:block;line-height:1.4;margin-bottom:2px"
+                     onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">{{ art.title }}</a>
+                  <div style="font-size:10px;color:var(--text-muted);display:flex;gap:5px;align-items:center">
+                    {% if art.source %}<span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 5px;font-weight:600">{{ art.source }}</span>{% endif %}
+                    {% if art.pub_date %}<span>{{ art.pub_date[:10] if art.pub_date|length > 10 else art.pub_date }}</span>{% endif %}
+                  </div>
+                </div>
+                {% if art.url %}
+                <a href="{{ art.url }}" target="_blank" rel="noopener"
+                   style="flex-shrink:0;width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:var(--text-muted);text-decoration:none;font-size:10px">↗</a>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- ══ SECTION 2b2: CI Mini-Report ══ -->
+        {% if ci_report and ci_report.ai %}
+        {% set _ci = ci_report.ai %}
+        <div class="ri-section" id="ov-ci-mini-section">
+          <div class="ri-sec-hdr">
+            <div class="ri-sec-title">
+              <div class="ri-sec-title-icon">🔍</div>
+              <span>Конкурентная разведка</span>
+            </div>
+            <a href="/companies/{{ company.id }}/ci" style="font-size:11px;color:var(--accent);text-decoration:none">Подробнее →</a>
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden">
+            <!-- Summary + threat -->
+            <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px">
+              {% set _tl = _ci.threat_level|default('medium') %}
+              {% if _tl == 'high' %}
+                <span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">HIGH</span>
+              {% elif _tl == 'low' %}
+                <span style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.28);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">LOW</span>
+              {% else %}
+                <span style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:2px 10px;font-size:10px;font-weight:700;white-space:nowrap">MEDIUM</span>
+              {% endif %}
+              <span style="font-size:12px;color:var(--text-muted)">{{ _ci.summary }}</span>
+            </div>
+            <!-- Competitors row -->
+            {% if _ci.competitors %}
+            <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;gap:8px">
+              {% for _cc in _ci.competitors %}
+              {% set _ct = _cc.threat|default('medium') %}
+              <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:5px 10px">
+                <span style="font-size:11px;font-weight:600;color:var(--text)">{{ _cc.name }}</span>
+                {% if _ct == 'high' %}<span style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>
+                {% elif _ct == 'low' %}<span style="width:6px;height:6px;border-radius:50%;background:#34d399;flex-shrink:0"></span>
+                {% else %}<span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;flex-shrink:0"></span>{% endif %}
+                {% if _cc.key_move %}<span style="font-size:10px;color:var(--text-muted)">{{ _cc.key_move[:50] }}</span>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <!-- Risks -->
+            {% if _ci.risks %}
+            <div style="padding:10px 16px">
+              {% for _r in _ci.risks[:5] %}
+              <div style="font-size:11px;color:var(--text-muted);padding:2px 0;display:flex;gap:6px"><span style="color:#ef4444;flex-shrink:0">▲</span>{{ _r }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- ══ SECTION 2c: News Sources ══ -->
         <!-- ══ SECTION 3: AI Intelligence ══ -->
         {% if (latest and latest.advice) or (latest and latest.scenarios) %}
         <div class="ri-section">
@@ -1129,7 +1565,7 @@
       </div>{# end overview #}
 
       <!-- ══ MONITOR TAB ══ -->
-      <div class="cd-panel" id="tab-monitor">
+      <div class="cd-panel" id="tab-monitor" style="display:none!important">
         <style>
           .mon-status-grid { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
           .mon-status-card {
@@ -1243,6 +1679,45 @@
               <span>Нажмите «Загрузить новости» чтобы получить свежие данные.</span>
             </div>
           </div>
+
+          <!-- Full Analysis -->
+          <div class="mon-sec-hdr" style="margin-top:8px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Полный AI-анализ
+          </div>
+          <div style="margin-bottom:16px">
+            <button id="run-analysis-btn" onclick="runFullAnalysis()"
+              style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.35);color:#34d399;border-radius:8px;padding:9px 22px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(52,211,153,0.24)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">
+              Запустить полный анализ
+            </button>
+          </div>
+
+          <!-- Stage tracker moved to floating overlay -->
+
+          <!-- Results -->
+          <div id="full-analysis-result" style="display:none">
+            <div id="fa-summary" style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);border-radius:12px;padding:16px 20px;margin-bottom:18px;font-size:13px;line-height:1.7;color:var(--text)"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Топ важных материалов
+            </div>
+            <div id="fa-top-items" class="mon-feed" style="margin-bottom:18px"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Выявленные проблемы
+            </div>
+            <div id="fa-problems" style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:12px;padding:14px 18px;margin-bottom:18px"></div>
+
+            <div class="mon-sec-hdr" style="margin-top:0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Потенциальные потери
+            </div>
+            <div id="fa-losses" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:14px 18px;margin-bottom:28px"></div>
+          </div>
+
 
         </div>
       </div>
@@ -1705,23 +2180,92 @@
                   <div class="hist-item-advice">{{ rr.advice[:280] }}{% if rr.advice|length > 280 %}…{% endif %}</div>
                 {% endif %}
 
-                {% if is_admin %}
-                <details style="margin-top:8px">
-                  <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none;list-style:none;display:inline-flex;align-items:center;gap:4px">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
-                    <span data-i18n="hist_send_ceo">Отправить CEO</span>
-                  </summary>
-                  <form method="post" action="/ceo/send" style="margin-top:10px">
-                    <input type="hidden" name="company_id" value="{{ company.id }}" />
-                    <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
-                    <div class="row">
-                      <div class="field"><label data-i18n="hist_subject">Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
-                      <div class="field"><label data-i18n="hist_comment">Комментарий</label><input name="message" type="text" /></div>
+                <!-- Category mini-bars -->
+                {% if rr.categories %}
+                {% set _hcat = [('media','MI','#93bbff'),('hr','HR','#4ade80'),('gr','GR','#f87171'),('pr','PR','#c084fc'),('market','MK','#fbbf24')] %}
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                  {% for _k,_l,_c in _hcat %}
+                    {% set _cs = rr.categories[_k].score | int if rr.categories[_k] and rr.categories[_k].score is not none else none %}
+                    {% if _cs is not none %}
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <span style="font-size:10px;font-weight:700;color:{{ _c }}">{{ _l }}</span>
+                      <div style="width:40px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px">
+                        <div style="width:{{ _cs }}%;height:100%;background:{{ _c }};border-radius:2px;opacity:0.8"></div>
+                      </div>
+                      <span style="font-size:10px;color:{{ _c }}">{{ _cs }}</span>
                     </div>
-                    <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm" data-i18n="btn_send">Отправить</button></div>
-                  </form>
-                </details>
+                    {% endif %}
+                  {% endfor %}
+                </div>
                 {% endif %}
+
+                <!-- Expandable detail -->
+                <details style="margin-top:10px" class="hist-details">
+                  <summary style="cursor:pointer;font-size:12px;color:var(--accent);user-select:none;list-style:none;display:inline-flex;align-items:center;gap:5px">
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" class="hist-chevron" style="transition:transform .2s"><path d="M4 6l4 4 4-4"/></svg>
+                    Развернуть анализ
+                  </summary>
+
+                  <!-- Risks per category -->
+                  {% if rr.risks %}
+                  <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+                    {% set _cat_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c084fc','market':'#fbbf24'} %}
+                    {% for risk in rr.risks[:10] %}
+                    {% set _rc = _cat_colors.get(risk.get('category',''), '#94a3b8') %}
+                    <div style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);border-left:3px solid {{ _rc }}">
+                      <div style="font-size:11px;font-weight:700;color:{{ _rc }};margin-bottom:2px">
+                        {{ risk.get('category','').upper() }}
+                        {% if risk.get('score') %}<span style="font-weight:400;opacity:0.7"> · {{ risk.score }}</span>{% endif %}
+                        {% if risk.get('consecutive_runs', 1) > 1 %}<span style="font-weight:400;opacity:0.6"> · ×{{ risk.consecutive_runs }}</span>{% endif %}
+                      </div>
+                      <div style="font-size:12px;color:var(--text);font-weight:600">{{ risk.get('title','') }}</div>
+                      {% if risk.get('text') %}<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;line-height:1.5">{{ risk.text[:200] }}{% if risk.text|length > 200 %}…{% endif %}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+
+                  <!-- Articles used -->
+                  {% set _arts = rr.top_articles if rr.top_articles else [] %}
+                  {% if _arts %}
+                  <div style="margin-top:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Источники анализа ({{ _arts|length }})</div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      {% for art in _arts[:15] %}
+                      <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+                        <div style="flex:1;min-width:0">
+                          <a href="{{ art.url or '#' }}" target="_blank" rel="noopener"
+                             style="font-size:12px;color:var(--text);font-weight:500;text-decoration:none;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                             onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color=''">{{ art.get('title','') }}</a>
+                          <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">
+                            {{ art.get('source','') }}{% if art.get('pub_date') %} · {{ art.pub_date }}{% endif %}
+                          </div>
+                          {% if art.get('risk_note') %}
+                          <div style="font-size:11px;color:#fbbf24;margin-top:3px;line-height:1.4">{{ art.risk_note }}</div>
+                          {% endif %}
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  {% else %}
+                  <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">Статьи для этого прогона не сохранены (данные будут доступны в следующих анализах).</div>
+                  {% endif %}
+
+                  {% if is_admin %}
+                  <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.07)">
+                    <form method="post" action="/ceo/send">
+                      <input type="hidden" name="company_id" value="{{ company.id }}" />
+                      <input type="hidden" name="risk_run_id" value="{{ rr.id }}" />
+                      <div class="row">
+                        <div class="field"><label data-i18n="hist_subject">Тема</label><input name="subject" type="text" placeholder="Отчет по рискам" /></div>
+                        <div class="field"><label data-i18n="hist_comment">Комментарий</label><input name="message" type="text" /></div>
+                      </div>
+                      <div class="mt-8"><button type="submit" class="btn btn-secondary btn-sm" data-i18n="btn_send">Отправить</button></div>
+                    </form>
+                  </div>
+                  {% endif %}
+                </details>
               </div>
             </div>
           {% endfor %}
@@ -1772,12 +2316,12 @@
       <div class="cd-panel" id="tab-social">
         <div style="max-width:720px;margin:0 auto;padding:8px 0">
 
+          <div id="threads-section">
           <div class="mon-sec-hdr">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             Threads
             <span id="threads-count" style="display:none"></span>
           </div>
-
           <div style="margin-bottom:12px">
             <button id="load-threads-btn" onclick="loadThreads()"
               style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
@@ -1785,20 +2329,61 @@
               Загрузить посты
             </button>
           </div>
-
           <div id="threads-feed" class="mon-feed">
             <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
               <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🧵</div>
               <span>Нажмите «Загрузить посты» чтобы найти упоминания в Threads.</span>
             </div>
           </div>
+          </div>
 
+          <div id="instagram-section">
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            Instagram
+            <span id="instagram-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-instagram-btn" onclick="loadInstagram()"
+              style="background:rgba(225,48,108,0.12);border:1px solid rgba(225,48,108,0.35);color:#f472b6;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(225,48,108,0.24)'" onmouseout="this.style.background='rgba(225,48,108,0.12)'">
+              Загрузить посты
+            </button>
+          </div>
+          <div id="instagram-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">📸</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания в Instagram.</span>
+            </div>
+          </div>
+          </div>
+
+          <!-- Reddit -->
+          <div class="mon-sec-hdr" style="margin-top:20px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Reddit
+            <span id="reddit-count" style="display:none"></span>
+          </div>
+          <div style="margin-bottom:12px">
+            <button id="load-reddit-btn" onclick="loadSocial('reddit','reddit-feed','reddit-count','load-reddit-btn','Ищем посты на Reddit…','🟠')"
+              style="background:rgba(255,69,0,0.12);border:1px solid rgba(255,69,0,0.35);color:#fb923c;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(255,69,0,0.24)'" onmouseout="this.style.background='rgba(255,69,0,0.12)'">
+              Загрузить посты
+            </button>
+          </div>
+          <div id="reddit-feed" class="mon-feed">
+            <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+              <div style="font-size:24px;margin-bottom:8px;opacity:0.3">🟠</div>
+              <span>Нажмите «Загрузить посты» чтобы найти упоминания на Reddit.</span>
+            </div>
+          </div>
+
+          <!-- YouTube Official -->
           <div class="mon-sec-hdr" style="margin-top:20px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             YouTube
             <span id="youtube-count" style="display:none"></span>
           </div>
-
           <div style="margin-bottom:12px">
             <button id="load-youtube-btn" onclick="loadYouTube()"
               style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.35);color:#f87171;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
@@ -1806,7 +2391,6 @@
               Загрузить видео
             </button>
           </div>
-
           <div id="youtube-feed" class="mon-feed">
             <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
               <div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div>
@@ -1814,6 +2398,48 @@
             </div>
           </div>
 
+
+        </div>
+      </div>
+
+      <!-- ══ SOURCES TAB ══ -->
+      <div class="cd-panel" id="tab-sources">
+        <div style="max-width:720px;margin:0 auto;padding:8px 0">
+          <div class="panel-hdr" style="margin-bottom:20px">
+            <div class="panel-hdr-title">Рекомендуемые источники</div>
+            <button id="suggest-sources-btn" onclick="loadSuggestedSources()"
+              style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.35);color:#34d399;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s"
+              onmouseover="this.style.background='rgba(52,211,153,0.24)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">
+              🤖 Подобрать источники
+            </button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            ИИ проанализирует компанию и подберёт финансовые порталы, отраслевые СМИ, регуляторные сайты и другие источники для мониторинга.
+          </div>
+          <div id="suggested-sources-feed"></div>
+        </div>
+      </div>
+
+      <!-- ══ ARCHIVE TAB ══ -->
+      <div class="cd-panel" id="tab-archive">
+        <div style="max-width:860px;margin:0 auto;padding:8px 0">
+          <div class="panel-hdr" style="margin-bottom:20px">
+            <div class="panel-hdr-title">Архив новостей</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="archive-search" type="text" placeholder="Поиск по заголовку…"
+                oninput="filterArchive()"
+                style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--text);width:200px;outline:none">
+              <button id="archive-refresh-btn" onclick="loadArchive()"
+                style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">
+                ↻ Обновить
+              </button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+            Все статьи найденные в предыдущих анализах. При новом анализе повторно не загружаются.
+          </div>
+          <div id="archive-stats" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+          <div id="archive-feed"></div>
         </div>
       </div>
 
@@ -1822,6 +2448,9 @@
 </div>
 
 <script>
+let _suggestedSources = [];
+const _companyNameForSources = '{{ company.name | replace("'", "\\'") }}';
+
 // ── Tabs ──
 const _iframeLoaded = {};
 const _tabLoaded = {};
@@ -1842,6 +2471,9 @@ const riskRuns = {{ risk_runs | tojson | safe }};
 
 const COMPANY_ID   = '{{ company.id }}';
 const COMPANY_NAME = '{{ company.name | replace("'", "\\'") }}';
+const COMPANY_INDUSTRY = '{{ (company.industry or "") | replace("'", "\\'") }}';
+const COMPANY_LOCATION = '{{ (company.location or "") | replace("'", "\\'") }}';
+const COMPANY_DESCRIPTION = '{{ (company.description or "") | replace("'", "\\'") | replace("\n", " ") | truncate(300, false) }}';
 const APIFY_TOKEN  = '{{ settings.APIFY_TOKEN }}';
 let lastEmailIds = new Set({{ emails | map(attribute='id') | list | tojson | safe }});
 
@@ -2464,59 +3096,109 @@ document.addEventListener('click', function() {
 
 const APIFY_BASE_URL = 'https://api.apify.com/v2/acts';
 
-async function loadYouTube() {
-  const btn     = document.getElementById('load-youtube-btn');
-  const feed    = document.getElementById('youtube-feed');
-  const countEl = document.getElementById('youtube-count');
+async function loadInstagram() {
+  const btn     = document.getElementById('load-instagram-btn');
+  const feed    = document.getElementById('instagram-feed');
+  const countEl = document.getElementById('instagram-count');
 
   btn.disabled = true;
   btn.textContent = 'Загрузка…';
-  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем видео на YouTube…</div>';
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем упоминания в Instagram…</div>';
 
   try {
-    const r = await fetch(
-      `${APIFY_BASE_URL}/streamers~youtube-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          searchQueries: [COMPANY_NAME],
-          maxResults: 10, maxResultsShorts: 0, maxResultStreams: 0,
-          downloadSubtitles: false, hasCC: false, hasLocation: false,
-          hasSubtitles: false, is360: false, is3D: false, is4K: false,
-          isBought: false, isHD: false, isHDR: false, isLive: false,
-          isVR180: false, preferAutoGeneratedSubtitles: false, saveSubsToKVS: false,
-        }),
-      }
-    );
+    const r = await fetch(`/companies/${COMPANY_ID}/instagram`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const items = await r.json();
+    const data = await r.json();
 
-    if (!items.length) {
-      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div><span>Видео не найдено.</span></div>';
+    if (data.error) {
+      feed.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">${data.error}</div>`;
       return;
     }
 
-    countEl.textContent = items.length;
+    const posts = data.posts || [];
+    if (!posts.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">📸</div><span>Постов не найдено.</span></div>';
+      return;
+    }
+
+    countEl.textContent = posts.length;
     countEl.style.display = '';
 
-    feed.innerHTML = items.map(p => {
-      const title  = p.title || p.text || '—';
-      const url    = p.url || p.videoUrl || '';
-      const author = p.channelName || p.channel || '';
-      const views  = p.viewCount ?? p.views ?? null;
-      const likes  = p.likeCount ?? p.likes ?? null;
+    feed.innerHTML = posts.map(p => `
+      <div class="mon-item">
+        <div class="mon-icon" style="font-size:14px;background:rgba(225,48,108,0.12)">📸</div>
+        <div class="mon-body">
+          ${p.url
+            ? `<a href="${p.url}" target="_blank" rel="noopener" class="mon-title">${p.text || p.url}</a>`
+            : `<span class="mon-title" style="cursor:default">${p.text || '—'}</span>`}
+          <div class="mon-meta">
+            ${p.author ? `<span>@${p.author}</span>` : ''}
+            ${p.likes != null ? `<span>·</span><span>❤ ${p.likes}</span>` : ''}
+            ${p.comments != null ? `<span>·</span><span>💬 ${p.comments}</span>` : ''}
+            ${p.date ? `<span>·</span><span>${p.date}</span>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обновить';
+  }
+}
+
+
+// Universal loader for Reddit / Telegram
+async function loadSocial(platform, feedId, countId, btnId, loadingText, icon) {
+  const btn     = document.getElementById(btnId);
+  const feed    = document.getElementById(feedId);
+  const countEl = document.getElementById(countId);
+
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">${loadingText}</div>`;
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/${platform}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    if (data.error) {
+      feed.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">${data.error}</div>`;
+      return;
+    }
+
+    const posts = data.posts || [];
+    if (!posts.length) {
+      feed.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">${icon}</div><span>Упоминаний не найдено.</span></div>`;
+      return;
+    }
+
+    countEl.textContent = posts.length;
+    countEl.style.display = '';
+
+    feed.innerHTML = posts.map(p => {
+      const title = p.title || p.text || '—';
+      const url   = p.url || '';
+      const meta  = [
+        p.author   ? `<span>${p.author}</span>` : '',
+        p.channel  ? `<span>${p.channel}</span>` : '',
+        p.subreddit? `<span>r/${p.subreddit}</span>` : '',
+        p.score    != null ? `<span>·</span><span>▲ ${p.score}</span>` : '',
+        p.likes    ? `<span>·</span><span>❤ ${p.likes}</span>` : '',
+        p.reposts  ? `<span>·</span><span>🔁 ${p.reposts}</span>` : '',
+        p.comments ? `<span>·</span><span>💬 ${p.comments}</span>` : '',
+        p.views    ? `<span>·</span><span>👁 ${Number(p.views).toLocaleString()}</span>` : '',
+        p.date     ? `<span>·</span><span>${p.date}</span>` : '',
+      ].filter(Boolean).join('');
       return `
         <div class="mon-item">
-          <div class="mon-icon" style="font-size:14px;background:rgba(220,38,38,0.15)">▶️</div>
+          <div class="mon-icon mon-icon-new" style="font-size:13px">${icon}</div>
           <div class="mon-body">
             ${url ? `<a href="${url}" target="_blank" rel="noopener" class="mon-title">${title}</a>`
                   : `<span class="mon-title" style="cursor:default">${title}</span>`}
-            <div class="mon-meta">
-              ${author ? `<span>${author}</span><span>·</span>` : ''}
-              ${views != null ? `<span>👁 ${Number(views).toLocaleString()}</span>` : ''}
-              ${likes != null ? `<span>·</span><span>❤ ${Number(likes).toLocaleString()}</span>` : ''}
-            </div>
+            ${p.text && p.title ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.text}</div>` : ''}
+            <div class="mon-meta">${meta}</div>
           </div>
         </div>`;
     }).join('');
@@ -2528,6 +3210,213 @@ async function loadYouTube() {
   }
 }
 
+
+async function loadYouTube() {
+  const btn     = document.getElementById('load-youtube-btn');
+  const feed    = document.getElementById('youtube-feed');
+  const countEl = document.getElementById('youtube-count');
+
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Ищем видео на YouTube…</div>';
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/youtube-api`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    if (data.error) {
+      feed.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">${data.error}</div>`;
+      return;
+    }
+
+    const posts = data.posts || [];
+    if (!posts.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px"><div style="font-size:24px;margin-bottom:8px;opacity:0.3">▶️</div><span>Видео не найдено.</span></div>';
+      return;
+    }
+
+    countEl.textContent = posts.length;
+    countEl.style.display = '';
+
+    feed.innerHTML = posts.map(p => `
+      <div class="mon-item">
+        <div class="mon-icon" style="font-size:14px;background:rgba(220,38,38,0.15)">▶️</div>
+        <div class="mon-body">
+          <a href="${p.url}" target="_blank" rel="noopener" class="mon-title">${p.title}</a>
+          ${p.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description}</div>` : ''}
+          <div class="mon-meta">
+            ${p.channel ? `<span>${p.channel}</span>` : ''}
+            ${p.date ? `<span>·</span><span>${p.date}</span>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">Ошибка загрузки.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обновить';
+  }
+}
+
+
+
+async function checkSource(idx) {
+  const s = _suggestedSources[idx];
+  if (!s) return;
+  const btn    = document.getElementById(`check-btn-${idx}`);
+  const result = document.getElementById(`src-result-${idx}`);
+  btn.disabled = true;
+  btn.textContent = '⏳ Ищу…';
+  result.style.display = 'block';
+  result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Ищем упоминания…</div>';
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/check-source`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: s.name, url: s.url, company_name: _companyNameForSources }),
+    });
+    const d = await r.json();
+
+    if (d.error) {
+      result.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:#f87171">${d.error}</div>`;
+      btn.textContent = '🔍 Проверить'; btn.disabled = false; return;
+    }
+
+    if (!d.found) {
+      result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Упоминаний не найдено</div>';
+      btn.textContent = '— Пусто'; return;
+    }
+
+    const a = d.analysis || {};
+    const lvlColor = { high: '#f87171', medium: '#fbbf24', low: '#34d399', none: '#71717a' };
+    const lvl = a.risk_level || 'none';
+    const col = lvlColor[lvl] || '#71717a';
+
+    const risksHtml = (a.risks || []).map(r =>
+      `<div style="display:flex;gap:6px;font-size:12px;color:var(--text);margin-bottom:4px"><span style="color:#f87171;flex-shrink:0">✕</span>${r}</div>`
+    ).join('');
+    const posHtml = (a.positives || []).map(p =>
+      `<div style="display:flex;gap:6px;font-size:12px;color:var(--text);margin-bottom:4px"><span style="color:#34d399;flex-shrink:0">✓</span>${p}</div>`
+    ).join('');
+    const articlesHtml = (d.articles || []).map(art =>
+      `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <a href="${art.link||'#'}" target="_blank" rel="noopener"
+           style="font-size:11px;color:var(--text);text-decoration:none;display:block;line-height:1.4"
+           onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">${art.title}</a>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${art.pub_date || ''}</div>
+      </div>`
+    ).join('');
+
+    result.innerHTML = `
+      <div style="padding:12px 14px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
+                       background:rgba(0,0,0,0.3);border:1px solid ${col};color:${col}">
+            ${lvl === 'high' ? '⚠ Высокий риск' : lvl === 'medium' ? '⚡ Средний риск' : lvl === 'low' ? '✓ Низкий риск' : '— Нет данных'}
+          </span>
+          <span style="font-size:11px;color:var(--text-muted)">${d.found} материалов найдено</span>
+        </div>
+        ${a.verdict ? `<div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.5;font-style:italic">"${a.verdict}"</div>` : ''}
+        ${risksHtml ? `<div style="margin-bottom:8px">${risksHtml}</div>` : ''}
+        ${posHtml ? `<div style="margin-bottom:8px">${posHtml}</div>` : ''}
+        <details style="margin-top:8px">
+          <summary style="font-size:11px;color:var(--accent);cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px">
+            📰 Показать статьи (${d.found})
+          </summary>
+          <div style="margin-top:8px">${articlesHtml}</div>
+        </details>
+      </div>`;
+    btn.textContent = '✓ Проверено'; btn.disabled = false;
+  } catch(e) {
+    result.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#f87171">Ошибка сети</div>';
+    btn.textContent = '🔍 Проверить'; btn.disabled = false;
+  }
+}
+
+async function loadSuggestedSources() {
+  const btn  = document.getElementById('suggest-sources-btn');
+  const feed = document.getElementById('suggested-sources-feed');
+  btn.disabled = true;
+  btn.textContent = '⏳ ИИ подбирает источники…';
+  feed.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:13px">Анализируем компанию…</div>';
+
+  const _CAT_COLORS = {
+    'финансы':    { bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.25)',  color: '#34d399',  icon: '📈' },
+    'СМИ':        { bg: 'rgba(96,165,250,0.08)',   border: 'rgba(96,165,250,0.25)',  color: '#60a5fa',  icon: '📰' },
+    'регулятор':  { bg: 'rgba(251,191,36,0.08)',   border: 'rgba(251,191,36,0.25)',  color: '#fbbf24',  icon: '⚖️' },
+    'соцсети':    { bg: 'rgba(167,139,250,0.08)',  border: 'rgba(167,139,250,0.25)', color: '#a78bfa',  icon: '💬' },
+    'официальный':{ bg: 'rgba(255,255,255,0.05)',  border: 'rgba(255,255,255,0.12)', color: '#e4e4e7',  icon: '🏢' },
+    'биржа':      { bg: 'rgba(248,113,113,0.08)',  border: 'rgba(248,113,113,0.25)', color: '#f87171',  icon: '📊' },
+    'отрасль':    { bg: 'rgba(251,146,60,0.08)',   border: 'rgba(251,146,60,0.25)',  color: '#fb923c',  icon: '🏭' },
+  };
+
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/suggest-sources`);
+    if (!r.ok) { feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка сервера: ${r.status}</div>`; btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return; }
+    const d = await r.json();
+    if (d.error) { feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка: ${d.error}</div>`; btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return; }
+
+    const sources = d.sources || [];
+    if (!sources.length) {
+      feed.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:13px">Источники не найдены</div>';
+      btn.disabled=false; btn.textContent='🤖 Подобрать источники'; return;
+    }
+
+    _suggestedSources = sources;
+
+    const _DEFAULT_C = { bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)', color: '#60a5fa', icon: '📰' };
+    feed.innerHTML = sources.map((s, i) => {
+      const cat = (s.category || '').toLowerCase();
+      const match = Object.entries(_CAT_COLORS).find(([k]) => cat.includes(k));
+      const c = match ? match[1] : _DEFAULT_C;
+      return `
+        <div id="src-card-${i}" style="margin-bottom:10px;border-radius:12px;overflow:hidden;border:1px solid ${c.border}">
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:${c.bg}">
+            <span style="font-size:18px;flex-shrink:0;margin-top:1px">${c.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
+                <a href="${s.url || '#'}" target="_blank" rel="noopener"
+                   style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                   onmouseover="this.style.color='${c.color}'" onmouseout="this.style.color='var(--text)'">
+                  ${s.name || s.url}
+                </a>
+                <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;
+                             background:${c.bg};border:1px solid ${c.border};color:${c.color};flex-shrink:0">
+                  ${s.category || ''}
+                </span>
+              </div>
+              ${s.description ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.4">${s.description}</div>` : ''}
+              ${s.url ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.url}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button onclick="checkSource(${i})" id="check-btn-${i}"
+                style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;
+                       background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.35);color:#a78bfa;
+                       transition:background .15s;white-space:nowrap"
+                onmouseover="this.style.background='rgba(167,139,250,0.25)'" onmouseout="this.style.background='rgba(167,139,250,0.12)'">
+                🔍 Проверить
+              </button>
+              ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener"
+                style="width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);
+                       display:flex;align-items:center;justify-content:center;color:var(--text-muted);
+                       text-decoration:none;font-size:10px" title="Открыть">↗</a>` : ''}
+            </div>
+          </div>
+          <div id="src-result-${i}" style="display:none"></div>
+        </div>`;
+    }).join('');
+
+    btn.textContent = '🔄 Обновить';
+    btn.disabled = false;
+  } catch(e) {
+    console.error('loadSuggestedSources error:', e);
+    feed.innerHTML = `<div style="padding:20px;color:#f87171;font-size:13px">Ошибка: ${e.message}</div>`;
+    btn.textContent = '🤖 Подобрать источники';
+    btn.disabled = false;
+  }
+}
 
 async function loadThreads() {
   const btn     = document.getElementById('load-threads-btn');
@@ -2563,13 +3452,11 @@ async function loadThreads() {
     countEl.style.display = '';
 
     feed.innerHTML = items.map(p => {
-      // watcher.data actor fields
-      const text   = (p.text || p.caption || p.captionText || '').trim();
-      const url    = p.url || p.postUrl || p.threadUrl || '';
+      const text  = (p.text || p.caption || p.captionText || '').trim();
+      const url   = p.url || p.postUrl || p.threadUrl || '';
       const author = p.username || p.author || p.ownerUsername || '';
-      const likes  = p.likesCount ?? p.likeCount ?? null;
-      const reposts = p.repostsCount ?? p.repostCount ?? null;
-      const date   = p.publishedAt || p.takenAtFormatted || p.date || '';
+      const likes = p.likesCount ?? p.likeCount ?? null;
+      const date  = p.publishedAt || p.date || '';
       const displayDate = date ? new Date(date).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'}) : '';
       return `
         <div class="mon-item">
@@ -2580,7 +3467,6 @@ async function loadThreads() {
             <div class="mon-meta">
               ${author ? `<span>@${author}</span>` : ''}
               ${likes != null ? `<span>·</span><span>❤ ${likes}</span>` : ''}
-              ${reposts != null ? `<span>·</span><span>🔁 ${reposts}</span>` : ''}
               ${displayDate ? `<span>·</span><span>${displayDate}</span>` : ''}
             </div>
           </div>
@@ -2637,6 +3523,477 @@ async function loadCompanyNews() {
   }
 }
 
+
+const SOURCE_ICONS = { news:'📰', google_news:'📰', gdelt:'📰', yahoo_news:'📰', serpapi:'📰', hh:'💼', reddit:'🟠', youtube:'▶️', instagram:'📸', threads:'🧵', kase:'📊' };
+
+// ── Robot narrator ───────────────────────────────────────────────────────────
+var _analysisStart = 0;
+var _elapsedTimer  = null;
+var _tickerIdx     = 0;
+
+// Step labels matching pipeline phases
+var _AN_STEPS = ['Сбор данных','Фильтрация','AI-фильтр','Дедупликация','Анализ рисков'];
+
+function _robotSet(title, subtitle) {
+  var t = document.getElementById('robot-title');
+  var s = document.getElementById('robot-subtitle');
+  if (t) t.textContent = title;
+  if (s) s.textContent = subtitle;
+}
+
+function _anSetDot(idx, state) {
+  var el = document.getElementById('an-dot' + idx);
+  if (el) el.className = 'an-dot' + (state ? ' ' + state : '');
+}
+
+function _anLog(text, cls) {
+  var box = document.getElementById('an-log');
+  if (!box) return;
+  var el = document.createElement('div');
+  el.className   = 'an-log-line ' + (cls || '');
+  el.textContent = text;
+  box.appendChild(el);
+  if (box.children.length > 4) box.removeChild(box.firstChild);
+}
+
+function _anFound(text, badgeCls, label) {
+  var box = document.getElementById('an-found');
+  if (!box) return;
+  var el = document.createElement('div');
+  el.className = 'an-found-item';
+  el.innerHTML = '<span class="an-badge ' + badgeCls + '">' + label + '</span><span>' + text + '</span>';
+  box.appendChild(el);
+  if (box.children.length > 3) box.removeChild(box.firstChild);
+}
+
+function _elapsedStart() {
+  _analysisStart = Date.now();
+  _elapsedTimer = setInterval(function() {
+    var sec = Math.floor((Date.now() - _analysisStart) / 1000);
+    var el = document.getElementById('analysis-elapsed');
+    if (el) el.textContent = sec + 'с';
+  }, 1000);
+}
+
+function _elapsedStop() { clearInterval(_elapsedTimer); }
+
+function _setProgress(pct) {
+  var bar = document.getElementById('analysis-progress-bar');
+  if (bar) bar.style.width = pct + '%';
+}
+
+function _setItemsFound(n) {
+  if (n) _anFound('Обработано ' + n + ' материалов', 'an-badge-ok', 'Готово');
+}
+
+var _stageOrder = ['news','reddit','youtube','instagram','threads','ai'];
+var _stageDone  = 0;
+
+function setStage(id, state, status) {
+  // Update hidden compat div
+  var el = document.getElementById('stage-' + id);
+  if (el) {
+    el.className = 'analysis-stage stage-' + state;
+    var ss = el.querySelector('.stage-status');
+    if (ss) ss.textContent = status;
+  }
+  // Update robot UI
+  var labels = { news:'📰 Новости', reddit:'🟠 Reddit', youtube:'▶️ YouTube', instagram:'📸 Instagram', threads:'🧵 Threads', ai:'🤖 AI агенты' };
+  if (state === 'loading') {
+    _robotSet('Собираю данные…', labels[id] || id);
+    _anLog('→ ' + (labels[id] || id) + ': загружаем…', 'active');
+  } else if (state === 'done') {
+    _robotSet('Нашёл данные!', status);
+    _anLog('✓ ' + (labels[id] || id) + ': ' + status, 'done');
+    if (id !== 'ai') { _stageDone++; _anSetDot(Math.min(_stageDone - 1, 3), 'done'); }
+  } else if (state === 'error') {
+    _robotSet('Источник недоступен', status);
+    _anLog('✗ ' + (labels[id] || id) + ': ' + status, 'warn');
+  }
+}
+
+async function runFullAnalysis() {
+  const btn = document.getElementById('run-analysis-btn');
+  btn.disabled = true;
+  btn.textContent = 'Идёт анализ…';
+  document.getElementById('analysis-stages').style.display = 'block';
+  document.getElementById('full-analysis-result').style.display = 'none';
+
+  // Start robot animation
+  _robotSet('Запускаю анализ…', 'Инициализация агентов');
+  _setProgress(0);
+  _stageDone = 0;
+  for (var _di = 0; _di < 5; _di++) _anSetDot(_di, '');
+  _anSetDot(0, 'active');
+  var _logBox = document.getElementById('an-log');
+  var _foundBox = document.getElementById('an-found');
+  if (_logBox) _logBox.innerHTML = '';
+  if (_foundBox) _foundBox.innerHTML = '';
+  _elapsedStart();
+
+  // Reset stages
+  ['news','reddit','youtube','instagram','threads','ai'].forEach(s => setStage(s, 'pending', 'ожидание…'));
+
+  const collected = { news:[], reddit:[], youtube:[], instagram:[], threads:[] };
+
+  // Fetch all sources in parallel
+  const tasks = {
+    news: async () => {
+      setStage('news', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/news`);
+      const d = await r.json();
+      collected.news = d.news || [];
+      setStage('news', 'done', `найдено ${collected.news.length}`); _setProgress(12);
+    },
+    reddit: async () => {
+      setStage('reddit', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/reddit`);
+      const d = await r.json();
+      collected.reddit = d.posts || [];
+      setStage('reddit', 'done', `найдено ${collected.reddit.length}`); _setProgress(24);
+    },
+    youtube: async () => {
+      setStage('youtube', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/youtube-api`);
+      const d = await r.json();
+      collected.youtube = d.posts || [];
+      setStage('youtube', 'done', `найдено ${collected.youtube.length}`); _setProgress(36);
+    },
+    instagram: async () => {
+      setStage('instagram', 'loading', 'загружаем…');
+      const r = await fetch(`/companies/${COMPANY_ID}/instagram`);
+      const d = await r.json();
+      collected.instagram = d.posts || [];
+      if (d.error) setStage('instagram', 'error', d.error.slice(0,40));
+      else setStage('instagram', 'done', `найдено ${collected.instagram.length}`); _setProgress(48);
+    },
+    threads: async () => {
+      if (!APIFY_TOKEN) { setStage('threads', 'error', 'нет токена'); _setProgress(60); return; }
+      setStage('threads', 'loading', 'загружаем…');
+      const payload = { keywords:[COMPANY_NAME], proxyConfiguration:{useApifyProxy:false}, sortByRecent:true };
+      const r = await fetch(
+        `https://api.apify.com/v2/acts/watcher.data~search-threads-by-keywords/run-sync-get-dataset-items?token=${APIFY_TOKEN}&timeout=30`,
+        { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }
+      );
+      const items = await r.json();
+      collected.threads = Array.isArray(items) ? items : [];
+      setStage('threads', 'done', `найдено ${collected.threads.length}`); _setProgress(60);
+    },
+  };
+
+  const results = await Promise.allSettled(Object.values(tasks).map(fn => fn().catch(e => {
+    // mark error on uncaught
+  })));
+
+  _setProgress(60);
+  _anSetDot(4, 'active');
+  _robotSet('Обрабатываю данные…', 'Запускаю AI-агентов');
+  _anLog('→ AI: запускаю анализ рисков…', 'active');
+
+  // AI analysis — 3-agent pipeline
+  setStage('ai', 'loading', '🔍 Агент 1: отбор материалов…');
+  try {
+    const companyInfo = {
+      company_name: COMPANY_NAME,
+      industry: COMPANY_INDUSTRY,
+      location: COMPANY_LOCATION,
+      description: COMPANY_DESCRIPTION,
+      ...collected
+    };
+
+    // Start background job
+    const startR = await fetch(`/companies/${COMPANY_ID}/analyze-combined`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(companyInfo),
+    });
+    const startData = await startR.json();
+    if (startData.error) { setStage('ai', 'error', startData.error.slice(0,60)); btn.disabled=false; btn.textContent='Повторить анализ'; return; }
+
+    const jobId = startData.job_id;
+    setStage('ai', 'loading', '🔍 Анализ запущен, обрабатываем статьи…');
+
+    // Poll until done
+    const data = await new Promise((resolve, reject) => {
+      const poll = async () => {
+        try {
+          const pr = await fetch(`/companies/${COMPANY_ID}/analyze-status/${jobId}`);
+          const pj = await pr.json();
+          if (pj.status === 'done') { resolve(pj.result); return; }
+          if (pj.status === 'error') { reject(new Error(pj.error || 'Ошибка анализа')); return; }
+          if (pj.status === 'not_found') { reject(new Error('Задача не найдена')); return; }
+          // Still processing — update stage text from server
+          if (pj.stage) {
+            setStage('ai', 'loading', pj.stage);
+            _setProgress(70 + Math.min(25, _stageDone * 4));
+            _anLog('→ ' + pj.stage, 'active');
+          }
+          setTimeout(poll, 5000);
+        } catch(e) { setTimeout(poll, 5000); } // network hiccup — keep polling
+      };
+      poll();
+    });
+
+    setStage('ai', 'done', `готово · ${data.total_items||0} материалов`);
+    _setProgress(100);
+    _elapsedStop();
+    _anSetDot(4, 'done');
+    _robotSet('Анализ готов!', 'Найдено ' + (data.total_items||0) + ' материалов');
+    _anLog('✓ Отчёт сформирован', 'done');
+    _setItemsFound(data.total_items || 0);
+    btn.textContent = 'Обновить анализ';
+    btn.disabled = false;
+
+    // ── Fade out overlay then reload — runs unconditionally ──────
+    setTimeout(() => {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.classList.add('fading');
+      setTimeout(() => {
+        window.location.href = window.location.pathname + '?t=' + Date.now();
+      }, 850);
+    }, 1500);
+
+    // Optional DOM preview before reload (errors here don't block reload)
+    try {
+      const total = data.total_items || 0;
+      const summaryEl = document.getElementById('fa-summary');
+      if (summaryEl) {
+        summaryEl.textContent = '';
+        const h = document.createElement('div');
+        h.innerHTML = '<strong style="color:#a78bfa">Общий вывод</strong>';
+        summaryEl.appendChild(h);
+        if (data.overall_summary) {
+          const p = document.createElement('div');
+          p.style.marginTop = '8px';
+          p.textContent = data.overall_summary;
+          summaryEl.appendChild(p);
+        }
+      }
+      const topEl = document.getElementById('fa-top-items');
+      if (topEl) {
+        const items = data.top_items || [];
+        topEl.innerHTML = items.length
+          ? items.map(n => {
+              const icon = SOURCE_ICONS[n.source] || '📄';
+              const title = document.createElement('div');
+              title.textContent = n.title || '';
+              return `<div class="mon-item"><div class="mon-icon mon-icon-new" style="font-size:13px">${icon}</div><div class="mon-body"><div class="mon-title">${title.innerHTML}</div><div class="mon-meta"><span class="mon-badge mon-badge-src">${n.source||''}</span>${n.date?`<span>·</span><span>${n.date}</span>`:''}</div></div></div>`;
+            }).join('')
+          : '<div style="padding:20px;color:var(--text-muted);font-size:13px">Нет данных</div>';
+      }
+    } catch(_previewErr) { console.warn('preview err:', _previewErr); }
+
+  } catch(e) {
+    console.error('[análisis] catch:', e);
+    setStage('ai', 'error', (e.message || 'ошибка').slice(0, 60));
+    _elapsedStop();
+    _robotSet('Ошибка анализа', e.message || '');
+    _anLog('✗ ' + (e.message || 'неизвестная ошибка'), 'warn');
+    setTimeout(() => { document.getElementById('analysis-stages').style.display = 'none'; }, 3000);
+    btn.textContent = 'Повторить анализ';
+    btn.disabled = false;
+  }
+  btn.disabled = false;
+}
+
+function updateOverviewWithAnalysis(data) {
+  const sec = document.getElementById('ov-ai-section');
+  if (!sec) return;
+
+  // Summary
+  const sumEl = document.getElementById('ov-ai-summary');
+  if (sumEl && data.overall_summary) {
+    sumEl.textContent = data.overall_summary;
+    sec.style.display = 'block';
+  }
+
+  // Recommendation
+  const recEl = document.getElementById('ov-ai-recommendation');
+  if (recEl && data.recommendation) {
+    recEl.textContent = '💡 ' + data.recommendation;
+    recEl.style.display = 'block';
+  }
+
+  // Problems
+  const probEl = document.getElementById('ov-ai-problems');
+  const probList = document.getElementById('ov-ai-problems-list');
+  if (probList && data.problems?.length) {
+    probList.innerHTML = data.problems.map(p =>
+      `<div style="display:flex;gap:7px;margin-bottom:6px;font-size:12.5px;line-height:1.5;color:var(--text)"><span style="color:#f87171;flex-shrink:0">✕</span>${p}</div>`
+    ).join('');
+    probEl.style.display = 'block';
+  }
+
+  // Losses
+  const lossEl = document.getElementById('ov-ai-losses');
+  const lossList = document.getElementById('ov-ai-losses-list');
+  if (lossList && data.potential_losses?.length) {
+    lossList.innerHTML = data.potential_losses.map(l =>
+      `<div style="display:flex;gap:7px;margin-bottom:6px;font-size:12.5px;line-height:1.5;color:var(--text)"><span style="color:#fbbf24;flex-shrink:0">⚠</span>${l}</div>`
+    ).join('');
+    lossEl.style.display = 'block';
+  }
+
+  // Date
+  const dateEl = document.getElementById('ov-ai-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  // Top items feed
+  const topFeed = document.getElementById('ov-top-feed');
+  if (topFeed && data.top_items?.length) {
+    const SRC = { news:'📰', reddit:'🟠', youtube:'▶️', instagram:'📸', threads:'🧵', kase:'📊' };
+    topFeed.innerHTML = data.top_items.map(n => `
+      <div class="mon-item">
+        <div class="mon-icon mon-icon-new" style="font-size:14px">${SRC[n.source]||'📄'}</div>
+        <div class="mon-body">
+          <a href="${n.url||'#'}" target="_blank" rel="noopener" class="mon-title">${n.title}</a>
+          <div class="mon-meta">
+            <span class="mon-badge mon-badge-src">${n.source}</span>
+            ${n.date ? `<span>·</span><span>${n.date}</span>` : ''}
+          </div>
+          ${n.importance ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">${n.importance}</div>` : ''}
+        </div>
+      </div>`).join('');
+    const cnt = document.getElementById('ov-top-count');
+    if (cnt) cnt.textContent = `${data.top_items.length} материалов · только что`;
+  }
+
+  // ── Update risk category cards (rcat-nav) and overview bars ──────
+  const cats = data.categories || {};
+  const CAT_COLORS = {media:'#93bbff', hr:'#4ade80', gr:'#f87171', pr:'#c084fc', market:'#fbbf24'};
+
+  for (const [key] of Object.entries(CAT_COLORS)) {
+    const cat = cats[key] || {};
+    const score = (cat.score != null) ? Math.round(cat.score) : null;
+    const firstRisk = cat.risks?.[0]?.text || '';
+
+    // rcat-nav card score + bar + desc
+    const scoreEl = document.getElementById(`rcat-score-${key}`);
+    if (scoreEl) scoreEl.textContent = score ?? '—';
+    const barEl = document.getElementById(`rcat-bar-${key}`);
+    if (barEl) barEl.style.width = `${score || 0}%`;
+    const descEl = document.getElementById(`rcat-desc-${key}`);
+    if (descEl && firstRisk) descEl.textContent = firstRisk.length > 55 ? firstRisk.substring(0, 55) + '…' : firstRisk;
+
+    // Risk Overview breakdown (ro-cats)
+    const roFill = document.getElementById(`ro-fill-${key}`);
+    if (roFill) roFill.style.width = `${score || 0}%`;
+    const roScore = document.getElementById(`ro-score-${key}`);
+    if (roScore) roScore.textContent = score ?? '—';
+  }
+
+  // Overall score gauge number
+  if (data.score != null) {
+    const gaugeEl = document.getElementById('ro-gauge-score');
+    if (gaugeEl) gaugeEl.textContent = Math.round(data.score);
+  }
+}
+
+// Entry point for header button and overview placeholder button
+function launchFullAnalysis(triggerBtn) {
+  if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Анализ…'; }
+  const btn = document.getElementById('run-analysis-btn');
+  if (btn && !btn.disabled) {
+    btn.click();
+  }
+  if (triggerBtn) setTimeout(() => { triggerBtn.disabled = false; triggerBtn.textContent = 'Запустить анализ'; }, 500);
+}
+
+async function createMeet() {
+  const btn = document.getElementById('meet-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Создаю встречу…';
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/meet`, { method: 'POST' });
+    const d = await r.json();
+    if (d.error) {
+      alert('Ошибка: ' + d.error);
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg> Собрать совещание';
+      return;
+    }
+    // Show modal
+    const names = (d.invited || []).map(e => e.name || e.email).join(', ');
+    const html = `
+      <div id="meet-modal" onclick="if(event.target===this)this.remove()"
+           style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center">
+        <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px;max-width:440px;width:90%">
+          <div style="font-size:18px;font-weight:700;margin-bottom:6px">✅ Встреча создана</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">Начало: ${d.start} (Алматы)</div>
+          <a href="${d.meet_url}" target="_blank"
+             style="display:block;text-align:center;padding:12px;background:rgba(37,99,235,0.2);
+                    border:1px solid rgba(37,99,235,0.4);border-radius:10px;color:#60a5fa;
+                    font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">
+            📹 Открыть Google Meet
+          </a>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Приглашены (${(d.invited||[]).length}):</div>
+          <div style="font-size:12px;color:var(--text);margin-bottom:18px">${names}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35)">Приглашения отправлены на email участников</div>
+          <button onclick="document.getElementById('meet-modal').remove()"
+                  style="margin-top:16px;width:100%;padding:8px;background:rgba(255,255,255,0.06);
+                         border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);cursor:pointer">
+            Закрыть
+          </button>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Встреча создана';
+  } catch(e) {
+    alert('Ошибка сети');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="8" width="12" height="8" rx="2"/></svg> Собрать совещание';
+  }
+}
+
+// ── Archive tab ──────────────────────────────────────────────────────────────
+function loadArchive() {
+  var feed  = document.getElementById('archive-feed');
+  var stats = document.getElementById('archive-stats');
+  var btn   = document.getElementById('archive-refresh-btn');
+  feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Загружаем…</div>';
+  stats.textContent = '';
+  btn.disabled = true;
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/companies/' + COMPANY_ID + '/archive', true);
+  xhr.onload = function() {
+    btn.disabled = false;
+    if (xhr.status !== 200) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171">Ошибка HTTP ' + xhr.status + '</div>';
+      return;
+    }
+    var data = JSON.parse(xhr.responseText);
+    var items = data.items || [];
+    stats.textContent = 'Всего статей: ' + items.length;
+    if (!items.length) {
+      feed.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Архив пуст — запустите анализ.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var a = items[i];
+      html += '<div class="mon-item">' +
+        '<div class="mon-icon mon-icon-new">📰</div>' +
+        '<div class="mon-body">' +
+          '<a href="' + (a.url || '#') + '" target="_blank" rel="noopener" class="mon-title">' + (a.title || '—') + '</a>' +
+          '<div class="mon-meta">' +
+            (a.source ? '<span class="mon-badge mon-badge-src">' + a.source + '</span>' : '') +
+            (a.pub_date ? '<span> · </span><span>' + a.pub_date + '</span>' : '') +
+            (a.seen_at ? '<span> · </span><span style="opacity:0.6">' + a.seen_at.slice(0,10) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    feed.innerHTML = html;
+  };
+  xhr.onerror = function() {
+    btn.disabled = false;
+    feed.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171">Ошибка сети</div>';
+  };
+  xhr.send();
+}
 
 </script>
 {% endblock %}
