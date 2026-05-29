@@ -2567,7 +2567,7 @@ async function refreshEmails() {
 
 // ── Loading overlay ──
 {% if is_admin %}
-document.getElementById('risk-form').addEventListener('submit', function() {
+document.getElementById('risk-form')?.addEventListener('submit', function() {
   const btn = document.getElementById('risk-btn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ' + (document.cookie.includes('lang=en') ? 'Analyzing…' : 'Анализируем…');
   document.getElementById('loading-overlay').classList.add('active');
