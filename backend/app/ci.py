@@ -230,28 +230,37 @@ async def analyze_ci(
 
 
 async def score_competitor(name: str, news: list[dict], api_key: str) -> dict[str, Any]:
-    """Lightweight risk score for a single competitor — uses Haiku for speed/cost."""
+    """Competitive threat score for a single competitor — uses Haiku for speed/cost."""
     import anthropic as _a, json as _json
     if not news:
         return {"score": None, "categories": {}, "summary": ""}
-    news_lines = "\n".join(f"- {n['title']}" for n in news[:12])
+    news_lines = "\n".join(f"- {n.get('title','')}" for n in news[:15])
     prompt = (
-        f"Оцени риски компании «{name}» по новостям. Оценка 0–100 (0=нет рисков, 100=критические).\n\n"
-        f"Новости:\n{news_lines}\n\n"
-        f"Верни ТОЛЬКО JSON:\n"
-        f'{{"score":<0-100>,"categories":{{"media":<0-100>,"hr":<0-100>,"gr":<0-100>,"pr":<0-100>,"market":<0-100>}},"summary":"<1 предложение>"}}'
+        f"Оцени КОНКУРЕНТНУЮ УГРОЗУ компании «{name}» для рынка. "
+        f"Шкала 0–100: 0=угрозы нет, 50=умеренная активность, 80+=агрессивная экспансия/кризис у конкурента открывает возможности.\n\n"
+        f"Анализируй:\n"
+        f"- Рост и экспансия (новые проекты, партнёрства, найм) → повышает угрозу (60-85)\n"
+        f"- Проблемы конкурента (суды, скандалы, уходы топ-менеджеров) → снижает угрозу, даёт нам возможность (15-40)\n"
+        f"- Нейтральные новости (корпоративные события) → умеренно (35-55)\n\n"
+        f"Новости о «{name}»:\n{news_lines}\n\n"
+        f"Верни ТОЛЬКО JSON (без пояснений):\n"
+        f'{{"score":<0-100>,"trend":"growing|stable|declining","categories":{{"media":<0-100>,"hr":<0-100>,"gr":<0-100>,"pr":<0-100>,"market":<0-100>}},"summary":"<1 предложение о конкурентной позиции>"}}'
     )
     try:
         client = _a.AsyncAnthropic(api_key=api_key)
         resp = await client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
         text = resp.content[0].text.strip()
         if text.startswith("```"):
             text = "\n".join(text.split("\n")[1:-1])
-        return _json.loads(text)
+        data = _json.loads(text)
+        # Ensure score reflects real competitive context, not default 25
+        if data.get("score") is None:
+            data["score"] = 50
+        return data
     except Exception as e:
         logger.warning("score_competitor %s: %r", name, e)
         return {"score": None, "categories": {}, "summary": ""}
