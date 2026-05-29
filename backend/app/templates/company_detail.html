@@ -232,6 +232,28 @@
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
       <style>
+        /* ── Display font (Syne) ── */
+        .cd-tab,
+        .ri-sec-title,
+        .ri-sec-hdr .ri-sec-title span,
+        .panel-hdr-title,
+        .co-name,
+        .ro-gauge-score,
+        .hist-score,
+        .cd-tab-badge,
+        h1, h2, h3 {
+          font-family: 'Syne', 'Inter', sans-serif !important;
+          letter-spacing: -0.01em;
+        }
+        /* Company name in header */
+        .co-name { font-weight: 800; }
+        /* Tab labels */
+        .cd-tab { font-weight: 700; font-size: 12px; letter-spacing: 0.02em; text-transform: uppercase; }
+        /* Section titles */
+        .ri-sec-title { font-weight: 700; }
+        /* Gauge score number */
+        .ro-gauge-score { font-weight: 800; }
+
         /* ── Company switcher dropdown ── */
         .co-switcher { position:relative; }
         .co-switcher-btn {
