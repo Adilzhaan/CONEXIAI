@@ -96,7 +96,7 @@
 
       {% if not crisis_runs %}
       <div class="ca-empty">
-        <div style="font-size:32px;margin-bottom:12px">🤖</div>
+        <div style="font-size:32px;margin-bottom:12px"></div>
         <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Агент ещё не запускался</div>
         <div style="font-size:12px">Агент автоматически активируется при риск-скоре ≥ 50 после каждого анализа</div>
       </div>
@@ -126,7 +126,7 @@
               <div class="ca-action" style="background:{% if atype == 'email' %}rgba(37,99,235,0.06){% elif atype == 'meet' %}rgba(124,58,237,0.06){% else %}rgba(255,255,255,0.03){% endif %}">
                 <div class="ca-action-icon" style="background:{% if atype == 'email' %}rgba(37,99,235,0.15){% elif atype == 'meet' %}rgba(124,58,237,0.15){% else %}rgba(251,191,36,0.12){% endif %}">
                   {% if atype == 'email' %}📧
-                  {% elif atype == 'meet' %}📹
+                  {% elif atype == 'meet' %}
                   {% else %}📋{% endif %}
                 </div>
                 <div class="ca-action-body">
@@ -189,12 +189,12 @@ async function runAgentNow() {
   const btn = document.getElementById('run-agent-btn');
   if (!btn) return;
   btn.disabled = true;
-  btn.textContent = '⏳ Агент работает…';
+  btn.textContent = ' Агент работает…';
   try {
     const r = await fetch(`/companies/${COMPANY_ID}/crisis/run-agent`, { method: 'POST' });
     const d = await r.json();
     if (d.error) { alert('Ошибка: ' + d.error); btn.disabled = false; btn.textContent = 'Запустить агента'; return; }
-    btn.textContent = `✅ Готово (${(d.actions||[]).length} действий)`;
+    btn.textContent = ` Готово (${(d.actions||[]).length} действий)`;
     setTimeout(() => window.location.reload(), 1500);
   } catch(e) {
     alert('Ошибка сети');

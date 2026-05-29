@@ -305,7 +305,7 @@ async def run_pipeline(
     comp_names = [c["name"] for c in competitors if c.get("name")]
 
     # ── Step 1: Parallel scraping ─────────────────────────────────────────────
-    _stage("📡 Сбор данных из всех источников…")
+    _stage(" Сбор данных из всех источников…")
 
     own_coros = [
         _source_agent("google_news", news_client.fetch_google_news_only(company_name, limit=50), company_name, "own", cutoff_days),
@@ -403,7 +403,7 @@ async def run_pipeline(
             logger.info("[pipeline] dedup: dropped %d already-seen items", dedup_dropped)
 
     # ── Step 2: AI semantic filter per source batch ───────────────────────────
-    _stage("🔍 ИИ фильтрует материалы по источникам…")
+    _stage(" ИИ фильтрует материалы по источникам…")
 
     active_batches = [b for b in batches if b.get("items")]
     if api_key and active_batches:
@@ -447,7 +447,7 @@ async def run_pipeline(
             })
 
     # ── Step 2.5: Annotate own articles with risk context ────────────────────
-    _stage("📝 ИИ аннотирует материалы…")
+    _stage(" ИИ аннотирует материалы…")
     own_staging = [r for r in staging_rows if r["entity_type"] == "own"]
     if api_key and own_staging:
         await _ai_annotate_own_rows(own_staging, company_name, api_key)
@@ -492,7 +492,7 @@ async def run_pipeline(
             logger.warning("[pipeline] load prev run failed: %s", e)
 
     # ── Step 4: AI risk analysis with history ─────────────────────────────────
-    _stage("🧠 Анализ рисков с учётом истории…")
+    _stage(" Анализ рисков с учётом истории…")
 
     own_rows  = [r for r in staging_rows if r["entity_type"] == "own"]
     comp_rows = [r for r in staging_rows if r["entity_type"] == "competitor"]

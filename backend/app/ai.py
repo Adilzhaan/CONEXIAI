@@ -831,7 +831,7 @@ async def analyze_company_risks_parallel(
     filter_results = []
     for _i, _b in enumerate(batches):
         if _b and on_stage:
-            on_stage(f"🔍 Фильтрация статей ({_i + 1}/{_n_batches})…")
+            on_stage(f" Фильтрация статей ({_i + 1}/{_n_batches})…")
         filter_results.append(await _aio.to_thread(_filter_batch, _b, _i))
         if _i < len(batches) - 1 and _b:
             await _aio.sleep(3)
@@ -878,7 +878,7 @@ async def analyze_company_risks_parallel(
     fin_txt = " | ".join(_fin_parts)
 
     if on_stage:
-        on_stage("🧠 Анализ рисков по категориям…")
+        on_stage(" Анализ рисков по категориям…")
 
     comp_txt = ""
     if competitor_news:
@@ -1022,7 +1022,7 @@ def filter_articles(
         if not batch:
             continue
         if on_stage:
-            on_stage(f"🔍 Проверка статей ({bi + 1}/{n_real})…")
+            on_stage(f" Проверка статей ({bi + 1}/{n_real})…")
 
         offset = bi * 100
         lines = "\n".join(

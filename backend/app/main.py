@@ -1321,7 +1321,7 @@ async def _run_combined_job(
 
         if _comp_rows and settings.SUPABASE_SERVICE_KEY:
             try:
-                _stage("📊 Сохранение CI-отчёта…")
+                _stage(" Сохранение CI-отчёта…")
                 from datetime import datetime, timezone as _tz2
 
                 _comp_by_name: dict = {}
@@ -1410,7 +1410,7 @@ async def _run_combined_job(
         _score_now = result.get("score") or 0
         if _score_now >= 75 and settings.SUPABASE_SERVICE_KEY:
             try:
-                _stage("🚨 Кризисный агент работает…")
+                _stage(" Кризисный агент работает…")
                 _emp_rows = await supabase.rest_select_service(
                     table="employees",
                     service_key=settings.SUPABASE_SERVICE_KEY,
@@ -1479,7 +1479,7 @@ async def company_analyze_combined(req: Request, company_id: str):
     instagram_items = body.get("instagram", [])
 
     job_id = str(_uuid.uuid4())
-    _analysis_jobs[job_id] = {"status": "processing", "stage": "🚀 Запуск…", "company_id": company_id}
+    _analysis_jobs[job_id] = {"status": "processing", "stage": " Запуск…", "company_id": company_id}
     asyncio.create_task(_run_combined_job(
         job_id, company_id, company_name,
         news_items, [], [], instagram_items, threads_items, 0,
@@ -1714,12 +1714,12 @@ async def company_social(req: Request, company_id: str):
 
     posts = []
     platform_map = {
-        "threads":   ("Threads",   "🧵"),
-        "instagram": ("Instagram", "📸"),
+        "threads":   ("Threads",   ""),
+        "instagram": ("Instagram", ""),
         "tiktok":    ("TikTok",    "🎵"),
-        "youtube":   ("YouTube",   "▶️"),
+        "youtube":   ("YouTube",   ""),
         "twitter":   ("Twitter/X", "🐦"),
-        "facebook":  ("Facebook",  "👤"),
+        "facebook":  ("Facebook",  ""),
     }
     for platform, (label, icon) in platform_map.items():
         for p in social_data.get(platform, []):
@@ -2428,11 +2428,11 @@ async def risks_run(
 
 
 _CAT_META = {
-    "media":  ("📰", "InfoField & Media",  "#93bbff"),
-    "hr":     ("👥", "Human Resources",    "#4ade80"),
-    "gr":     ("⚖️", "Gov. Relations",     "#f87171"),
+    "media":  ("", "InfoField & Media",  "#93bbff"),
+    "hr":     ("", "Human Resources",    "#4ade80"),
+    "gr":     ("⚖", "Gov. Relations",     "#f87171"),
     "pr":     ("🌐", "PR Environment",     "#c4b5fd"),
-    "market": ("📊", "Market & Industry",  "#fbbf24"),
+    "market": ("", "Market & Industry",  "#fbbf24"),
 }
 
 
@@ -3404,7 +3404,7 @@ async def ci_refresh(req: Request, company_id: str):
 
     import uuid as _uuid2
     job_id = str(_uuid2.uuid4())
-    _analysis_jobs[job_id] = {"status": "running", "stage": "🚀 Запуск анализа…"}
+    _analysis_jobs[job_id] = {"status": "running", "stage": " Запуск анализа…"}
     asyncio.create_task(_run_combined_job(
         job_id, company_id, company_name,
         news_items, [], [], [], [], len(news_items),
