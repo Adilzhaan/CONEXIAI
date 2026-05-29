@@ -825,6 +825,20 @@ async def _company_detail_inner(req: Request, company_id: str):
         except Exception:
             return []
 
+    async def _get_score_history():
+        if not settings.SUPABASE_SERVICE_KEY:
+            return []
+        try:
+            return await supabase.rest_select_service(
+                table="risk_score_history",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                select="score,categories,run_at",
+                query_params={"company_id": f"eq.{company_id}", "order": "run_at.asc", "limit": "50"},
+            ) or []
+        except Exception as e:
+            logger.warning("risk_score_history load failed: %s", e)
+            return []
+
     async def _get_employees():
         try:
             return await supabase.rest_select(
@@ -867,7 +881,7 @@ async def _company_detail_inner(req: Request, company_id: str):
                 continue
         return []
 
-    company_rows, all_companies, employees, risk_runs, emails_rows, members, user_role, monitor_snapshot, monitoring_items, comp_sel_rows, _ci_cached = await asyncio.gather(
+    company_rows, all_companies, employees, risk_runs, emails_rows, members, user_role, monitor_snapshot, monitoring_items, comp_sel_rows, _ci_cached, _score_hist_rows = await asyncio.gather(
         supabase.rest_select(
             table="companies",
             access_token=effective_token,
@@ -897,6 +911,7 @@ async def _company_detail_inner(req: Request, company_id: str):
             },
         ) if settings.SUPABASE_SERVICE_KEY else asyncio.sleep(0, result=[]),
         _get_ci_report(company_id),
+        _get_score_history(),
     )
 
     # Group by competitor_name
@@ -942,12 +957,19 @@ async def _company_detail_inner(req: Request, company_id: str):
     msg = req.query_params.get("msg")
     error = req.query_params.get("error")
 
-    # Score history for chart (oldest → newest)
+    # Score history from dedicated table (oldest → newest)
     score_history = [
-        {"date": r["created_at"][:10], "score": int(r["score"])}
-        for r in reversed(risk_runs)
-        if r.get("score") is not None and r.get("created_at")
+        {"date": r["run_at"][:16].replace("T", " "), "score": int(r["score"])}
+        for r in (_score_hist_rows or [])
+        if r.get("score") is not None and r.get("run_at")
     ]
+    # Fallback to risk_runs if history table is empty
+    if not score_history:
+        score_history = [
+            {"date": r["created_at"][:16].replace("T", " "), "score": int(r["score"])}
+            for r in reversed(risk_runs)
+            if r.get("score") is not None and r.get("created_at")
+        ]
     delta = _compute_delta(risk_runs)
 
     # Compute financial impact metrics for Risk Overview
@@ -1219,6 +1241,22 @@ async def _run_combined_job(
                     }],
                 )
 
+                # ── Write to risk_score_history ──────────────────────────
+                try:
+                    await supabase.rest_insert_service(
+                        table="risk_score_history",
+                        service_key=settings.SUPABASE_SERVICE_KEY,
+                        rows=[{
+                            "company_id": company_id,
+                            "score":      result["score"],
+                            "categories": result.get("categories", {}),
+                            "run_at":     _now_iso,
+                        }],
+                    )
+                    logger.info("[job %s] risk_score_history written: score=%s", job_id, result["score"])
+                except Exception as _he:
+                    logger.warning("[job %s] risk_score_history write failed: %s", job_id, _he)
+
                 # Build recent_news for monitoring_snapshots from sel_own
                 _recent_news = [
                     {
@@ -1259,7 +1297,7 @@ async def _run_combined_job(
                         for r in sel_own if r.get("url")
                     ]
                     if archive_rows:
-                        await supabase.rest_insert_service(
+                        await supabase.rest_insert_ignore_service(
                             "news_archive", settings.SUPABASE_SERVICE_KEY, archive_rows,
                         )
                         logger.info("[job %s] %d rows → news_archive", job_id, len(archive_rows))

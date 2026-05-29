@@ -166,6 +166,19 @@ class SupabaseClient:
         r = await self._http.post(url, headers=headers, json=rows)
         r.raise_for_status()
 
+    async def rest_insert_ignore_service(
+        self,
+        table: str,
+        service_key: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        """INSERT … ON CONFLICT DO NOTHING using service role key."""
+        url = f"{self._base}/rest/v1/{table}"
+        headers = self._headers(service_key=service_key)
+        headers["Prefer"] = "return=minimal,resolution=ignore-duplicates"
+        r = await self._http.post(url, headers=headers, json=rows)
+        r.raise_for_status()
+
     async def rest_upsert_service(
         self,
         table: str,
