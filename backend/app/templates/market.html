@@ -38,7 +38,7 @@
             </span>
           {% elif loading %}
             <span id="loading-badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.28);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600">
-              ⏳ загружается...
+               загружается...
             </span>
           {% endif %}
         </div>
@@ -109,7 +109,7 @@
         <div class="skeleton" style="height:180px;border-radius:var(--radius)"></div>
       </div>
       <div style="text-align:center;margin-top:24px;color:var(--text-muted);font-size:13px">
-        <div style="font-size:22px;margin-bottom:8px">⏳</div>
+        <div style="font-size:22px;margin-bottom:8px"></div>
         Анализируем рыночную позицию компании...<br>
         <span style="font-size:11px">Обычно 20–40 секунд</span>
       </div>
@@ -170,7 +170,7 @@
     {% set fund = finance.fundamentals if finance else {} %}
     {% if fund and (fund.sector or fund.industry or fund.trailing_pe or fund.market_cap_fmt) %}
     <div class="mkt-block" style="margin-bottom:16px;padding:16px 22px">
-      <div class="mkt-label">🏭 Отрасль & Фундаментальные данные</div>
+      <div class="mkt-label"> Отрасль & Фундаментальные данные</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
         {% if fund.sector %}
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px">
@@ -310,7 +310,7 @@
     <!-- ══ AI SUMMARY ══ -->
     {% if ai.summary %}
     <div style="background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04));border:1px solid rgba(124,58,237,0.25);border-left:3px solid #7c3aed;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
-      <span style="font-size:18px;flex-shrink:0">🤖</span>
+      <span style="font-size:18px;flex-shrink:0"></span>
       <div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text)">{{ ai.summary }}</div>
     </div>
     {% endif %}
@@ -385,7 +385,7 @@
 
     {% else %}
     <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
-      <div style="font-size:28px;margin-bottom:10px">📊</div>
+      <div style="font-size:28px;margin-bottom:10px"></div>
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">Нет данных анализа</div>
       <div style="font-size:12px">Нажмите ↻ Обновить чтобы загрузить рыночный анализ</div>
     </div>
@@ -395,13 +395,13 @@
     {% if company_news %}
     <div class="mkt-block" style="margin-top:8px">
       <div class="mkt-label">
-        📰 Источники анализа
+         Источники анализа
         <span style="font-size:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:99px;padding:1px 8px;font-weight:600;margin-left:6px">{{ company_news|length }}</span>
       </div>
-      {% set src_icons_m = {"news":"📰","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵","kase":"📊"} %}
+      {% set src_icons_m = {"news":"","reddit":"","youtube":"","instagram":"","threads":"","kase":""} %}
       {% for item in company_news %}
       <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.last %}border-bottom:none{% endif %}">
-        <span style="font-size:14px;flex-shrink:0;margin-top:2px">{{ src_icons_m.get((item.source or '')|lower|replace(' ',''), '📄') }}</span>
+        <span style="font-size:14px;flex-shrink:0;margin-top:2px">{{ src_icons_m.get((item.source or '')|lower|replace(' ',''), '') }}</span>
         <div style="flex:1;min-width:0">
           {% if item.link %}
             <a href="{{ item.link }}" target="_blank" rel="noopener"
@@ -486,7 +486,7 @@ async function triggerRefresh() {
   const btn = document.getElementById('refresh-btn');
   if (btn) { btn.textContent = '↻ Обновляю...'; btn.disabled = true; }
   const badge = document.getElementById('updated-badge') || document.getElementById('loading-badge');
-  if (badge) { badge.textContent = '⏳ обновляется...'; badge.style.color='#a16207'; }
+  if (badge) { badge.textContent = ' обновляется...'; badge.style.color='#a16207'; }
   try {
     await fetch(`/companies/${COMPANY_ID}/market/refresh`, { method: 'POST' });
     setTimeout(() => pollForData(20), 5000);

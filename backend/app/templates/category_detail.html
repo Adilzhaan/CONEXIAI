@@ -336,7 +336,7 @@
   {% set _ = stakeholders.items.append(('🏛', 'Министерство', 'Исполнительная власть')) %}
 {% endif %}
 {% if 'нбрк' in all_text or 'нацбанк' in all_text or 'центральный банк' in all_text %}
-  {% set _ = stakeholders.items.append(('🏦', 'Нацбанк (НБРК)', 'Финансовый регулятор')) %}
+  {% set _ = stakeholders.items.append(('', 'Нацбанк (НБРК)', 'Финансовый регулятор')) %}
 {% endif %}
 {% if 'антикор' in all_text or 'коррупц' in all_text %}
   {% set _ = stakeholders.items.append(('⚖', 'Агентство по ПКК', 'Антикоррупционный контроль')) %}
@@ -348,23 +348,23 @@
   {% set _ = stakeholders.items.append(('📜', 'Парламент РК', 'Законодательная власть')) %}
 {% endif %}
 {% if 'акимат' in all_text or 'аким' in all_text or 'городск' in all_text or 'региональн' in all_text %}
-  {% set _ = stakeholders.items.append(('🏢', 'Акимат', 'Местные органы власти')) %}
+  {% set _ = stakeholders.items.append(('', 'Акимат', 'Местные органы власти')) %}
 {% endif %}
 {% if 'суд' in all_text or 'прокурат' in all_text or 'правоохран' in all_text %}
   {% set _ = stakeholders.items.append(('⚖', 'Прокуратура / Суды', 'Правоохранительные органы')) %}
 {% endif %}
 {% if 'лиценз' in all_text or 'регулятор' in all_text or 'надзор' in all_text %}
-  {% set _ = stakeholders.items.append(('🔍', 'Регуляторный орган', 'Надзор и лицензирование')) %}
+  {% set _ = stakeholders.items.append(('', 'Регуляторный орган', 'Надзор и лицензирование')) %}
 {% endif %}
 {% if 'конкурент' in all_text or 'рынок' in all_text or 'монопол' in all_text %}
-  {% set _ = stakeholders.items.append(('📊', 'Антимонопольный орган', 'Конкурентная среда')) %}
+  {% set _ = stakeholders.items.append(('', 'Антимонопольный орган', 'Конкурентная среда')) %}
 {% endif %}
 
 <!-- Always add at least generic if nothing found -->
 {% if stakeholders.items | length == 0 %}
   {% set _ = stakeholders.items.append(('🏛', 'Государственные органы', 'Исполнительная власть')) %}
   {% set _ = stakeholders.items.append(('📜', 'Парламент РК', 'Законодательная власть')) %}
-  {% set _ = stakeholders.items.append(('🔍', 'Регуляторы', 'Надзор и контроль')) %}
+  {% set _ = stakeholders.items.append(('', 'Регуляторы', 'Надзор и контроль')) %}
 {% endif %}
 
 <div class="gr-stakeholders-card">
@@ -528,7 +528,7 @@
 {% set opps = namespace(items=[]) %}
 
 {% if 'цифров' in all_text or 'технолог' in all_text or 'инновац' in all_text %}
-  {% set _ = opps.items.append(('💡', 'Цифровая трансформация', 'Конкуренты отстают — окно для дифференциации', 'Технологии', 'rgba(147,187,255,0.12)', 'rgba(147,187,255,0.25)', '#93bbff')) %}
+  {% set _ = opps.items.append(('', 'Цифровая трансформация', 'Конкуренты отстают — окно для дифференциации', 'Технологии', 'rgba(147,187,255,0.12)', 'rgba(147,187,255,0.25)', '#93bbff')) %}
 {% endif %}
 {% if 'экспорт' in all_text or 'международн' in all_text or 'зарубеж' in all_text %}
   {% set _ = opps.items.append(('🌍', 'Выход на новые рынки', 'Международная экспансия как защита от локальных рисков', 'Экспансия', 'rgba(52,211,153,0.10)', 'rgba(52,211,153,0.22)', '#34d399')) %}
@@ -537,18 +537,18 @@
   {% set _ = opps.items.append(('🤝', 'Стратегические партнёрства', 'Объединение ресурсов для усиления позиций', 'M&A / Alliance', 'rgba(192,132,252,0.10)', 'rgba(192,132,252,0.22)', '#c084fc')) %}
 {% endif %}
 {% if 'цен' in all_text or 'стоимост' in all_text or 'ценовой' in all_text %}
-  {% set _ = opps.items.append(('💰', 'Ценовая стратегия', 'Пересмотр ценообразования для захвата доли рынка', 'Ценообразование', 'rgba(251,191,36,0.10)', 'rgba(251,191,36,0.22)', '#fbbf24')) %}
+  {% set _ = opps.items.append(('', 'Ценовая стратегия', 'Пересмотр ценообразования для захвата доли рынка', 'Ценообразование', 'rgba(251,191,36,0.10)', 'rgba(251,191,36,0.22)', '#fbbf24')) %}
 {% endif %}
 {% if 'лояльност' in all_text or 'клиент' in all_text or 'потребител' in all_text %}
-  {% set _ = opps.items.append(('⭐', 'Удержание клиентов', 'Инвестиции в лояльность опережают конкурентов', 'CX / Retention', 'rgba(251,191,36,0.10)', 'rgba(251,191,36,0.22)', '#fbbf24')) %}
+  {% set _ = opps.items.append(('', 'Удержание клиентов', 'Инвестиции в лояльность опережают конкурентов', 'CX / Retention', 'rgba(251,191,36,0.10)', 'rgba(251,191,36,0.22)', '#fbbf24')) %}
 {% endif %}
 {% if 'бренд' in all_text or 'репутац' in all_text or 'имидж' in all_text %}
   {% set _ = opps.items.append(('📣', 'Брендинг и репутация', 'Слабость конкурентов — шанс укрепить бренд', 'Brand', 'rgba(192,132,252,0.10)', 'rgba(192,132,252,0.22)', '#c084fc')) %}
 {% endif %}
 
 {% if opps.items | length == 0 %}
-  {% set _ = opps.items.append(('📊', 'Диверсификация продукта', 'Расширение линейки снижает зависимость от одного сегмента', 'Продукт', 'rgba(147,187,255,0.10)', 'rgba(147,187,255,0.22)', '#93bbff')) %}
-  {% set _ = opps.items.append(('🔍', 'Конкурентная разведка', 'Углублённый анализ слабых сторон конкурентов', 'CI', 'rgba(52,211,153,0.10)', 'rgba(52,211,153,0.22)', '#34d399')) %}
+  {% set _ = opps.items.append(('', 'Диверсификация продукта', 'Расширение линейки снижает зависимость от одного сегмента', 'Продукт', 'rgba(147,187,255,0.10)', 'rgba(147,187,255,0.22)', '#93bbff')) %}
+  {% set _ = opps.items.append(('', 'Конкурентная разведка', 'Углублённый анализ слабых сторон конкурентов', 'CI', 'rgba(52,211,153,0.10)', 'rgba(52,211,153,0.22)', '#34d399')) %}
 {% endif %}
 
 <div class="mkt-opportunities-card">
@@ -634,7 +634,7 @@
 {% if active_key == 'hr' and hh_data %}
 <div style="margin-top:28px">
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-muted);margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <span style="width:22px;height:22px;border-radius:5px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px">💼</span>
+    <span style="width:22px;height:22px;border-radius:5px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px"></span>
     Вакансии на hh.kz
     <span style="font-size:10px;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.25);border-radius:99px;padding:1px 8px;font-weight:700;color:#4ade80">{{ hh_data.total }} открытых</span>
   </div>
@@ -655,7 +655,7 @@
   <div style="border:1px solid rgba(255,255,255,0.08);border-radius:var(--radius);overflow:hidden">
     {% for v in hh_data.vacancies %}
     <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.last %}border-bottom:none{% endif %}">
-      <span style="font-size:15px;flex-shrink:0;margin-top:1px">💼</span>
+      <span style="font-size:15px;flex-shrink:0;margin-top:1px"></span>
       <div style="flex:1;min-width:0">
         <a href="{{ v.link }}" target="_blank" rel="noopener"
            style="font-size:13px;font-weight:500;color:var(--text);text-decoration:none;line-height:1.4;display:block;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
@@ -686,15 +686,15 @@
 {% if recent_news %}
 <div style="margin-top:28px">
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-muted);margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <span style="width:22px;height:22px;border-radius:5px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px">📰</span>
+    <span style="width:22px;height:22px;border-radius:5px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px"></span>
     Источники анализа
     <span style="font-size:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:99px;padding:1px 8px;font-weight:600">{{ recent_news|length }} материалов</span>
   </div>
   <div style="border:1px solid rgba(255,255,255,0.08);border-radius:var(--radius);overflow:hidden">
-    {% set src_icons = {"news":"📰","reddit":"🟠","youtube":"▶️","instagram":"📸","threads":"🧵","kase":"📊"} %}
+    {% set src_icons = {"news":"","reddit":"","youtube":"","instagram":"","threads":"","kase":""} %}
     {% for item in recent_news %}
     <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.last %}border-bottom:none{% endif %}">
-      <span style="font-size:15px;flex-shrink:0;margin-top:1px">{{ src_icons.get(item.source|lower|replace(' ','') , '📄') if item.source else '📄' }}</span>
+      <span style="font-size:15px;flex-shrink:0;margin-top:1px">{{ src_icons.get(item.source|lower|replace(' ','') , '') if item.source else '' }}</span>
       <div style="flex:1;min-width:0">
         {% if item.link %}
           <a href="{{ item.link }}" target="_blank" rel="noopener"

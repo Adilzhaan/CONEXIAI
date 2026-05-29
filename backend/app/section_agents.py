@@ -423,9 +423,9 @@ async def run_full_analysis(
     def _on_progress(section: str, stage: str):
         progress[section] = stage
         if on_stage:
-            icons = {"source": "🔍", "fetch": "📡", "risk": "🧠", "done": "✅", "error": "❌"}
+            icons = {"source": "", "fetch": "", "risk": "", "done": "", "error": ""}
             labels = {s: _SECTION_LABELS.get(s, s) for s in SECTIONS}
-            parts = [f"{icons.get(progress[s],'⏳')} {labels[s]}" for s in SECTIONS]
+            parts = [f"{icons.get(progress[s],'')} {labels[s]}" for s in SECTIONS]
             on_stage(" | ".join(parts))
 
     # Run all 5 sections in parallel
@@ -476,7 +476,7 @@ async def run_full_analysis(
 
     # Master Agent
     if on_stage:
-        on_stage("🎯 Главный агент — итоговый анализ…")
+        on_stage(" Главный агент — итоговый анализ…")
 
     master = await asyncio.to_thread(
         _master_agent_sync, company_name, section_results, api_key

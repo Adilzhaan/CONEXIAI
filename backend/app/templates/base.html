@@ -51,9 +51,9 @@
       --sb-label:      rgba(255,255,255,0.25);
 
       /* Radius */
-      --radius:    16px;
-      --radius-sm: 12px;
-      --radius-xs: 8px;
+      --radius:    0px;
+      --radius-sm: 0px;
+      --radius-xs: 0px;
 
       /* Shadows */
       --shadow-sm: 0 1px 4px rgba(0,0,0,0.20);
@@ -72,6 +72,19 @@
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── No rounded corners ── */
+    .ri-section, .cd-panel, .hist-item, .hist-item-body,
+    .ro-gauge-card, .ro-cats-card, .ro-finance-card, .ro-action-panel, .ro-ap-col,
+    .mon-item, .badge, .btn, .btn-primary, .btn-secondary,
+    .sidebar-item, .cd-tab, .co-switcher-btn, .co-dropdown,
+    .scenario-card, .advice-card, input, textarea, select,
+    .an-found-item, .an-badge, .modal, .modal-box,
+    [class*="-card"], [class*="-box"], [class*="-panel"],
+    [class*="-badge"], [class*="-chip"], [class*="-pill"],
+    [class*="-btn"], [class*="-section"], [class*="-item"] {
+      border-radius: 0 !important;
     }
 
     /* ── Scrollbar ── */
