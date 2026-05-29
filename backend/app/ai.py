@@ -1358,8 +1358,10 @@ def analyze_with_history(
         ]
         categories[cat] = {"score": score, "risks": risks}
 
-    overall = max(0, min(100, int(raw.get("overall_score",
-        sum(v["score"] for v in categories.values()) // 5 if categories else 50))))
+    overall = max(0, min(100,
+        round(sum(v["score"] for v in categories.values()) / len(categories))
+        if categories else (raw.get("overall_score") or 50)
+    ))
 
     # Flat risks list — deduplicate against categories
     seen_titles: set[str] = set()

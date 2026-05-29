@@ -1213,51 +1213,105 @@
               </div>
               <span style="font-size:11px;color:var(--text-muted)">{{ score_history|length }} прогонов</span>
             </div>
-            <div style="position:relative;height:160px;padding:4px 0">
+            <div style="position:relative;height:200px">
               <canvas id="score-history-chart"></canvas>
             </div>
             <script>
             (function(){
               try {
                 const canvas = document.getElementById('score-history-chart');
-                if (!canvas || !window.Chart) { console.warn('[chart] canvas or Chart.js missing'); return; }
+                if (!canvas || !window.Chart) return;
                 const history = {{ score_history | tojson }};
                 if (!history || history.length < 2) return;
                 const labels = history.map(r => r.date);
                 const scores = history.map(r => r.score);
-                const colors = scores.map(s => s >= 65 ? '#f87171' : s >= 35 ? '#fbbf24' : '#34d399');
+                const ptColors = scores.map(s => s >= 65 ? '#f87171' : s >= 35 ? '#fbbf24' : '#34d399');
+                const ptSizes  = scores.map(s => s >= 65 ? 7 : 5);
+
+                const ctx = canvas.getContext('2d');
+                const grad = ctx.createLinearGradient(0, 0, 0, 200);
+                grad.addColorStop(0,   'rgba(167,139,250,0.25)');
+                grad.addColorStop(1,   'rgba(167,139,250,0)');
+
+                // Zone plugin — colored background bands
+                const zonePlugin = {
+                  id: 'zones',
+                  beforeDraw(chart) {
+                    const {ctx, chartArea: {top, bottom, left, right}, scales: {y}} = chart;
+                    const zones = [
+                      { from: 65, to: 100, color: 'rgba(248,113,113,0.07)' },
+                      { from: 35, to: 65,  color: 'rgba(251,191,36,0.05)'  },
+                      { from: 0,  to: 35,  color: 'rgba(52,211,153,0.05)'  },
+                    ];
+                    zones.forEach(({from, to, color}) => {
+                      const yTop = y.getPixelForValue(to);
+                      const yBot = y.getPixelForValue(from);
+                      ctx.fillStyle = color;
+                      ctx.fillRect(left, yTop, right - left, yBot - yTop);
+                    });
+                    // Zone labels
+                    ctx.font = '9px system-ui';
+                    ctx.textAlign = 'right';
+                    ctx.fillStyle = 'rgba(248,113,113,0.4)';  ctx.fillText('Crisis', right - 4, y.getPixelForValue(82) + 4);
+                    ctx.fillStyle = 'rgba(251,191,36,0.4)';   ctx.fillText('Warning', right - 4, y.getPixelForValue(50) + 4);
+                    ctx.fillStyle = 'rgba(52,211,153,0.4)';   ctx.fillText('Normal', right - 4, y.getPixelForValue(17) + 4);
+                  }
+                };
+
                 new Chart(canvas, {
                   type: 'line',
+                  plugins: [zonePlugin],
                   data: {
                     labels,
                     datasets: [{
                       data: scores,
                       borderColor: '#a78bfa',
-                      backgroundColor: 'rgba(167,139,250,0.08)',
-                      borderWidth: 2,
-                      pointBackgroundColor: colors,
-                      pointBorderColor: colors,
-                      pointRadius: 5,
-                      tension: 0.35,
+                      backgroundColor: grad,
+                      borderWidth: 2.5,
+                      pointBackgroundColor: ptColors,
+                      pointBorderColor: '#1e1b4b',
+                      pointBorderWidth: 2,
+                      pointRadius: ptSizes,
+                      pointHoverRadius: 8,
+                      tension: 0.4,
                       fill: true,
                     }]
                   },
                   options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 600, easing: 'easeOutQuart' },
                     plugins: {
                       legend: { display: false },
-                      tooltip: { callbacks: { label: c => 'Риск-скор: ' + c.parsed.y } }
+                      tooltip: {
+                        backgroundColor: 'rgba(15,10,40,0.92)',
+                        borderColor: 'rgba(167,139,250,0.3)',
+                        borderWidth: 1,
+                        titleColor: '#94a3b8',
+                        bodyColor: '#e2e8f0',
+                        padding: 10,
+                        callbacks: {
+                          title: items => items[0].label,
+                          label: c => {
+                            const s = c.parsed.y;
+                            const lvl = s >= 65 ? '🔴 Crisis' : s >= 35 ? '🟡 Warning' : '🟢 Normal';
+                            return `  Риск-скор: ${s}  ${lvl}`;
+                          }
+                        }
+                      }
                     },
                     scales: {
                       x: {
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { color: '#64748b', font: { size: 10 } }
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                        ticks: { color: '#475569', font: { size: 10 }, maxRotation: 30 }
                       },
                       y: {
                         min: 0, max: 100,
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { color: '#64748b', font: { size: 10 }, stepSize: 25 }
+                        grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false },
+                        ticks: {
+                          color: '#475569', font: { size: 10 }, stepSize: 25,
+                          callback: v => v === 0 ? '' : v
+                        }
                       }
                     }
                   }
