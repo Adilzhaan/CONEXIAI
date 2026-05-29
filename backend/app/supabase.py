@@ -171,12 +171,14 @@ class SupabaseClient:
         table: str,
         service_key: str,
         rows: list[dict[str, Any]],
+        on_conflict: str = "url",
     ) -> None:
         """INSERT … ON CONFLICT DO NOTHING using service role key."""
-        url = f"{self._base}/rest/v1/{table}"
+        api_url = f"{self._base}/rest/v1/{table}"
         headers = self._headers(service_key=service_key)
         headers["Prefer"] = "return=minimal,resolution=ignore-duplicates"
-        r = await self._http.post(url, headers=headers, json=rows)
+        r = await self._http.post(api_url, headers=headers, json=rows,
+                                  params={"on_conflict": on_conflict})
         r.raise_for_status()
 
     async def rest_upsert_service(
