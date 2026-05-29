@@ -51,9 +51,9 @@
       --sb-label:      rgba(255,255,255,0.25);
 
       /* Radius */
-      --radius:    0px;
-      --radius-sm: 0px;
-      --radius-xs: 0px;
+      --radius:    16px;
+      --radius-sm: 12px;
+      --radius-xs: 8px;
 
       /* Shadows */
       --shadow-sm: 0 1px 4px rgba(0,0,0,0.20);
@@ -75,18 +75,6 @@
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* ── Sharp corners everywhere ── */
-    *, *::before, *::after {
-      border-radius: 0 !important;
-    }
-    /* Preserve circles and spinners */
-    .loading-spinner,
-    .an-dot,
-    [style*="border-radius:50%"],
-    [style*="border-radius: 50%"] {
-      border-radius: 50% !important;
     }
 
     /* ── Scrollbar ── */
