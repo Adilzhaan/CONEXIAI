@@ -1694,6 +1694,55 @@
           </div>
           {% endif %}
 
+          <!-- ══ SECTION 1b3: Loss Scenarios (AI-1, lazy) ══ -->
+          {% set _loss = latest.loss_scenarios if latest and latest.loss_scenarios else [] %}
+          <div class="ri-section" id="ov-loss-section">
+            <div class="ri-sec-hdr">
+              <div class="ri-sec-title"><span>Сценарии потерь</span></div>
+              <span style="font-size:11px;color:var(--text-muted)">если риск реализуется</span>
+            </div>
+            {% if not _loss %}
+            <div id="loss-cta" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:var(--radius);padding:22px;text-align:center">
+              <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">ИИ рассчитает сколько вы потеряете по топ-рискам — деньги, отток клиентов, удар по репутации в 3 сценариях</div>
+              <button onclick="loadLossScenarios(this)" style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">
+                Рассчитать сценарии потерь
+              </button>
+            </div>
+            {% endif %}
+            <div id="loss-feed" style="display:flex;flex-direction:column;gap:12px">
+              {% if _loss %}{% set _cat_colors_ls = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c084fc','market':'#fbbf24'} %}
+              {% for ls in _loss %}
+              {% set _lc = _cat_colors_ls.get(ls.category, '#94a3b8') %}
+              <div style="border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);overflow:hidden">
+                <div style="padding:11px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ _lc }};flex-shrink:0"></span>
+                  <span style="font-size:13px;font-weight:700;color:var(--text)">{{ ls.title }}</span>
+                  <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:{{ _lc }};margin-left:auto">{{ ls.category }}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+                  {% set _branches = [
+                    ('Худший', ls.worst, '#f87171', 'rgba(248,113,113,0.06)'),
+                    ('Базовый', ls.base, '#fbbf24', 'rgba(251,191,36,0.05)'),
+                    ('Если среагировать', ls.reacted, '#34d399', 'rgba(52,211,153,0.06)'),
+                  ] %}
+                  {% for _bn, _b, _bc, _bg in _branches %}
+                  <div style="padding:12px 14px;background:{{ _bg }};{% if not loop.last %}border-right:1px solid rgba(255,255,255,0.06){% endif %}">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:{{ _bc }};margin-bottom:8px">{{ _bn }}</div>
+                    {% if _b.money %}<div style="font-size:18px;font-weight:800;color:{{ _bc }};line-height:1">{{ _b.money }}</div>{% endif %}
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 8px">
+                      {% if _b.churn %}<span style="font-size:10px;color:var(--text-muted)">отток {{ _b.churn }}</span>{% endif %}
+                      {% if _b.rep %}<span style="font-size:10px;color:var(--text-muted)">репутация {{ _b.rep }}</span>{% endif %}
+                      {% if _b.days %}<span style="font-size:10px;color:var(--text-muted)">{{ _b.days }} дн.</span>{% endif %}
+                    </div>
+                    {% if _b.text %}<div style="font-size:11px;color:var(--text-muted);line-height:1.45">{{ _b.text[:90] }}</div>{% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endfor %}{% endif %}
+            </div>
+          </div>
+
           <!-- ══ SECTION 1c: What Changed ══ -->
           {% if delta and delta.has_changes %}
           <div class="ri-section">
@@ -4463,6 +4512,54 @@ function updateOverviewWithAnalysis(data) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
   else setup();
 })();
+
+// ── Loss scenarios (lazy AI-1) ──
+const _CAT_C = {media:'#93bbff',hr:'#4ade80',gr:'#f87171',pr:'#c084fc',market:'#fbbf24'};
+function _lossBranch(name, b, col, bg, last) {
+  b = b || {};
+  const metas = [];
+  if (b.churn) metas.push(`отток ${b.churn}`);
+  if (b.rep)   metas.push(`репутация ${b.rep}`);
+  if (b.days)  metas.push(`${b.days} дн.`);
+  return `<div style="padding:12px 14px;background:${bg};${last?'':'border-right:1px solid rgba(255,255,255,0.06)'}">
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${col};margin-bottom:8px">${name}</div>
+    ${b.money?`<div style="font-size:18px;font-weight:800;color:${col};line-height:1">${b.money}</div>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 8px">${metas.map(m=>`<span style="font-size:10px;color:var(--text-muted)">${m}</span>`).join('')}</div>
+    ${b.text?`<div style="font-size:11px;color:var(--text-muted);line-height:1.45">${(b.text||'').slice(0,90)}</div>`:''}
+  </div>`;
+}
+async function loadLossScenarios(btn) {
+  const cta = document.getElementById('loss-cta');
+  const feed = document.getElementById('loss-feed');
+  if (btn) { btn.disabled = true; btn.textContent = 'ИИ считает…'; }
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/loss-scenarios`, { method: 'POST' });
+    const d = await r.json();
+    const scen = d.scenarios || [];
+    if (!scen.length) {
+      if (cta) cta.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">' + (d.error || 'Нет данных для расчёта') + '</div>';
+      return;
+    }
+    feed.innerHTML = scen.map(ls => {
+      const col = _CAT_C[ls.category] || '#94a3b8';
+      return `<div style="border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);overflow:hidden">
+        <div style="padding:11px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">${ls.title||''}</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:${col};margin-left:auto">${ls.category||''}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+          ${_lossBranch('Худший', ls.worst, '#f87171', 'rgba(248,113,113,0.06)', false)}
+          ${_lossBranch('Базовый', ls.base, '#fbbf24', 'rgba(251,191,36,0.05)', false)}
+          ${_lossBranch('Если среагировать', ls.reacted, '#34d399', 'rgba(52,211,153,0.06)', true)}
+        </div>
+      </div>`;
+    }).join('');
+    if (cta) cta.style.display = 'none';
+  } catch(e) {
+    if (cta) cta.innerHTML = '<div style="font-size:13px;color:#f87171">Ошибка сети</div>';
+  }
+}
 
 function toggleExtraRisks(btn, cls) {
   const rows = document.querySelectorAll('.' + (cls || 'ro-risk-extra'));

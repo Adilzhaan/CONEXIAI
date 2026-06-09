@@ -901,6 +901,7 @@ async def _company_detail_inner(req: Request, company_id: str):
 
     async def _safe_risk_runs(token: str, cid: str):
         _selects = [
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints",
@@ -1267,6 +1268,7 @@ async def _run_combined_job(
                         "risk_fingerprints": pipeline_result.get("risk_fingerprints", []),
                         "previous_run_id":   pipeline_result.get("previous_run_id"),
                         "positive_signals":  pipeline_result.get("positive_signals", []),
+                        "loss_scenarios":    pipeline_result.get("loss_scenarios", []),
                         "top_articles": [
                             {
                                 "title":     r["title"],
@@ -1614,6 +1616,65 @@ async def risk_copilot(req: Request, company_id: str):
     except Exception as e:
         logger.warning("copilot call failed: %s", e)
         return {"error": "Не удалось получить ответ"}
+
+
+@app.post("/companies/{company_id}/loss-scenarios")
+async def loss_scenarios(req: Request, company_id: str):
+    """Lazily generate (and cache) loss scenarios for the latest run's top risks (AI-1)."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    if not settings.ANTHROPIC_API_KEY or not settings.SUPABASE_SERVICE_KEY:
+        return {"error": "AI не настроен"}
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    try:
+        rows = await supabase.rest_select_service(
+            table="risk_runs", service_key=svc,
+            select="id,risks,loss_scenarios",
+            query_params={"company_id": f"eq.{company_id}", "order": "created_at.desc", "limit": "1"},
+        )
+    except Exception as e:
+        logger.warning("loss_scenarios load failed: %s", e)
+        rows = []
+    if not rows:
+        return {"scenarios": []}
+
+    run = rows[0]
+    cached = run.get("loss_scenarios")
+    if cached:                       # already generated — return cache
+        return {"scenarios": cached, "cached": True}
+
+    risks = run.get("risks") or []
+    if not risks:
+        return {"scenarios": []}
+
+    industry = ""
+    try:
+        crows = await supabase.rest_select_service(
+            table="companies", service_key=svc, select="name,industry",
+            query_params={"id": f"eq.{company_id}"},
+        )
+        company_name = crows[0]["name"] if crows else ""
+        industry = (crows[0].get("industry") or "") if crows else ""
+    except Exception:
+        company_name = ""
+
+    from .ai import generate_loss_scenarios as _gls
+    top = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
+    scen = await asyncio.to_thread(_gls, company_name, top, industry, settings.ANTHROPIC_API_KEY)
+
+    # Cache back onto the run so next load is instant
+    if scen:
+        try:
+            await supabase.rest_update_service(
+                f"rest/v1/risk_runs?id=eq.{run['id']}", service_key=svc,
+                patch={"loss_scenarios": scen},
+            )
+        except Exception as e:
+            logger.warning("loss_scenarios cache write failed: %s", e)
+
+    return {"scenarios": scen}
 
 
 @app.get("/companies/{company_id}/analyze-status/{job_id}")

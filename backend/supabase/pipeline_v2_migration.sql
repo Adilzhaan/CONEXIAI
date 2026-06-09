@@ -20,4 +20,5 @@ alter table risk_runs
   add column if not exists categories       jsonb,
   add column if not exists scenarios        jsonb,
   add column if not exists positive_signals jsonb,
-  add column if not exists top_articles     jsonb;
+  add column if not exists top_articles     jsonb,
+  add column if not exists loss_scenarios   jsonb;

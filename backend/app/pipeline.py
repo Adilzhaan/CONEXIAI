@@ -519,6 +519,18 @@ async def run_pipeline(
     risks, decayed_fps = escalate_risks(analysis.get("risks", []), prev_fps, positive_signals)
     analysis["risks"] = risks
 
+    # ── Loss scenarios for top risks (AI-1) ──────────────────────────────────
+    loss_scenarios: list[dict] = []
+    if api_key and risks:
+        try:
+            from .ai import generate_loss_scenarios as _gls
+            _top_sorted = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
+            loss_scenarios = await asyncio.to_thread(_gls, company_name, _top_sorted, "", api_key)
+            logger.info("[pipeline] generated %d loss scenarios", len(loss_scenarios))
+        except Exception as e:
+            logger.warning("[pipeline] loss scenarios failed: %s", e)
+    analysis["loss_scenarios"] = loss_scenarios
+
     # Fingerprints = active risks + decaying (not yet resolved) risks
     new_fps = [
         {
@@ -536,6 +548,7 @@ async def run_pipeline(
         "generated_at":      datetime.now(timezone.utc).isoformat(),
         "previous_run_id":   prev_run_id,
         "positive_signals":  positive_signals,
+        "loss_scenarios":    loss_scenarios,
         "risk_fingerprints": new_fps,
         "staging_rows":      staging_rows,
         "source_stats": [

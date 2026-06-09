@@ -1195,6 +1195,73 @@ async def generate_communication(
     return ""
 
 
+def generate_loss_scenarios(
+    company_name: str,
+    risks: list[dict],
+    industry: str,
+    api_key: str,
+) -> list[dict]:
+    """For the top risks, quantify loss in 3 branches: worst / base / reacted.
+    Returns list aligned to input risks: [{title, category, worst:{...}, base:{...}, reacted:{...}}].
+    Sync — call via asyncio.to_thread()."""
+    import anthropic as _a, json as _json
+    top = [r for r in (risks or []) if (r.get("title") or r.get("text"))][:5]
+    if not top or not api_key:
+        return []
+
+    lines = "\n".join(
+        f"[{i}] ({r.get('category','')}) {r.get('title') or r.get('text','')}"
+        for i, r in enumerate(top)
+    )
+    prompt = (
+        f"Компания: «{company_name}» (отрасль: {industry or 'н/д'}).\n\n"
+        f"Для каждого риска оцени ПОТЕРИ в 3 сценариях. Будь конкретным с цифрами "
+        f"(деньги в USD, отток клиентов в %, удар по репутации −баллов из 100, срок в днях).\n\n"
+        f"Риски:\n{lines}\n\n"
+        f"Верни JSON: {{\"scenarios\": [\n"
+        f"  {{\"i\": 0,\n"
+        f"    \"worst\":   {{\"money\": \"$500K\", \"churn\": \"25%\", \"rep\": -30, \"days\": 7,  \"text\": \"что произойдёт без реакции\"}},\n"
+        f"    \"base\":    {{\"money\": \"$200K\", \"churn\": \"10%\", \"rep\": -15, \"days\": 14, \"text\": \"наиболее вероятный исход\"}},\n"
+        f"    \"reacted\": {{\"money\": \"$50K\",  \"churn\": \"3%\",  \"rep\": -5,  \"days\": 30, \"text\": \"если среагировать быстро\"}}\n"
+        f"  }}\n"
+        f"]}} — ровно {len(top)} элементов, по индексу i."
+    )
+
+    def _call():
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        return _parse_json(raw).get("scenarios", [])
+
+    try:
+        scen = _call()
+    except Exception as e:
+        logger.warning("generate_loss_scenarios failed: %s", e)
+        return []
+
+    by_i = {s.get("i"): s for s in scen if isinstance(s, dict)}
+    out = []
+    for idx, r in enumerate(top):
+        s = by_i.get(idx, {})
+        if not s:
+            continue
+        out.append({
+            "title":    (r.get("title") or r.get("text") or "")[:100],
+            "category": r.get("category", ""),
+            "worst":    s.get("worst", {}),
+            "base":     s.get("base", {}),
+            "reacted":  s.get("reacted", {}),
+        })
+    return out
+
+
 def analyze_with_history(
     company_name: str,
     own_rows: list[dict],
