@@ -1280,6 +1280,12 @@ def analyze_with_history(
 2. Сравни с предыдущими рисками — повторяющийся риск важнее нового
 3. Учти активность конкурентов при оценке market-рисков
 4. Отдельно выдели ПОЛОЖИТЕЛЬНЫЕ сигналы — новости которые снижают риск компании
+5. Для КАЖДОГО риска определи тип:
+   - "incident" — событие УЖЕ ПРОИЗОШЛО, есть факт в материалах (иск подан, скандал опубликован,
+     сокращения объявлены, штраф выписан, авария случилась). Указывай тип incident ТОЛЬКО при наличии
+     свершившегося факта в источниках.
+   - "risk" — прогноз/угроза, которая МОЖЕТ случиться (возможен отток, репутация под угрозой, риск проверки).
+   Инцидент важнее риска — это уже реальность, а не вероятность.
 
 Положительные сигналы: рост прибыли, выигранные суды, награды, расширение бизнеса,
 позитивные отзывы, успешные партнёрства, рост найма, ESG-инициативы и т.д.
@@ -1287,16 +1293,16 @@ def analyze_with_history(
 Верни JSON строго такой структуры:
 {{
   "categories": {{
-    "media":  {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "hr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "gr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "pr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "market": {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}}
+    "media":  {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "hr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "gr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "pr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "market": {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}}
   }},
   "overall_score": 0-100,
   "advice": "2-3 предложения руководству",
   "risks": [
-    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "text": "описание", "severity": "high|medium|low", "score": 0-100}}
+    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "text": "описание", "severity": "high|medium|low", "score": 0-100, "type": "risk|incident"}}
   ],
   "positive_signals": [
     {{"category": "media|hr|gr|pr|market", "title": "краткое название", "weight": "low|medium|high"}}
@@ -1353,6 +1359,7 @@ def analyze_with_history(
                 "text":     r.get("text", "")[:300],
                 "severity": r.get("severity", "medium") if isinstance(r, dict) else "medium",
                 "sources":  [],
+                "type":     "incident" if isinstance(r, dict) and r.get("type") == "incident" else "risk",
             }
             for r in cd.get("risks", [])[:5]
         ]
@@ -1379,6 +1386,7 @@ def analyze_with_history(
                 "severity": r.get("severity", "medium"),
                 "score":    50,
                 "sources":  [],
+                "type":     "incident" if r.get("type") == "incident" else "risk",
             })
     for r in raw.get("risks", []):
         if not isinstance(r, dict):
@@ -1394,6 +1402,7 @@ def analyze_with_history(
             "severity": r.get("severity", "medium"),
             "score":    r.get("score", 50),
             "sources":  [],
+            "type":     "incident" if r.get("type") == "incident" else "risk",
         })
 
     # Validate and clean positive signals

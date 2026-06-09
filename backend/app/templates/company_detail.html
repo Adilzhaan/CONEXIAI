@@ -1020,12 +1020,12 @@
         .ro-risk-row:last-child { border-bottom:none; }
         .ro-risk-row:hover { background:rgba(255,255,255,0.03); }
         /* Expandable extra rows — smooth reveal */
-        .ro-risk-extra {
+        .ro-risk-extra, .ro-risk-extra-inc, .ro-risk-extra-fc {
           overflow:hidden; padding-top:0; padding-bottom:0;
           max-height:0; opacity:0; border-bottom-width:0;
           transition:max-height .28s ease, opacity .28s ease, padding .28s ease;
         }
-        .ro-risk-extra.shown {
+        .ro-risk-extra.shown, .ro-risk-extra-inc.shown, .ro-risk-extra-fc.shown {
           max-height:80px; opacity:1; padding-top:11px; padding-bottom:11px;
           border-bottom-width:1px;
         }
@@ -1126,6 +1126,88 @@
               {% endfor %}
             {% endif %}
             {% set _action = (latest.advice.split('.')[0] ~ '.') if latest and latest.advice else 'Провести аудит рисков' %}
+
+            <!-- ══ WAR ROOM (score >= 75) ══ -->
+            {% if s >= 75 %}
+            {% set _role_map = {'media':'PR-директор','hr':'HR-директор','gr':'GR / Юр.отдел','pr':'PR-директор','market':'CFO'} %}
+            <style>
+              @keyframes warPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+              @keyframes warGlow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
+              .war-room { background:linear-gradient(135deg,rgba(120,20,20,0.55),rgba(40,10,15,0.6)); border:1px solid rgba(239,68,68,0.45); border-radius:var(--radius); padding:0; margin-bottom:16px; overflow:hidden; }
+              .war-hdr { display:flex; align-items:center; gap:12px; padding:14px 20px; background:rgba(239,68,68,0.14); border-bottom:1px solid rgba(239,68,68,0.3); }
+              .war-dot { width:11px; height:11px; border-radius:50%; background:#ef4444; animation:warPulse 1.2s infinite, warGlow 1.6s infinite; flex-shrink:0; }
+              .war-title { font-size:14px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#fca5a5; }
+              .war-timer { margin-left:auto; font-size:13px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; }
+              .war-body { padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+              @media(max-width:700px){ .war-body { grid-template-columns:1fr; } }
+              .war-col-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:rgba(255,255,255,0.5); margin-bottom:10px; }
+              .war-task { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.07); }
+              .war-task:last-child { border-bottom:none; }
+              .war-check { width:18px; height:18px; border-radius:5px; border:1.5px solid rgba(255,255,255,0.3); flex-shrink:0; cursor:pointer; margin-top:1px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+              .war-check.done { background:#34d399; border-color:#34d399; }
+              .war-check.done::after { content:''; width:9px; height:5px; border-left:2px solid #0b1220; border-bottom:2px solid #0b1220; transform:rotate(-45deg) translateY(-1px); }
+              .war-task.done .war-task-text { text-decoration:line-through; opacity:.5; }
+              .war-task-text { font-size:12.5px; color:var(--text); line-height:1.4; }
+              .war-task-owner { font-size:10px; font-weight:700; color:#fca5a5; margin-top:2px; }
+            </style>
+            <div class="war-room">
+              <div class="war-hdr">
+                <div class="war-dot"></div>
+                <div class="war-title">War Room · Кризис активен</div>
+                <div class="war-timer" id="war-timer">00:00:00</div>
+              </div>
+              <div class="war-body">
+                <!-- Action checklist -->
+                <div>
+                  <div class="war-col-lbl">Чек-лист реакции</div>
+                  {% set _war_risks = [] %}
+                  {% if cats %}
+                    {% for _k,_l,_c in ro_cat_meta %}
+                      {% if cats[_k] and cats[_k].risks %}
+                        {% for _r in (cats[_k].risks or [])[:2] %}
+                          {% set _rt = _r.text if _r is mapping else _r %}
+                          {% if _rt %}{% set _ = _war_risks.append({'text': _rt, 'role': _role_map.get(_k,'Руководитель')}) %}{% endif %}
+                        {% endfor %}
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                  {% for _t in _war_risks[:5] %}
+                  <div class="war-task" onclick="this.classList.toggle('done');this.querySelector('.war-check').classList.toggle('done')">
+                    <div class="war-check"></div>
+                    <div>
+                      <div class="war-task-text">Среагировать: {{ _t.text[:80] }}{% if _t.text|length > 80 %}…{% endif %}</div>
+                      <div class="war-task-owner">{{ _t.role }}</div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                <!-- Live actions -->
+                <div>
+                  <div class="war-col-lbl">Немедленные действия</div>
+                  <div style="font-size:12.5px;color:var(--text);line-height:1.6;margin-bottom:12px">{{ latest.advice or "Созвать антикризисный штаб, подготовить официальное заявление, уведомить совет директоров." }}</div>
+                  <button onclick="createMeet()" style="width:100%;padding:10px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.5);border-radius:8px;color:#fca5a5;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(239,68,68,0.32)'" onmouseout="this.style.background='rgba(239,68,68,0.2)'">
+                    Собрать экстренное совещание
+                  </button>
+                </div>
+              </div>
+            </div>
+            <script>
+            (function(){
+              const since = new Date("{{ latest.created_at }}".replace(' ','T')).getTime();
+              const el = document.getElementById('war-timer');
+              if (!el || isNaN(since)) return;
+              function tick(){
+                let d = Math.max(0, Date.now() - since);
+                const h = String(Math.floor(d/3600000)).padStart(2,'0');
+                const m = String(Math.floor(d%3600000/60000)).padStart(2,'0');
+                const s = String(Math.floor(d%60000/1000)).padStart(2,'0');
+                el.textContent = h+':'+m+':'+s;
+              }
+              tick(); setInterval(tick, 1000);
+            })();
+            </script>
+            {% endif %}
+
             <div style="display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,{{ crisis_color }}14,{{ crisis_color }}06);border:1px solid {{ crisis_color }}33;border-left:4px solid {{ crisis_color }};border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
               <div style="width:14px;height:14px;border-radius:50%;background:{{ crisis_color }};flex-shrink:0;box-shadow:0 0 12px {{ crisis_color }}88"></div>
               <div style="flex:1;min-width:0">
@@ -1138,6 +1220,13 @@
                   <span style="color:#a78bfa;font-weight:600">Что делать:</span> {{ _action[:120] }}
                 </div>
               </div>
+              {% set _src_set = (monitoring_items | map(attribute='source') | reject('equalto','') | list | unique | list) if monitoring_items else [] %}
+              {% if _src_set %}
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:26px;font-weight:800;color:var(--text);line-height:1">{{ _src_set|length }}</div>
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">источник{{ 'а' if _src_set|length in [2,3,4] else ('ов' if _src_set|length not in [1] else '') }}</div>
+              </div>
+              {% endif %}
             </div>
 
             <!-- Row 1: Gauge (left) + Financial Impact (right) -->
@@ -1214,34 +1303,32 @@
                   {% set growth = (cscore - prev_cscore) if prev_cscore is not none else none %}
                   {% for risk in (cats[key].risks or [])[:6] %}
                     {% set rtext = risk.text if risk is mapping else risk %}
+                    {% set rtype = (risk.type if risk is mapping and risk.type else 'risk') %}
                     {% if rtext and not rtext.startswith('Анализ недоступен') and 'Error code:' not in rtext %}
                       {% set prob = [99, (cscore * 0.92) | int] | min %}
                       {% set impact = ((cscore / 100) * (risk_impact.potential_loss if risk_impact else 500000) / 5) | int %}
-                      {% set _ = all_risks_ns.items.append({'text': rtext, 'cat_key': key, 'cat_label': cat_labels_ro[key], 'color': color, 'prob': prob, 'impact': impact, 'growth': growth, 'cscore': cscore}) %}
+                      {% set _ = all_risks_ns.items.append({'text': rtext, 'cat_key': key, 'cat_label': cat_labels_ro[key], 'color': color, 'prob': prob, 'impact': impact, 'growth': growth, 'cscore': cscore, 'rtype': rtype}) %}
                     {% endif %}
                   {% endfor %}
                 {% endif %}
               {% endfor %}
             {% endif %}
             {% set sorted_risks = all_risks_ns.items | sort(attribute='cscore', reverse=True) %}
+            {% set incidents = sorted_risks | selectattr('rtype','equalto','incident') | list %}
+            {% set forecasts = sorted_risks | rejectattr('rtype','equalto','incident') | list %}
             <!-- Row 3: Risks (left) + Action panel (right) -->
             <div class="ro-bottom-grid">
-            <div>{% if sorted_risks %}
-            <div class="ro-risks-card">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:flex;align-items:center;gap:7px">
-                  <span style="width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:10px">⚑</span>
-                  <span data-i18n="top_risks">Топ рисков</span>
-                  <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.07);color:var(--text-muted);border:1px solid rgba(255,255,255,0.10)">{{ [sorted_risks|length, 25] | min }}</span>
-                </div>
-                <div style="font-size:10px;color:var(--text-dim)" data-i18n="top_risks_sub">приоритет по вероятности × влиянию</div>
-              </div>
+            <div>
+
+            {% macro risk_rows(items, accent, is_incident) %}
               <div class="ro-risks-hdr" style="grid-template-columns:1fr auto auto auto">
-                <div data-i18n="th_risk">Риск</div><div data-i18n="th_prob">Вероятность</div><div data-i18n="th_loss">Потери</div><div data-i18n="th_cat">Категория</div>
+                <div>{% if is_incident %}Инцидент{% else %}Риск{% endif %}</div><div>{% if is_incident %}Уровень{% else %}Вероятность{% endif %}</div><div data-i18n="th_loss">Потери</div><div data-i18n="th_cat">Категория</div>
               </div>
-              {% for r in sorted_risks[:25] %}
-              <div class="ro-risk-row {% if loop.index > 3 %}ro-risk-extra{% endif %}" style="grid-template-columns:1fr auto auto auto;{% if loop.index > 3 %}display:none{% endif %}">
-                <div class="ro-risk-text">{{ r.text[:160] }}{% if r.text|length > 160 %}…{% endif %}</div>
+              {% for r in items[:25] %}
+              <div class="ro-risk-row {% if loop.index > 3 %}ro-risk-extra-{{ accent }}{% endif %}" style="grid-template-columns:1fr auto auto auto;{% if loop.index > 3 %}display:none{% endif %}">
+                <div class="ro-risk-text">
+                  {% if is_incident %}<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:7px;vertical-align:middle"></span>{% endif %}{{ r.text[:160] }}{% if r.text|length > 160 %}…{% endif %}
+                </div>
                 <div>
                   <div class="ro-prob-wrap">
                     <div class="ro-prob-track"><div class="ro-prob-fill" style="width:{{ r.prob }}%;background:{{ r.color }}"></div></div>
@@ -1254,15 +1341,46 @@
                 </div>
               </div>
               {% endfor %}
-              {% set _extra = ([sorted_risks|length, 25]|min) - 3 %}
+              {% set _extra = ([items|length, 25]|min) - 3 %}
               {% if _extra > 0 %}
-              <button id="ro-risks-toggle" onclick="toggleExtraRisks(this)"
+              <button onclick="toggleExtraRisks(this, 'ro-risk-extra-{{ accent }}')"
                 style="width:100%;padding:11px;background:rgba(255,255,255,0.03);border:none;border-top:1px solid rgba(255,255,255,0.07);color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s;font-family:inherit"
                 onmouseover="this.style.background='rgba(124,58,237,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
                 Показать ещё {{ _extra }} ↓
               </button>
               {% endif %}
+            {% endmacro %}
+
+            {% if incidents %}
+            <div class="ro-risks-card" style="border-color:rgba(239,68,68,0.35);margin-bottom:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06)">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fca5a5;display:flex;align-items:center;gap:7px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;animation:warPulse 1.3s infinite"></span>
+                  Активные инциденты
+                  <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,0.15);color:#fca5a5">{{ incidents|length }}</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim)">уже произошло — реагировать</div>
+              </div>
+              {{ risk_rows(incidents, 'inc', true) }}
             </div>
+            {% endif %}
+
+            {% if forecasts %}
+            <div class="ro-risks-card">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:flex;align-items:center;gap:7px">
+                  <span style="width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:10px">⚑</span>
+                  Прогнозы рисков
+                  <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,0.07);color:var(--text-muted);border:1px solid rgba(255,255,255,0.10)">{{ forecasts|length }}</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim)" data-i18n="top_risks_sub">приоритет по вероятности × влиянию</div>
+              </div>
+              {{ risk_rows(forecasts, 'fc', false) }}
+            </div>
+            {% endif %}
+
+            {% if not incidents and not forecasts %}
+            <div style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;border:1px solid rgba(255,255,255,0.08);border-radius:var(--radius)">Рисков не выявлено</div>
             {% endif %}
             </div>
             <!-- Right column: AI Recommendation + action tips -->
@@ -1314,6 +1432,7 @@
                 <div style="position:relative;height:200px">
                   <canvas id="score-history-chart"></canvas>
                 </div>
+                <div id="forecast-caption" style="font-size:11.5px;color:var(--text-muted);margin-top:8px;line-height:1.4;text-align:center"></div>
               </div>
               <!-- Radar: categories -->
               <div class="ro-chart-card">
@@ -1334,6 +1453,39 @@
                 const scores = history.map(r => r.score);
                 const ptColors = scores.map(s => s >= 65 ? '#f87171' : s >= 35 ? '#fbbf24' : '#34d399');
                 const ptSizes  = scores.map(s => s >= 65 ? 7 : 5);
+
+                // ── Trajectory forecast (linear regression over time) ──
+                const DAY = 86400000;
+                const t0 = new Date(history[0].date.replace(' ', 'T')).getTime();
+                const xs = history.map(r => (new Date(r.date.replace(' ', 'T')).getTime() - t0) / DAY);
+                const n = xs.length;
+                const mx = xs.reduce((a,b)=>a+b,0)/n;
+                const my = scores.reduce((a,b)=>a+b,0)/n;
+                let num = 0, den = 0;
+                for (let i=0;i<n;i++){ num += (xs[i]-mx)*(scores[i]-my); den += (xs[i]-mx)**2; }
+                const slope = den ? num/den : 0;
+                const intercept = my - slope*mx;
+                const lastX = xs[n-1];
+                const projX = lastX + 7;
+                let projected = Math.round(Math.max(0, Math.min(100, intercept + slope*projX)));
+                const lastScore = scores[n-1];
+                const trendUp = projected > lastScore + 1;
+                const trendDown = projected < lastScore - 1;
+                const projColor = projected >= 65 ? '#f87171' : projected >= 35 ? '#fbbf24' : '#34d399';
+
+                // Append a forecast label + datasets padded with nulls
+                const fLabels = [...labels, 'прогноз +7д'];
+                const realData = [...scores, null];
+                const forecastData = new Array(n-1).fill(null);
+                forecastData.push(lastScore, projected);   // connect last real → projected
+
+                // Caption under chart
+                const cap = document.getElementById('forecast-caption');
+                if (cap) {
+                  const arrow = trendUp ? '↑' : trendDown ? '↓' : '→';
+                  const word = trendUp ? 'вырастет до' : trendDown ? 'снизится до' : 'останется около';
+                  cap.innerHTML = `<span style="color:${projColor};font-weight:700">${arrow} Прогноз:</span> если тренд сохранится, скор ${word} <span style="color:${projColor};font-weight:700">${projected}</span> через 7 дней`;
+                }
 
                 const ctx = canvas.getContext('2d');
                 const grad = ctx.createLinearGradient(0, 0, 0, 200);
@@ -1369,19 +1521,35 @@
                   type: 'line',
                   plugins: [zonePlugin],
                   data: {
-                    labels,
-                    datasets: [{
-                      data: scores,
+                    labels: fLabels,
+                    datasets: [
+                    {
+                      label: 'История',
+                      data: realData,
                       borderColor: '#a78bfa',
                       backgroundColor: grad,
                       borderWidth: 2.5,
-                      pointBackgroundColor: ptColors,
+                      pointBackgroundColor: [...ptColors, '#1e1b4b'],
                       pointBorderColor: '#1e1b4b',
                       pointBorderWidth: 2,
-                      pointRadius: ptSizes,
+                      pointRadius: [...ptSizes, 0],
                       pointHoverRadius: 8,
                       tension: 0.4,
                       fill: true,
+                    },
+                    {
+                      label: 'Прогноз',
+                      data: forecastData,
+                      borderColor: projColor,
+                      borderWidth: 2,
+                      borderDash: [6, 5],
+                      pointBackgroundColor: projColor,
+                      pointBorderColor: '#1e1b4b',
+                      pointBorderWidth: 2,
+                      pointRadius: [...new Array(n-1).fill(0), 0, 6],
+                      pointHoverRadius: 7,
+                      tension: 0,
+                      fill: false,
                     }]
                   },
                   options: {
@@ -1478,6 +1646,51 @@
               } catch(e) { console.error('[radar-chart]', e); }
             })();
             </script>
+          </div>
+          {% endif %}
+
+          <!-- ══ SECTION 1b2: Risk vs Competitor Duel ══ -->
+          {% set _duel = ci_report.competitors_data if ci_report and ci_report.competitors_data else [] %}
+          {% set _duel = _duel | selectattr('risk') | selectattr('risk.score','ne',none) | list %}
+          {% if _duel %}
+          {% set _avatars = ['#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d'] %}
+          <div class="ri-section">
+            <div class="ri-sec-hdr">
+              <div class="ri-sec-title"><span>Дуэль · вы против конкурентов</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              {% for _cd in _duel %}
+                {% set _comp_s = _cd.risk.score | int %}
+                {% set _diff = _comp_s - s %}
+                {% set _win = _diff > 0 %}
+                {% set _av = _avatars[loop.index0 % _avatars|length] %}
+                <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:var(--radius);padding:14px 18px">
+                  <!-- You -->
+                  <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end;text-align:right">
+                    <div>
+                      <div style="font-size:12px;font-weight:700;color:var(--text)">{{ company.name }}</div>
+                      <div style="font-size:10px;color:var(--text-muted)">ваш скор</div>
+                    </div>
+                    <div style="font-size:26px;font-weight:800;color:{{ crisis_color }}">{{ s }}</div>
+                  </div>
+                  <!-- VS verdict -->
+                  <div style="flex-shrink:0;text-align:center;min-width:110px">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:3px">VS</div>
+                    <div style="font-size:11px;font-weight:700;color:{{ '#34d399' if _win else '#f87171' }}">
+                      {% if _win %}Вы спокойнее на {{ _diff }}{% elif _diff < 0 %}Вы рискованнее на {{ -_diff }}{% else %}Наравне{% endif %}
+                    </div>
+                  </div>
+                  <!-- Competitor -->
+                  <div style="display:flex;align-items:center;gap:10px;flex:1">
+                    <div style="font-size:26px;font-weight:800;color:{{ '#f87171' if _comp_s >= 65 else '#fbbf24' if _comp_s >= 40 else '#34d399' }}">{{ _comp_s }}</div>
+                    <div>
+                      <div style="font-size:12px;font-weight:700;color:var(--text)">{{ _cd.name }}</div>
+                      <div style="font-size:10px;color:var(--text-muted)">конкурент</div>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
           </div>
           {% endif %}
 
@@ -3311,6 +3524,17 @@ function setLang(lang) {
 })();
 
 // Company switcher dropdown
+function confirmDeleteCompany() {
+  const name = COMPANY_NAME || 'эту компанию';
+  if (!confirm(`Удалить «${name}»?\n\nВсе анализы, новости, конкуренты и история будут удалены безвозвратно.`)) return;
+  if (!confirm('Точно удалить? Это действие нельзя отменить.')) return;
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = `/companies/${COMPANY_ID}/delete`;
+  document.body.appendChild(f);
+  f.submit();
+}
+
 function toggleCoDropdown(e) {
   e.stopPropagation();
   document.getElementById('coSwitcher').classList.toggle('open');
@@ -3812,7 +4036,19 @@ function _robotSet(title, subtitle) {
 
 function _anSetDot(idx, state) {
   var el = document.getElementById('an-dot' + idx);
-  if (el) el.className = 'an-dot' + (state ? ' ' + state : '');
+  if (!el) return;
+  // Sticky: once 'done', never downgrade to active/empty
+  if (el.classList.contains('done') && state !== 'done') return;
+  el.className = 'an-dot' + (state ? ' ' + state : '');
+}
+
+// Deterministic phase progress: mark all prior dots done, current active.
+// Never clears already-shown indicators (fixes flicker/disappearing).
+function _anPhase(idx) {
+  for (var d = 0; d <= 4; d++) {
+    if (d < idx) _anSetDot(d, 'done');
+    else if (d === idx) _anSetDot(d, 'active');
+  }
 }
 
 function _anLog(text, cls) {
@@ -3874,7 +4110,7 @@ function setStage(id, state, status) {
   } else if (state === 'done') {
     _robotSet('Нашёл данные!', status);
     _anLog('✓ ' + (labels[id] || id) + ': ' + status, 'done');
-    if (id !== 'ai') { _stageDone++; _anSetDot(Math.min(_stageDone - 1, 3), 'done'); }
+    if (id !== 'ai') { _stageDone++; _anPhase(Math.min(_stageDone, 1)); }
   } else if (state === 'error') {
     _robotSet('Источник недоступен', status);
     _anLog('✗ ' + (labels[id] || id) + ': ' + status, 'warn');
@@ -3892,8 +4128,11 @@ async function runFullAnalysis() {
   _robotSet('Запускаю анализ…', 'Инициализация агентов');
   _setProgress(0);
   _stageDone = 0;
-  for (var _di = 0; _di < 5; _di++) _anSetDot(_di, '');
-  _anSetDot(0, 'active');
+  for (var _di = 0; _di < 5; _di++) {
+    var _dd = document.getElementById('an-dot' + _di);
+    if (_dd) _dd.className = 'an-dot';   // hard reset (bypass sticky)
+  }
+  _anPhase(0);
   var _logBox = document.getElementById('an-log');
   var _foundBox = document.getElementById('an-found');
   if (_logBox) _logBox.innerHTML = '';
@@ -3955,7 +4194,7 @@ async function runFullAnalysis() {
   })));
 
   _setProgress(60);
-  _anSetDot(4, 'active');
+  _anPhase(4);
   _robotSet('Обрабатываю данные…', 'Запускаю AI-агентов');
   _anLog('→ AI: запускаю анализ рисков…', 'active');
 
@@ -4007,6 +4246,7 @@ async function runFullAnalysis() {
     _setProgress(100);
     _elapsedStop();
     _anSetDot(4, 'done');
+    for (var _fd = 0; _fd <= 4; _fd++) _anSetDot(_fd, 'done');
     _robotSet('Анализ готов!', 'Найдено ' + (data.total_items||0) + ' материалов');
     _anLog('✓ Отчёт сформирован', 'done');
     _setItemsFound(data.total_items || 0);
@@ -4163,6 +4403,7 @@ function updateOverviewWithAnalysis(data) {
 (function initAccordion() {
   const SECTION_IDS = ['ov-top-section', 'ov-comp-news-section', 'ov-ci-mini-section', 'ov-ai-intel-section'];
   function setup() {
+   try {
     SECTION_IDS.forEach(id => {
       const sec = document.getElementById(id);
       if (!sec || sec._accordionDone) return;
@@ -4217,19 +4458,19 @@ function updateOverviewWithAnalysis(data) {
         }
       });
     });
+   } catch(e) { console.error('[accordion]', e); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
   else setup();
 })();
 
-function toggleExtraRisks(btn) {
-  const rows = document.querySelectorAll('.ro-risk-extra');
+function toggleExtraRisks(btn, cls) {
+  const rows = document.querySelectorAll('.' + (cls || 'ro-risk-extra'));
   if (!rows.length) return;
   const expanding = !rows[0].classList.contains('shown');
   rows.forEach((r, i) => {
     if (expanding) {
       r.style.display = 'grid';
-      // next frame → trigger transition
       requestAnimationFrame(() => {
         setTimeout(() => r.classList.add('shown'), i * 40);
       });
@@ -4346,5 +4587,81 @@ function loadArchive() {
   xhr.send();
 }
 
+// ── AI Copilot chat ──────────────────────────────────────────────
+function toggleCopilot() {
+  const p = document.getElementById('copilot-panel');
+  const open = p.style.display === 'flex';
+  p.style.display = open ? 'none' : 'flex';
+  if (!open) { document.getElementById('copilot-input').focus(); }
+}
+function copilotKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); copilotSend(); } }
+function copilotQuick(q) { document.getElementById('copilot-input').value = q; copilotSend(); }
+let _copilotHistory = [];
+async function copilotSend() {
+  const inp = document.getElementById('copilot-input');
+  const body = document.getElementById('copilot-messages');
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = '';
+  body.insertAdjacentHTML('beforeend', `<div style="align-self:flex-end;max-width:85%;background:rgba(124,58,237,0.25);border:1px solid rgba(124,58,237,0.4);border-radius:12px 12px 2px 12px;padding:9px 13px;font-size:13px;color:#fff;line-height:1.5">${q.replace(/</g,'&lt;')}</div>`);
+  const tid = 'cp-' + Date.now();
+  body.insertAdjacentHTML('beforeend', `<div id="${tid}" style="align-self:flex-start;max-width:85%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px 12px 12px 2px;padding:9px 13px;font-size:13px;color:var(--text-muted)"><span class="spinner"></span> думаю…</div>`);
+  body.scrollTop = body.scrollHeight;
+  try {
+    const r = await fetch(`/companies/${COMPANY_ID}/copilot`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question: q, history: _copilotHistory }),
+    });
+    const d = await r.json();
+    const el = document.getElementById(tid);
+    el.style.color = 'var(--text)';
+    const answer = d.answer || d.error || 'Нет ответа';
+    el.textContent = answer;
+    if (d.answer) {
+      _copilotHistory.push({ role: 'user', text: q }, { role: 'assistant', text: d.answer });
+      if (_copilotHistory.length > 12) _copilotHistory = _copilotHistory.slice(-12);
+    }
+  } catch(e) {
+    document.getElementById(tid).textContent = 'Ошибка сети';
+  }
+  body.scrollTop = body.scrollHeight;
+}
 </script>
+
+<!-- AI Copilot floating widget -->
+<button onclick="toggleCopilot()" title="AI-копилот по рискам"
+  style="position:fixed;bottom:24px;right:24px;z-index:9998;width:56px;height:56px;border-radius:50%;
+         background:linear-gradient(135deg,#7c3aed,#5b21b6);border:none;cursor:pointer;
+         box-shadow:0 8px 28px rgba(124,58,237,0.5);display:flex;align-items:center;justify-content:center">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>
+<div id="copilot-panel" style="display:none;position:fixed;bottom:90px;right:24px;z-index:9998;width:380px;max-width:calc(100vw - 48px);height:480px;max-height:calc(100vh - 130px);flex-direction:column;background:rgba(18,16,34,0.98);border:1px solid rgba(124,58,237,0.35);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.6);overflow:hidden;backdrop-filter:blur(20px)">
+  <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px">
+    <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M8 12h8M12 8v8"/></svg>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:700;color:#fff">AI-копилот</div>
+      <div style="font-size:10px;color:var(--text-muted)">по рискам вашей компании</div>
+    </div>
+    <button onclick="toggleCopilot()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1">×</button>
+  </div>
+  <div id="copilot-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
+    <div style="align-self:flex-start;max-width:90%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px 12px 12px 2px;padding:10px 13px;font-size:13px;color:var(--text);line-height:1.5">
+      Привет! Спросите меня о рисках компании — отвечу по данным анализа.
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">
+      <button onclick="copilotQuick('Почему вырос риск-скор?')" style="font-size:11px;padding:5px 10px;border-radius:99px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;cursor:pointer">Почему вырос скор?</button>
+      <button onclick="copilotQuick('Какой риск самый опасный и что делать?')" style="font-size:11px;padding:5px 10px;border-radius:99px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;cursor:pointer">Главный риск?</button>
+      <button onclick="copilotQuick('Дай краткую сводку по компании')" style="font-size:11px;padding:5px 10px;border-radius:99px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;cursor:pointer">Сводка</button>
+    </div>
+  </div>
+  <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px">
+    <input id="copilot-input" type="text" placeholder="Спросите о рисках…" onkeydown="copilotKey(event)"
+      style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:13px;outline:none;font-family:inherit">
+    <button onclick="copilotSend()" style="width:40px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#5b21b6);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
 {% endblock %}

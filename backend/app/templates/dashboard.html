@@ -699,11 +699,17 @@
                 </div>
 
                 <!-- Action -->
-                <div class="co-cell-action">
+                <div class="co-cell-action" style="display:flex;align-items:center;gap:8px">
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </a>
+                  <button onclick="deleteCompany('{{ c.id }}', '{{ c.name|replace("'","\\'") }}')" title="Удалить компанию"
+                    style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;
+                           background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.30);color:#f87171;cursor:pointer;transition:background .15s"
+                    onmouseover="this.style.background='rgba(248,113,113,0.22)'" onmouseout="this.style.background='rgba(248,113,113,0.10)'">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                  </button>
                 </div>
               </div>
             {% endif %}
@@ -776,6 +782,16 @@
 </div>
 
 <script>
+function deleteCompany(id, name) {
+  if (!confirm(`Удалить «${name}»?\n\nВсе анализы, новости, конкуренты и история будут удалены безвозвратно.`)) return;
+  if (!confirm('Точно удалить? Это действие нельзя отменить.')) return;
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = `/companies/${id}/delete`;
+  document.body.appendChild(f);
+  f.submit();
+}
+
 function toggleAddForm() { openAddModal(); }
 function openAddModal() {
   document.getElementById('addModal').classList.add('open');

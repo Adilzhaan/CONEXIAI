@@ -237,6 +237,8 @@ async def login_submit(
     password: str = Form(...),
 ):
     try:
+        email = email.strip()
+        password = password.strip()  # tolerate accidental leading/trailing spaces
         auth = await supabase.auth_sign_in_password(email=email, password=password)
         access_token = auth.get("access_token")
         refresh_token = auth.get("refresh_token")
@@ -277,6 +279,8 @@ async def register_submit(
     full_name: str = Form(""),
 ):
     try:
+        email = email.strip()
+        password = password.strip()  # match login behaviour
         auth = await supabase.auth_sign_up(email=email, password=password, full_name=full_name.strip())
         # If email confirmations disabled, Supabase may return tokens immediately.
         access_token = auth.get("access_token")
@@ -711,6 +715,38 @@ async def companies_create(
     return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
 
 
+@app.post("/companies/{company_id}/delete")
+async def delete_company(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    # Remove dependent rows first (best-effort), then the company itself.
+    if svc:
+        for tbl in ("risk_runs", "risk_score_history", "news_archive", "analysis_articles",
+                    "monitoring_snapshots", "ci_reports", "market_cache", "competitors",
+                    "employees", "emails", "company_members", "crisis_actions"):
+            try:
+                await supabase.rest_delete_service(tbl, svc, {"company_id": f"eq.{company_id}"})
+            except Exception as e:
+                logger.warning("delete_company: %s cleanup failed: %s", tbl, e)
+    try:
+        if svc:
+            await supabase.rest_delete_service("companies", svc, {"id": f"eq.{company_id}"})
+        else:
+            await supabase.rest_delete(
+                "companies", access_token=effective_token, query_params={"id": f"eq.{company_id}"},
+            )
+    except Exception as e:
+        logger.error("delete_company failed: %s", e)
+        return RedirectResponse(url=f"/companies/{company_id}?error=delete_failed", status_code=302)
+
+    return RedirectResponse(url="/dashboard?msg=company_deleted", status_code=302)
+
+
 @app.get("/signal", response_class=HTMLResponse)
 async def signal_page(req: Request):
     return templates.TemplateResponse(req, "signal.html", {})
@@ -769,6 +805,9 @@ async def _company_detail_inner(req: Request, company_id: str):
             return []
 
     async def _get_user_role():
+        # Allowlisted owner(s) are always admin.
+        if (user.get("email") or "").lower().strip() in _ALLOWED_EMAILS:
+            return "admin"
         try:
             rows = await supabase.rest_select(
                 table="company_members",
@@ -1486,6 +1525,95 @@ async def company_analyze_combined(req: Request, company_id: str):
     ))
     logger.info("[job %s] created for company %s (pipeline v2)", job_id, company_id)
     return {"job_id": job_id}
+
+
+@app.post("/companies/{company_id}/copilot")
+async def risk_copilot(req: Request, company_id: str):
+    """AI copilot — answers questions grounded in this company's risk data."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    if not settings.ANTHROPIC_API_KEY:
+        return {"error": "AI не настроен"}
+
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    question = (body.get("question") or "").strip()[:500]
+    if not question:
+        return {"error": "Пустой вопрос"}
+    # Prior turns for multi-turn context (last 6 messages, sanitized)
+    history_msgs: list[dict] = []
+    for m in (body.get("history") or [])[-6:]:
+        role = m.get("role")
+        text = (m.get("text") or "").strip()[:1000]
+        if role in ("user", "assistant") and text:
+            history_msgs.append({"role": role, "content": text})
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    company_name = ""
+    ctx_parts: list[str] = []
+    try:
+        if svc:
+            crows = await supabase.rest_select_service(
+                table="companies", service_key=svc, select="name,industry",
+                query_params={"id": f"eq.{company_id}"},
+            )
+            if crows:
+                company_name = crows[0].get("name", "")
+                ctx_parts.append(f"Компания: {company_name} ({crows[0].get('industry','') or 'отрасль н/д'})")
+
+            rruns = await supabase.rest_select_service(
+                table="risk_runs", service_key=svc,
+                select="score,advice,categories,risks,created_at",
+                query_params={"company_id": f"eq.{company_id}", "order": "created_at.desc", "limit": "1"},
+            )
+            if rruns:
+                r = rruns[0]
+                ctx_parts.append(f"Текущий риск-скор: {r.get('score')}")
+                cats = r.get("categories") or {}
+                cat_line = ", ".join(
+                    f"{k}={(v.get('score') if isinstance(v, dict) else '?')}" for k, v in cats.items()
+                )
+                if cat_line:
+                    ctx_parts.append(f"Категории: {cat_line}")
+                risks = r.get("risks") or []
+                if risks:
+                    rl = "\n".join(
+                        f"  - [{rr.get('category','')}] {rr.get('title') or rr.get('text','')} (скор {rr.get('score','?')})"
+                        for rr in risks[:12]
+                    )
+                    ctx_parts.append(f"Активные риски:\n{rl}")
+                if r.get("advice"):
+                    ctx_parts.append(f"Рекомендация AI: {r['advice']}")
+    except Exception as e:
+        logger.warning("copilot context load failed: %s", e)
+
+    context = "\n".join(ctx_parts) or "Данных анализа пока нет."
+
+    def _call():
+        import anthropic as _a
+        c = _a.Anthropic(api_key=settings.ANTHROPIC_API_KEY, max_retries=1)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=(
+                "Ты — риск-аналитик платформы CONEXIAI. Отвечай кратко (2-4 предложения), "
+                "по делу, на русском, ТОЛЬКО на основе предоставленных данных компании. "
+                "Если данных не хватает — честно скажи. Без воды и markdown-заголовков.\n\n"
+                f"ДАННЫЕ КОМПАНИИ:\n{context}"
+            ),
+            messages=history_msgs + [{"role": "user", "content": question}],
+        )
+        return msg.content[0].text.strip()
+
+    try:
+        answer = await asyncio.to_thread(_call)
+        return {"answer": answer}
+    except Exception as e:
+        logger.warning("copilot call failed: %s", e)
+        return {"error": "Не удалось получить ответ"}
 
 
 @app.get("/companies/{company_id}/analyze-status/{job_id}")
