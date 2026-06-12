@@ -1262,6 +1262,33 @@ def generate_loss_scenarios(
     return out
 
 
+# ── Risk Score formula ────────────────────────────────────────────────────
+# Risk Score = (Severity × Probability × Velocity) + Signal Density
+# The AI rates each of the 4 fundamentals 0–10 per category; the score is then
+# computed deterministically here (transparent + tunable). Default mapping to
+# 0–100: the multiplicative core (S×P×V) contributes up to CORE_W points,
+# Signal Density adds up to DENSITY_W points.
+RISK_FORMULA_CORE_W = 70
+RISK_FORMULA_DENSITY_W = 30
+
+
+def compute_risk_score(severity, probability, velocity, signal_density,
+                       core_w: float = RISK_FORMULA_CORE_W,
+                       density_w: float = RISK_FORMULA_DENSITY_W) -> int:
+    """4-factor risk score. Each factor expected on a 0–10 scale.
+
+    Risk Score = (Severity × Probability × Velocity) + Signal Density,
+    normalised to 0–100 via (core_w, density_w)."""
+    def _c(v):
+        try:
+            return max(0.0, min(10.0, float(v)))
+        except (TypeError, ValueError):
+            return 5.0
+    s, p, v, d = _c(severity), _c(probability), _c(velocity), _c(signal_density)
+    core = (s / 10.0) * (p / 10.0) * (v / 10.0)          # 0..1
+    return int(round(max(0, min(100, core * core_w + (d / 10.0) * density_w))))
+
+
 def analyze_with_history(
     company_name: str,
     own_rows: list[dict],
@@ -1269,6 +1296,8 @@ def analyze_with_history(
     prev_fps: list[dict],
     api_key: str,
     prev_articles: list[dict] | None = None,
+    category_hints: dict | None = None,
+    scoring_instruction: str = "",
 ) -> dict[str, Any]:
     """
     Risk analysis with previous-run history context.
@@ -1331,6 +1360,35 @@ def analyze_with_history(
 {_fmt_prev_articles(prev_articles)}
 """
 
+    # Department preferences (preferred sources + watch-keywords per category)
+    hints_section = ""
+    _cat_ru = {"media": "InfoField & Media", "hr": "HR", "gr": "Gov. Relations",
+               "pr": "PR", "market": "Market"}
+    if category_hints:
+        _hl = []
+        for cat, h in category_hints.items():
+            parts = []
+            if h.get("sources"):
+                parts.append("приоритетные источники: " + ", ".join(h["sources"]))
+            if h.get("keywords"):
+                parts.append("следить за словами: " + ", ".join(h["keywords"]))
+            if parts:
+                _hl.append(f"  [{_cat_ru.get(cat, cat)}] " + "; ".join(parts))
+        if _hl:
+            hints_section = (
+                "\n=== НАСТРОЙКИ ОТДЕЛОВ (учитывай при оценке категорий) ===\n"
+                + "\n".join(_hl)
+                + "\nЕсли встречаешь указанные ключевые слова или материалы из приоритетных "
+                  "источников в соответствующей категории — придай им больший вес.\n"
+            )
+
+    scoring_instruction_section = ""
+    if scoring_instruction and scoring_instruction.strip():
+        scoring_instruction_section = (
+            "\n=== ДОПОЛНИТЕЛЬНАЯ ИНСТРУКЦИЯ ПО ОЦЕНКЕ (от пользователя) ===\n"
+            + scoring_instruction.strip()[:1500] + "\n"
+        )
+
     prompt = f"""Компания: «{company_name}». Дата: {today}.
 
 === МАТЕРИАЛЫ ПО НАШЕЙ КОМПАНИИ (прошли строгий AI-фильтр) ===
@@ -1340,11 +1398,19 @@ def analyze_with_history(
 {_fmt_comp(comp_rows)}
 
 === РИСКИ ИЗ ПРЕДЫДУЩЕГО АНАЛИЗА ===
-{_fmt_prev(prev_fps)}{prev_arts_section}
+{_fmt_prev(prev_fps)}{prev_arts_section}{hints_section}
 
+=== 4 ОСНОВЫ RISK SCORE (оценивай каждую категорию по этим факторам, шкала 0–10) ===
+1. severity (серьёзность) — насколько это опасно для компании
+2. probability (вероятность) — насколько вероятно развитие/реализация
+3. velocity (скорость) — насколько быстро это развивается
+4. signal_density (плотность сигналов) — сколько подтверждений есть (внутренних + внешних источников)
+Итоговый score категории считается по формуле: Risk Score = (Severity × Probability × Velocity) + Signal Density.
+НЕ вычисляй score сам — просто честно проставь 4 фактора (0–10), систему посчитает балл сама.
+{scoring_instruction_section}
 Задача:
-1. Выяви риски по 5 категориям на основе новых материалов
-2. Сравни с предыдущими рисками — повторяющийся риск важнее нового
+1. Выяви риски по 5 категориям на основе новых материалов и оцени 4 фактора для каждой категории
+2. Сравни с предыдущими рисками — повторяющийся риск важнее нового (выше probability/velocity)
 3. Учти активность конкурентов при оценке market-рисков
 4. Отдельно выдели ПОЛОЖИТЕЛЬНЫЕ сигналы — новости которые снижают риск компании
 5. Для КАЖДОГО риска определи тип:
@@ -1360,11 +1426,11 @@ def analyze_with_history(
 Верни JSON строго такой структуры:
 {{
   "categories": {{
-    "media":  {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
-    "hr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
-    "gr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
-    "pr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
-    "market": {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}}
+    "media":  {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "hr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "gr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "pr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "market": {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}}
   }},
   "overall_score": 0-100,
   "advice": "2-3 предложения руководству",
@@ -1419,7 +1485,21 @@ def analyze_with_history(
     categories: dict[str, Any] = {}
     for cat in ("media", "hr", "gr", "pr", "market"):
         cd = raw_cats.get(cat, {})
-        score = max(0, min(100, int(cd.get("score", 50))))
+        # 4-factor formula: (Severity × Probability × Velocity) + Signal Density.
+        # Falls back to a direct "score" if the model didn't return the factors.
+        if any(k in cd for k in ("severity", "probability", "velocity", "signal_density")):
+            score = compute_risk_score(
+                cd.get("severity", 5), cd.get("probability", 5),
+                cd.get("velocity", 5), cd.get("signal_density", 5))
+            factors = {
+                "severity":       cd.get("severity", 5),
+                "probability":    cd.get("probability", 5),
+                "velocity":       cd.get("velocity", 5),
+                "signal_density": cd.get("signal_density", 5),
+            }
+        else:
+            score = max(0, min(100, int(cd.get("score", 50))))
+            factors = None
         risks = [
             {
                 "title":    (r.get("title") or r.get("text") or "")[:100],
@@ -1431,6 +1511,8 @@ def analyze_with_history(
             for r in cd.get("risks", [])[:5]
         ]
         categories[cat] = {"score": score, "risks": risks}
+        if factors:
+            categories[cat]["factors"] = factors
 
     overall = max(0, min(100,
         round(sum(v["score"] for v in categories.values()) / len(categories))

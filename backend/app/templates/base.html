@@ -6,7 +6,7 @@
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -19,7 +19,7 @@
 
       /* Borders */
       --border:        rgba(255,255,255,0.09);
-      --border-focus:  #7c3aed;
+      --border-focus:  #3b82f6;
 
       /* Text */
       --text:          #ffffff;
@@ -27,10 +27,10 @@
       --text-dim:      rgba(255,255,255,0.35);
 
       /* Accent - Purple */
-      --accent:        #7c3aed;
-      --accent-hover:  #6d28d9;
-      --accent-light:  rgba(124,58,237,0.12);
-      --accent-border: rgba(124,58,237,0.28);
+      --accent:        #3b82f6;
+      --accent-hover:  #2563eb;
+      --accent-light:  rgba(59,130,246,0.12);
+      --accent-border: rgba(59,130,246,0.28);
 
       /* Status */
       --danger:        #f87171;
@@ -46,14 +46,14 @@
       --sb-border:     rgba(255,255,255,0.10);
       --sb-text:       rgba(255,255,255,0.45);
       --sb-text-hover: rgba(255,255,255,0.90);
-      --sb-active-bg:  rgba(124,58,237,0.22);
+      --sb-active-bg:  rgba(59,130,246,0.22);
       --sb-active-text:#ffffff;
       --sb-label:      rgba(255,255,255,0.25);
 
       /* Radius */
-      --radius:    0px;
-      --radius-sm: 0px;
-      --radius-xs: 0px;
+      --radius:    18px;
+      --radius-sm: 12px;
+      --radius-xs: 9px;
 
       /* Shadows */
       --shadow-sm: 0 1px 4px rgba(0,0,0,0.20);
@@ -62,9 +62,9 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0; padding: 0;
-      background: linear-gradient(135deg, #0f1020 0%, #3d1265 100%);
+      background: radial-gradient(125% 90% at 50% -12%, #2c2052 0%, #181230 42%, #100d20 100%);
       background-attachment: fixed;
       color: var(--text);
       font-size: 14px;
@@ -74,24 +74,25 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    /* ── No rounded corners ── */
-    .ri-section, .cd-panel, .hist-item, .hist-item-body,
-    .ro-gauge-card, .ro-cats-card, .ro-finance-card, .ro-action-panel, .ro-ap-col,
-    .mon-item, .badge, .btn, .btn-primary, .btn-secondary,
-    .sidebar-item, .cd-tab, .co-switcher-btn, .co-dropdown,
-    .scenario-card, .advice-card, input, textarea, select,
-    .an-found-item, .an-badge, .modal, .modal-box,
-    [class*="-card"], [class*="-box"], [class*="-panel"],
-    [class*="-badge"], [class*="-chip"], [class*="-pill"],
-    [class*="-btn"], [class*="-section"], [class*="-item"] {
-      border-radius: 0 !important;
+    /* ── Display type: Space Grotesk for headings & big metric numbers ── */
+    h1, h2, h3, h4, .score-num, .chip-val, .cat-score, .ceo-card-score,
+    .auth-left-logo, .auth-logo-text, .topbar-brand, .sidebar-logo-text,
+    .gauge-val, .hist-score, .co-switcher-name {
+      font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    }
+    /* ── Mono eyebrows / labels / dates ── */
+    .chip-lbl, .advice-lbl, .cat-trend, .inline-form-title, .panel-hdr-title,
+    .ceo-block-title, .ceo-card-rank, .sidebar-section-label, .hist-item-date,
+    .co-switcher-sub, .cd-tab-badge {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
 
     /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); background-clip: padding-box; }
+    ::selection { background: rgba(59,130,246,0.35); }
 
     /* ── Auth layout ── */
     .auth-page {
@@ -117,7 +118,7 @@
 
     .auth-left-logo {
       font-size: 26px; font-weight: 800; letter-spacing: 0.06em;
-      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+      background: linear-gradient(135deg, #8fbcff, #3b82f6);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text; margin-bottom: 10px;
     }
@@ -136,10 +137,10 @@
     .auth-feature:hover { background: rgba(255,255,255,0.07); }
     .auth-feature-icon {
       width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
-      background: linear-gradient(135deg, #7c3aed, #5b21b6);
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
       display: flex; align-items: center; justify-content: center;
       font-size: 17px;
-      box-shadow: 0 4px 12px rgba(124,58,237,0.35);
+      box-shadow: 0 4px 12px rgba(59,130,246,0.35);
     }
     .auth-feature-text { font-size: 12px; color: rgba(255,255,255,0.50); line-height: 1.4; }
     .auth-feature-title { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 2px; }
@@ -154,7 +155,7 @@
     .auth-logo { margin-bottom: 32px; }
     .auth-logo-text {
       font-size: 22px; font-weight: 800; letter-spacing: 0.05em;
-      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+      background: linear-gradient(135deg, #8fbcff, #3b82f6);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -170,7 +171,7 @@
     }
     .topbar-brand {
       font-size: 15px; font-weight: 800; letter-spacing: 0.05em;
-      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+      background: linear-gradient(135deg, #8fbcff, #3b82f6);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -193,10 +194,10 @@
     }
     .sidebar-logo-icon {
       width: 32px; height: 32px; border-radius: 9px;
-      background: linear-gradient(135deg, #7c3aed, #5b21b6);
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
       display: flex; align-items: center; justify-content: center;
       font-size: 15px; font-weight: 800; color: #fff;
-      box-shadow: 0 4px 12px rgba(124,58,237,0.40);
+      box-shadow: 0 4px 12px rgba(59,130,246,0.40);
     }
     .sidebar-logo-text {
       font-size: 12px; font-weight: 800; color: #fff;
@@ -269,8 +270,8 @@
     }
     .card-interactive:hover {
       background: rgba(255,255,255,0.08);
-      border-color: rgba(124,58,237,0.30);
-      box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+      border-color: rgba(59,130,246,0.30);
+      box-shadow: 0 8px 32px rgba(59,130,246,0.15);
       transform: translateY(-2px);
     }
 
@@ -287,7 +288,7 @@
     .alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
     .alert-error   { background: var(--danger-bg);  border: 1px solid var(--danger-border);  color: var(--danger); }
     .alert-success { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success); }
-    .alert-info    { background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.25); color: #a78bfa; }
+    .alert-info    { background: rgba(143,188,255,0.10); border: 1px solid rgba(143,188,255,0.25); color: #8fbcff; }
 
     /* ── Form elements ── */
     label {
@@ -310,9 +311,9 @@
       font-family: inherit;
     }
     input:focus, textarea:focus, select:focus {
-      border-color: #7c3aed;
+      border-color: #3b82f6;
       background: rgba(255,255,255,0.09);
-      box-shadow: 0 0 0 3px rgba(124,58,237,0.20);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.20);
     }
     input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.28); }
     select option { background: #1a1040; color: #fff; }
@@ -333,11 +334,11 @@
     }
     .btn:active { transform: scale(0.97); }
     .btn-primary {
-      background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+      background: linear-gradient(180deg, #5b9dff, #2563eb);
       color: #fff;
-      box-shadow: 0 4px 20px rgba(124,58,237,0.40);
+      box-shadow: 0 10px 26px -10px rgba(37,99,235,0.85), inset 0 1px 0 rgba(255,255,255,0.28);
     }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(124,58,237,0.50); text-decoration: none; color: #fff; }
+    .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 12px 30px -10px rgba(37,99,235,0.9), inset 0 1px 0 rgba(255,255,255,0.28); text-decoration: none; color: #fff; }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn-secondary {
       background: rgba(255,255,255,0.07);
@@ -380,8 +381,8 @@
     .divider-text { font-size: 12px; color: rgba(255,255,255,0.35); white-space: nowrap; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; }
     .row > * { flex: 1; min-width: 200px; }
-    a { color: #a78bfa; text-decoration: none; }
-    a:hover { color: #c4b5fd; text-decoration: underline; }
+    a { color: #8fbcff; text-decoration: none; }
+    a:hover { color: #bcd6ff; text-decoration: underline; }
     .muted { color: var(--text-muted); }
     .small { font-size: 12px; }
     .text-center { text-align: center; }
@@ -402,10 +403,10 @@
     .badge-sm { padding: 2px 8px; font-size: 10px; }
     .badge-green  { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.28); color: #34d399; }
     .badge-yellow { background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.28); color: #fbbf24; }
-    .badge-blue   { background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.25); color: #a78bfa; }
+    .badge-blue   { background: rgba(143,188,255,0.12); border-color: rgba(143,188,255,0.25); color: #8fbcff; }
     .badge-red    { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.28); color: #f87171; }
     .badge-orange { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.28); color: #fb923c; }
-    .badge-purple { background: rgba(124,58,237,0.15); border-color: rgba(124,58,237,0.30); color: #a78bfa; }
+    .badge-purple { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.30); color: #8fbcff; }
 
     /* ── Pill tabs (TabsList style) ── */
     .tab-list {
@@ -421,8 +422,8 @@
     }
     .tab-btn:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); }
     .tab-btn.active {
-      background: rgba(124,58,237,0.25); color: #fff;
-      border-color: rgba(124,58,237,0.35);
+      background: rgba(59,130,246,0.25); color: #fff;
+      border-color: rgba(59,130,246,0.35);
     }
 
     /* ── Spinner ── */
@@ -437,12 +438,12 @@
     /* ── Progress bar ── */
     #nprogress-bar {
       position: fixed; top: 0; left: 0; height: 2px;
-      background: linear-gradient(90deg, #7c3aed, #a78bfa, #7c3aed);
+      background: linear-gradient(90deg, #3b82f6, #8fbcff, #3b82f6);
       background-size: 300% 100%;
       z-index: 99999; width: 0%; opacity: 1;
       animation: progress-shimmer 1.5s linear infinite;
       pointer-events: none;
-      box-shadow: 0 0 10px rgba(124,58,237,0.6);
+      box-shadow: 0 0 10px rgba(59,130,246,0.6);
     }
     @keyframes progress-shimmer {
       0% { background-position: 100% 0; } 100% { background-position: -100% 0; }
@@ -465,13 +466,13 @@
     #nav-spinner.visible { opacity: 1; transform: scale(1); }
     .nav-spinner-ring {
       width: 40px; height: 40px;
-      border: 2.5px solid rgba(124,58,237,0.15);
-      border-top-color: #7c3aed; border-radius: 50%;
+      border: 2.5px solid rgba(59,130,246,0.15);
+      border-top-color: #3b82f6; border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
     .nav-spinner-logo {
       font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
-      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+      background: linear-gradient(135deg, #8fbcff, #3b82f6);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -554,13 +555,13 @@
     .blob2 { animation: blob2 28s ease-in-out infinite; }
   </style>
   <div aria-hidden="true" style="pointer-events:none;position:fixed;inset:0;z-index:0;overflow:hidden;display:flex;align-items:center;justify-content:center">
-    <div class="sq1" style="position:absolute;width:900px;height:900px;border:1px solid rgba(147,112,219,0.20);border-radius:60px"></div>
-    <div class="sq2" style="position:absolute;width:720px;height:720px;border:1px solid rgba(147,112,219,0.25);border-radius:60px"></div>
-    <div class="sq3" style="position:absolute;width:540px;height:540px;border:1px solid rgba(147,112,219,0.30);border-radius:60px"></div>
-    <div class="sq4" style="position:absolute;width:360px;height:360px;border:1px solid rgba(147,112,219,0.35);border-radius:60px"></div>
+    <div class="sq1" style="position:absolute;width:900px;height:900px;border:1px solid rgba(99,102,241,0.20);border-radius:60px"></div>
+    <div class="sq2" style="position:absolute;width:720px;height:720px;border:1px solid rgba(99,102,241,0.25);border-radius:60px"></div>
+    <div class="sq3" style="position:absolute;width:540px;height:540px;border:1px solid rgba(99,102,241,0.30);border-radius:60px"></div>
+    <div class="sq4" style="position:absolute;width:360px;height:360px;border:1px solid rgba(99,102,241,0.35);border-radius:60px"></div>
     <!-- purple glow blobs -->
-    <div class="blob1" style="position:absolute;top:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(124,58,237,0.12) 0%,transparent 70%);border-radius:50%"></div>
-    <div class="blob2" style="position:absolute;bottom:-10%;left:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(91,33,182,0.10) 0%,transparent 70%);border-radius:50%"></div>
+    <div class="blob1" style="position:absolute;top:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%);border-radius:50%"></div>
+    <div class="blob2" style="position:absolute;bottom:-10%;left:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(29,78,216,0.10) 0%,transparent 70%);border-radius:50%"></div>
   </div>
 
   <div id="nprogress-bar"></div>

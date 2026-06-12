@@ -96,7 +96,7 @@
     letter-spacing: 0.05em; margin-right: 2px;
   }
   .tag-news       { background: rgba(79,143,255,0.15);  color: #93bbff; }
-  .tag-threads    { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+  .tag-threads    { background: rgba(143,188,255,0.15); color: #bcd6ff; }
   .tag-hh         { background: rgba(74,222,128,0.15);  color: #4ade80; }
   .tag-market     { background: rgba(251,191,36,0.15);  color: #fbbf24; }
   .tag-regulatory { background: rgba(248,113,113,0.15); color: #f87171; }
@@ -159,7 +159,7 @@
   ("media", "", "InfoField & Media",   "#93bbff"),
   ("hr",    "", "Human Resources",     "#4ade80"),
   ("gr",    "", "Gov. Relations",      "#f87171"),
-  ("pr",    "", "PR Environment",      "#c4b5fd"),
+  ("pr",    "", "PR Environment",      "#bcd6ff"),
   ("market","", "Market & Industry",   "#fbbf24"),
 ] %}
 
@@ -312,7 +312,7 @@
     </div>
     <div class="gr-metric-val" style="color:#c084fc">{{ exposure }}<span style="font-size:14px;font-weight:400;color:rgba(255,255,255,0.30)">/10</span></div>
     <div class="gr-exposure-bar">
-      <div class="gr-exposure-fill" style="width:{{ gr_score }}%;background:linear-gradient(90deg,#7c3aed,#c084fc)"></div>
+      <div class="gr-exposure-fill" style="width:{{ gr_score }}%;background:linear-gradient(90deg,#3b82f6,#c084fc)"></div>
     </div>
     <div class="gr-metric-sub">степень затронутости компании</div>
   </div>
@@ -699,7 +699,7 @@
         {% if item.link %}
           <a href="{{ item.link }}" target="_blank" rel="noopener"
              style="font-size:13px;font-weight:500;color:var(--text);text-decoration:none;line-height:1.4;display:block;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-             onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">
+             onmouseover="this.style.color='#8fbcff'" onmouseout="this.style.color='var(--text)'">
             {{ item.title }}
           </a>
         {% else %}

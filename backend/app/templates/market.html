@@ -64,7 +64,7 @@
       @media(max-width:800px){ .mkt-two-col { grid-template-columns:1fr; } }
 
       .mkt-pos-point { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--text); line-height:1.5; margin-bottom:6px; }
-      .mkt-pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#7c3aed; flex-shrink:0; margin-top:6px; }
+      .mkt-pos-point::before { content:''; width:6px; height:6px; border-radius:50%; background:#3b82f6; flex-shrink:0; margin-top:6px; }
 
       .risk-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
       .risk-row:last-child { border-bottom:none; }
@@ -82,7 +82,7 @@
       .swot-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
       .swot-q { padding:16px 18px; }
       .swot-q:nth-child(1) { background:rgba(22,163,74,0.05); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
-      .swot-q:nth-child(2) { background:rgba(124,58,237,0.05); border-bottom:1px solid var(--border); }
+      .swot-q:nth-child(2) { background:rgba(59,130,246,0.05); border-bottom:1px solid var(--border); }
       .swot-q:nth-child(3) { background:rgba(37,99,235,0.05); border-right:1px solid var(--border); }
       .swot-q:nth-child(4) { background:rgba(217,119,6,0.05); }
       .swot-hdr { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
@@ -309,7 +309,7 @@
 
     <!-- ══ AI SUMMARY ══ -->
     {% if ai.summary %}
-    <div style="background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(91,33,182,0.04));border:1px solid rgba(124,58,237,0.25);border-left:3px solid #7c3aed;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
+    <div style="background:linear-gradient(135deg,rgba(59,130,246,0.06),rgba(29,78,216,0.04));border:1px solid rgba(59,130,246,0.25);border-left:3px solid #3b82f6;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
       <span style="font-size:18px;flex-shrink:0"></span>
       <div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text)">{{ ai.summary }}</div>
     </div>
@@ -406,7 +406,7 @@
           {% if item.link %}
             <a href="{{ item.link }}" target="_blank" rel="noopener"
                style="font-size:12px;font-weight:500;color:var(--text);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;margin-bottom:2px"
-               onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='var(--text)'">{{ item.title }}</a>
+               onmouseover="this.style.color='#8fbcff'" onmouseout="this.style.color='var(--text)'">{{ item.title }}</a>
           {% else %}
             <div style="font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px">{{ item.title }}</div>
           {% endif %}

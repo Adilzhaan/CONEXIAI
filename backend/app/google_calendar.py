@@ -242,6 +242,47 @@ def _send_gmail(service: Any, to: str, subject: str, body: str) -> dict:
     return {"ok": True, "to": to}
 
 
+async def send_invite_email(
+    to_email: str,
+    company_name: str,
+    role_label: str,
+    join_url: str,
+    inviter_name: str,
+    client_id: str,
+    client_secret: str,
+    refresh_token: str,
+) -> dict[str, Any]:
+    """Send a company invitation email via Gmail API."""
+    if not client_id or not client_secret or not refresh_token:
+        return {"error": "Google не настроен"}
+    if not to_email:
+        return {"error": "Нет email получателя"}
+    try:
+        gmail = await asyncio.to_thread(_build_gmail_service, client_id, client_secret, refresh_token)
+    except Exception as e:
+        return {"error": f"Gmail API: {e}"}
+
+    role_line = f"Роль: {role_label}\n" if role_label else ""
+    by_line = f"{inviter_name} приглашает вас" if inviter_name else "Вас приглашают"
+    subject = f"Приглашение в «{company_name}» — CONEXIAI"
+    body = (
+        f"Здравствуйте!\n\n"
+        f"{by_line} присоединиться к компании «{company_name}» "
+        f"на платформе CONEXIAI — системе мониторинга рисков.\n\n"
+        f"{role_line}"
+        f"\nЧтобы принять приглашение, перейдите по ссылке:\n{join_url}\n\n"
+        f"Если вы не ожидали это письмо — просто проигнорируйте его.\n\n"
+        f"—\nCONEXIAI Risk Intelligence"
+    )
+    try:
+        await asyncio.to_thread(_send_gmail, gmail, to_email, subject, body)
+        logger.info("Invite email sent to %s", to_email)
+        return {"ok": True, "to": to_email}
+    except Exception as e:
+        logger.warning("Invite email failed for %s: %s", to_email, e)
+        return {"error": str(e)}
+
+
 async def send_crisis_emails(
     company_name: str,
     score: int,

@@ -491,6 +491,26 @@ async def run_pipeline(
         except Exception as e:
             logger.warning("[pipeline] load prev run failed: %s", e)
 
+    # ── Load per-category settings (preferred sources + keywords) ─────────────
+    category_hints: dict = {}
+    if sk:
+        try:
+            cs_rows = await supabase.rest_select_service(
+                table="category_settings", service_key=sk,
+                select="category,preferred_sources,custom_keywords",
+                query_params={"company_id": f"eq.{company_id}"},
+            ) or []
+            for r in cs_rows:
+                cat = r.get("category")
+                srcs = r.get("preferred_sources") or []
+                kws = r.get("custom_keywords") or []
+                if cat and (srcs or kws):
+                    category_hints[cat] = {"sources": srcs, "keywords": kws}
+            if category_hints:
+                logger.info("[pipeline] category hints: %s", list(category_hints.keys()))
+        except Exception as e:
+            logger.warning("[pipeline] category_settings load failed: %s", e)
+
     # ── Step 4: AI risk analysis with history ─────────────────────────────────
     _stage(" Анализ рисков с учётом истории…")
 
@@ -508,6 +528,7 @@ async def run_pipeline(
         prev_fps=prev_fps,
         prev_articles=prev_articles,
         api_key=api_key,
+        category_hints=category_hints,
     )
 
     # Apply escalation + decay + positive signal reduction
