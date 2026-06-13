@@ -1,6 +1,8 @@
+import json
 import logging
+import re
 import xml.etree.ElementTree as ET
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -10,9 +12,107 @@ from . import gr_sources as gr_client
 logger = logging.getLogger("conexiai.news")
 _http = httpx.AsyncClient(timeout=15, follow_redirects=True)
 
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
 
 async def close() -> None:
     await _http.aclose()
+
+
+# ── Article thumbnail resolution (Google News decode + og:image) ──────────
+_gnews_url_cache: dict[str, str] = {}
+_news_img_cache: dict[str, str] = {}
+
+
+async def _resolve_gnews_url(url: str) -> str:
+    """Decode a news.google.com redirect wrapper to the real publisher URL."""
+    if "news.google.com" not in url or "/articles/" not in url:
+        return url
+    if url in _gnews_url_cache:
+        return _gnews_url_cache[url]
+    real = url
+    try:
+        art_id = url.split("/articles/")[1].split("?")[0]
+        page = await _http.get(f"https://news.google.com/articles/{art_id}",
+                               headers={"User-Agent": _UA})
+        sg = re.search(r'data-n-a-sg="([^"]+)"', page.text)
+        ts = re.search(r'data-n-a-ts="([^"]+)"', page.text)
+        if sg and ts:
+            inner = json.dumps(["garturlreq", [["X", "X", ["X", "X"], None, None,
+                    1, 1, "US:en", None, 1, None, None, None, None, None, 0, 1],
+                    "X", "X", 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0],
+                    art_id, int(ts.group(1)), sg.group(1)])
+            payload = [[["Fbv4je", inner]]]
+            r = await _http.post(
+                "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+                data={"f.req": json.dumps(payload)},
+                headers={"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"})
+            tail = r.text.split("garturlres")[-1] if "garturlres" in r.text else r.text
+            m = re.search(r'(https?://[^"\\]+)', tail)
+            if m:
+                real = m.group(1)
+    except Exception as e:
+        logger.debug("gnews decode failed: %r", e)
+    _gnews_url_cache[url] = real
+    return real
+
+
+def _is_public_url(url: str) -> bool:
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    if host in ("localhost",) or host.endswith(".local"):
+        return False
+    return not (host.startswith("127.") or host.startswith("10.")
+                or host.startswith("192.168.") or host.startswith("169.254.")
+                or host.startswith("172.1") or host.startswith("172.2")
+                or host.startswith("172.30.") or host.startswith("172.31.")
+                or host in ("::1", "0.0.0.0"))
+
+
+async def fetch_article_image(url: str) -> str:
+    """Resolve (incl. Google News) and return the article's og:image URL.
+
+    Returns '' when no image is found. Results are cached in-process so each
+    article URL is resolved at most once."""
+    if not url or not url.startswith("http") or not _is_public_url(url):
+        return ""
+    # Hosts that never expose an og:image to a logged-out fetch — skip the slow
+    # round-trip entirely (Instagram returns a login wall).
+    _host = (urlparse(url).hostname or "").lower()
+    if _host.endswith("instagram.com") or _host.endswith("threads.net"):
+        return ""
+    if url in _news_img_cache:
+        return _news_img_cache[url]
+    img = ""
+    try:
+        real = await _resolve_gnews_url(url)
+        if not _is_public_url(real):
+            real = url
+        r = await _http.get(real, headers={"User-Agent": _UA})
+        html = r.text[:200_000]
+        for pat in (
+            r'<meta[^>]+property=["\']og:image(?::url)?["\'][^>]+content=["\']([^"\']+)',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image',
+            r'<meta[^>]+name=["\']twitter:image[^"\']*["\'][^>]+content=["\']([^"\']+)',
+        ):
+            m = re.search(pat, html, re.I)
+            if m:
+                img = m.group(1).strip()
+                break
+        if img.startswith("//"):
+            img = "https:" + img
+        elif img.startswith("/"):
+            p = urlparse(str(r.url))
+            img = f"{p.scheme}://{p.netloc}{img}"
+    except Exception as e:
+        logger.debug("og:image fetch failed for %s: %r", url, e)
+    _news_img_cache[url] = img
+    return img
 
 
 async def _fetch_by_query(query: str, limit: int, region: str = "RU") -> list[dict[str, Any]]:

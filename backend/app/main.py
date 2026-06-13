@@ -19,6 +19,7 @@ from . import news as news_client
 from . import apify as apify_client
 from . import hh as hh_client
 from . import ai as ai_client
+from . import risk_formulas as rf
 from . import finance as finance_client
 from . import monitor as monitor_client
 from . import ci as ci_client
@@ -32,6 +33,7 @@ from . import youtube_api as youtube_client
 
 from . import agent as agent_client
 from .pdf import generate_report
+from .playbooks import PLAYBOOKS as _PLAYBOOKS
 
 _EMPTY_SOCIAL = {"threads": [], "instagram": [], "tiktok": [], "youtube": [], "twitter": [], "facebook": []}
 
@@ -83,6 +85,22 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
+
+@app.middleware("http")
+async def _persist_refreshed_token(request: Request, call_next):
+    """When a route refreshed the access token (req.state.new_access_token),
+    write it back to the cookies so the NEXT request uses the fresh token
+    instead of repeating 403 → refresh on every page load."""
+    response = await call_next(request)
+    new_access = getattr(request.state, "new_access_token", None)
+    if new_access:
+        new_refresh = getattr(request.state, "new_refresh_token", None)
+        response.set_cookie(settings.SESSION_ACCESS_COOKIE_NAME, new_access, **_cookie_params())
+        if new_refresh:
+            response.set_cookie(settings.SESSION_REFRESH_COOKIE_NAME, new_refresh, **_cookie_params())
+    return response
+
+
 import os as _os
 _BASE = _os.path.dirname(_os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=_os.path.join(_BASE, "static")), name="static")
@@ -97,16 +115,10 @@ templates.env.filters["tojson"] = lambda v: _Markup(
 )
 
 
-# ── Access allowlist ──────────────────────────────────────────────────────────
+# ── Always-admin emails (owners). Login is open to everyone. ──────────────────
 _ALLOWED_EMAILS: set[str] = {
     "aidar@berdali.com",
 }
-
-def _is_allowed(user: dict | None) -> bool:
-    if not user:
-        return False
-    email = (user.get("email") or "").lower().strip()
-    return email in _ALLOWED_EMAILS
 
 
 def _compute_delta(runs: list) -> dict:
@@ -128,6 +140,35 @@ def _compute_delta(runs: list) -> dict:
             runs[0].get("positive_signals")
         ),
     }
+
+
+_RISK_CATEGORIES = ("media", "hr", "gr", "pr", "market")
+
+
+def _apply_category_settings(categories: dict, settings_map: dict) -> tuple[int | None, dict]:
+    """Recompute overall score from category scores using per-category
+    weight + sensitivity. Returns (effective_score, adjusted_categories).
+    Defaults (weight=1, sensitivity=1) reproduce the plain average."""
+    if not categories:
+        return None, {}
+    adjusted: dict = {}
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for cat in _RISK_CATEGORIES:
+        cd = categories.get(cat)
+        if not isinstance(cd, dict) or cd.get("score") is None:
+            continue
+        cfg = settings_map.get(cat, {})
+        weight = float(cfg.get("weight", 1.0) or 1.0)
+        sens = float(cfg.get("sensitivity", 1.0) or 1.0)
+        raw = float(cd["score"])
+        adj = max(0.0, min(100.0, raw * sens))
+        adjusted[cat] = {**cd, "score": round(adj), "raw_score": round(raw)}
+        weighted_sum += adj * weight
+        weight_total += weight
+    if weight_total <= 0:
+        return None, adjusted
+    return round(weighted_sum / weight_total), adjusted
 
 
 def _cookie_params() -> dict[str, Any]:
@@ -165,13 +206,23 @@ def _get_tokens(req: Request) -> tuple[str | None, str | None]:
 
 
 async def get_current_user(req: Request) -> dict[str, Any] | None:
+    # Memoize per request — a single page may call this more than once.
+    cached = getattr(req.state, "_user_cache", "__miss__")
+    if cached != "__miss__":
+        return cached
+
+    user = await _resolve_current_user(req)
+    req.state._user_cache = user
+    return user
+
+
+async def _resolve_current_user(req: Request) -> dict[str, Any] | None:
     access_token, refresh_token = _get_tokens(req)
     if not access_token or not refresh_token:
         return None
 
     try:
-        user = await supabase.auth_get_user(access_token)
-        return user if _is_allowed(user) else None
+        return await supabase.auth_get_user(access_token)
     except Exception:
         # Access token expired/invalid -> try refresh
         try:
@@ -180,8 +231,6 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
             if not new_access_token:
                 return None
             user = await supabase.auth_get_user(new_access_token)
-            if not _is_allowed(user):
-                return None
             req.state.new_access_token = new_access_token
             req.state.new_refresh_token = refreshed.get("refresh_token", refresh_token)
             return user
@@ -190,31 +239,78 @@ async def get_current_user(req: Request) -> dict[str, Any] | None:
 
 
 async def _activate_pending_memberships(user_email: str, user_id: str, access_token: str) -> None:
-    """Activate any pending invites that match this user's email."""
+    """Activate any pending invites that match this user's email (case-insensitive)."""
+    email_lc = (user_email or "").lower().strip()
+    if not email_lc:
+        return
     try:
         svc = settings.SUPABASE_SERVICE_KEY
+        # ilike makes the match case-insensitive; invited_email is stored lowercased
+        flt = f"invited_email=ilike.{email_lc}&status=eq.pending"
         if svc:
             await supabase.rest_update_service(
-                f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
+                f"rest/v1/company_members?{flt}",
                 service_key=svc,
                 patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
             )
         else:
             await supabase.rest_update_raw(
-                f"rest/v1/company_members?invited_email=eq.{user_email}&status=eq.pending",
+                f"rest/v1/company_members?{flt}",
                 access_token=access_token,
                 patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
                 returning="minimal",
             )
-        logger.info("Activated memberships for %s", user_email)
+        logger.info("Activated memberships for %s", email_lc)
     except Exception as e:
-        logger.warning("Could not activate memberships for %s: %s", user_email, e)
+        logger.warning("Could not activate memberships for %s: %s", email_lc, e)
+
+
+async def _activate_invite_token(token: str, user_id: str) -> str | None:
+    """Activate a specific membership by its invite token. Returns company_id or None."""
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc or not token:
+        return None
+    try:
+        rows = await supabase.rest_select_service(
+            table="company_members", service_key=svc,
+            select="id,company_id,status",
+            query_params={"invite_token": f"eq.{token}"},
+        )
+        if not rows:
+            return None
+        m = rows[0]
+        await supabase.rest_update_service(
+            f"rest/v1/company_members?invite_token=eq.{token}",
+            service_key=svc,
+            patch={"user_id": user_id, "status": "active", "joined_at": "now()"},
+        )
+        logger.info("Invite token activated → company %s", m.get("company_id"))
+        return m.get("company_id")
+    except Exception as e:
+        logger.warning("Activate invite token failed: %s", e)
+        return None
 
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/news-image")
+async def news_image(u: str):
+    """Resolve a news article URL (decoding Google News wrappers) to its
+    og:image and 302-redirect to it. Used by the Top-News carousel so cards
+    show the real publisher photo. Returns 404 when no image is found."""
+    if not u.startswith(("http://", "https://")):
+        return Response(status_code=400)
+    img = await news_client.fetch_article_image(u)
+    if not img:
+        return Response(status_code=404)
+    return RedirectResponse(
+        img, status_code=302,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -227,7 +323,8 @@ async def index(req: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(req: Request):
-    return templates.TemplateResponse(req, "login.html", {"error": None, "app_name": settings.APP_NAME})
+    invite = req.query_params.get("invite", "")
+    return templates.TemplateResponse(req, "login.html", {"error": None, "invite": invite, "app_name": settings.APP_NAME})
 
 
 @app.post("/login", response_class=HTMLResponse)
@@ -235,37 +332,41 @@ async def login_submit(
     req: Request,
     email: str = Form(...),
     password: str = Form(...),
+    invite: str = Form(""),
 ):
     try:
+        email = email.strip()
+        password = password.strip()  # tolerate accidental leading/trailing spaces
         auth = await supabase.auth_sign_in_password(email=email, password=password)
         access_token = auth.get("access_token")
         refresh_token = auth.get("refresh_token")
         if not access_token or not refresh_token:
             raise RuntimeError("No access/refresh token returned by Supabase.")
-        if email.lower().strip() not in _ALLOWED_EMAILS:
-            return templates.TemplateResponse(
-                req, "login.html",
-                {"error": "Доступ ограничен. Обратитесь к администратору.", "app_name": settings.APP_NAME},
-                status_code=403,
-            )
         user_id = auth.get("user", {}).get("id") or auth.get("user_id") or ""
         await _activate_pending_memberships(email, user_id, access_token)
-        resp = RedirectResponse(url="/dashboard", status_code=302)
+        # Token-based activation takes user straight to the company they joined
+        dest = "/dashboard"
+        if invite.strip():
+            cid = await _activate_invite_token(invite.strip(), user_id)
+            if cid:
+                dest = f"/companies/{cid}"
+        resp = RedirectResponse(url=dest, status_code=302)
         _set_tokens(resp, access_token, refresh_token)
         return resp
     except Exception as e:
         return templates.TemplateResponse(
             req, "login.html",
-            {"error": _friendly_error(e, "login"), "app_name": settings.APP_NAME},
+            {"error": _friendly_error(e, "login"), "invite": invite, "app_name": settings.APP_NAME},
             status_code=400,
         )
 
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(req: Request):
+    invite = req.query_params.get("invite", "")
     return templates.TemplateResponse(
         req, "register.html",
-        {"message": None, "error": None, "app_name": settings.APP_NAME},
+        {"message": None, "error": None, "invite": invite, "app_name": settings.APP_NAME},
     )
 
 
@@ -275,8 +376,11 @@ async def register_submit(
     email: str = Form(...),
     password: str = Form(...),
     full_name: str = Form(""),
+    invite: str = Form(""),
 ):
     try:
+        email = email.strip()
+        password = password.strip()  # match login behaviour
         auth = await supabase.auth_sign_up(email=email, password=password, full_name=full_name.strip())
         # If email confirmations disabled, Supabase may return tokens immediately.
         access_token = auth.get("access_token")
@@ -285,7 +389,12 @@ async def register_submit(
         if access_token and refresh_token:
             user_id = auth.get("user", {}).get("id") or auth.get("user_id") or ""
             await _activate_pending_memberships(email, user_id, access_token)
-            resp = RedirectResponse(url="/dashboard", status_code=302)
+            dest = "/dashboard"
+            if invite.strip():
+                cid = await _activate_invite_token(invite.strip(), user_id)
+                if cid:
+                    dest = f"/companies/{cid}"
+            resp = RedirectResponse(url=dest, status_code=302)
             _set_tokens(resp, access_token, refresh_token)
             return resp
         return templates.TemplateResponse(
@@ -318,7 +427,14 @@ async def logout(_req: Request):
 @app.get("/auth/google")
 async def auth_google(req: Request):
     verifier, challenge = _pkce_pair()
-    base = settings.SITE_URL.rstrip("/") if settings.SITE_URL else str(req.base_url).rstrip("/")
+    # Use the host the user is actually on (localhost vs 127.0.0.1) so the
+    # pkce_verifier cookie matches on callback. Fall back to SITE_URL.
+    req_origin = str(req.base_url).rstrip("/")
+    _host = (req.url.hostname or "")
+    if _host in ("localhost", "127.0.0.1") or not settings.SITE_URL:
+        base = req_origin
+    else:
+        base = settings.SITE_URL.rstrip("/")
     callback_url = base + "/auth/callback"
     oauth_url = (
         f"{settings.SUPABASE_URL}/auth/v1/authorize"
@@ -530,19 +646,34 @@ async def dashboard(req: Request):
     new_refresh = getattr(req.state, "new_refresh_token", None)
     effective_token = new_access or access_token
 
+    svc = settings.SUPABASE_SERVICE_KEY
+    # Pick up any invites created after this user last logged in
+    await _activate_pending_memberships(user.get("email", ""), user.get("id", ""), effective_token)
+    member_rows = []
     try:
-        member_rows = await supabase.rest_select(
-            table="company_members",
-            access_token=effective_token,
-            select="id,role,status,company_id,companies(id,name,ceo_email,industry,created_at)",
-            order_by="joined_at.desc",
-            query_params={"user_id": f"eq.{user.get('id')}", "status": "eq.active"},
-        )
+        if svc:
+            # Service key bypasses RLS so invited members reliably see their companies
+            member_rows = await supabase.rest_select_service(
+                table="company_members",
+                service_key=svc,
+                select="id,role,status,company_id,companies(id,name,ceo_email,industry,created_at)",
+                query_params={"user_id": f"eq.{user.get('id')}", "status": "eq.active",
+                              "order": "joined_at.desc"},
+            ) or []
+        else:
+            member_rows = await supabase.rest_select(
+                table="company_members",
+                access_token=effective_token,
+                select="id,role,status,company_id,companies(id,name,ceo_email,industry,created_at)",
+                order_by="joined_at.desc",
+                query_params={"user_id": f"eq.{user.get('id')}", "status": "eq.active"},
+            )
     except Exception as e:
         if "401" in str(e) or "403" in str(e):
             resp = RedirectResponse(url="/login", status_code=302)
             _clear_tokens(resp)
             return resp
+        logger.warning("dashboard member_rows failed: %s", e)
         member_rows = []
 
     active_companies = [
@@ -711,6 +842,585 @@ async def companies_create(
     return RedirectResponse(url=f"/companies/{company_id}", status_code=302)
 
 
+@app.post("/companies/{company_id}/category-settings")
+async def save_category_settings(req: Request, company_id: str):
+    """Save weight + sensitivity for a category. Role-gated: a department user
+    can only edit their own category; admin can edit any."""
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"error": "Хранилище не настроено"}
+
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    category = (body.get("category") or "").lower().strip()
+    if category not in _RISK_CATEGORIES:
+        return {"error": "Неизвестная категория"}
+
+    # Permission: admin (allowlist or member role) or the matching department role
+    try:
+        role = "admin" if (user.get("email") or "").lower().strip() in _ALLOWED_EMAILS else "member"
+        rows = await supabase.rest_select(
+            table="company_members", access_token=access_token, select="role",
+            query_params={"company_id": f"eq.{company_id}", "user_id": f"eq.{user.get('id')}"},
+        )
+        if rows:
+            role = rows[0].get("role") or role
+    except Exception:
+        role = "member"
+    if role != "admin" and role != category:
+        return {"error": "Нет прав на эту категорию"}
+
+    def _clampf(v, lo, hi, default):
+        try:
+            return max(lo, min(hi, float(v)))
+        except (TypeError, ValueError):
+            return default
+    weight = _clampf(body.get("weight"), 0.1, 3.0, 1.0)
+    sensitivity = _clampf(body.get("sensitivity"), 0.5, 1.5, 1.0)
+
+    _allowed_sources = {"google_news", "gdelt", "yahoo_news", "hh", "instagram",
+                        "threads", "reddit", "youtube", "kase"}
+    preferred_sources = [s for s in (body.get("preferred_sources") or []) if s in _allowed_sources][:12]
+    raw_kw = body.get("custom_keywords") or []
+    if isinstance(raw_kw, str):
+        raw_kw = [k.strip() for k in raw_kw.replace("\n", ",").split(",")]
+    custom_keywords = [k.strip()[:40] for k in raw_kw if isinstance(k, str) and k.strip()][:15]
+
+    try:
+        await supabase.rest_upsert_service(
+            table="category_settings",
+            service_key=svc,
+            rows=[{
+                "company_id": company_id,
+                "category": category,
+                "weight": weight,
+                "sensitivity": sensitivity,
+                "preferred_sources": preferred_sources,
+                "custom_keywords": custom_keywords,
+                "updated_by": user.get("id"),
+            }],
+            on_conflict="company_id,category",
+        )
+    except Exception as e:
+        logger.warning("category_settings save failed: %s", e)
+        return {"error": "Не удалось сохранить"}
+    return {"ok": True, "category": category, "weight": weight, "sensitivity": sensitivity,
+            "preferred_sources": preferred_sources, "custom_keywords": custom_keywords}
+
+
+# ══════════════ Client risk-scoring (per-type formulas) ══════════════
+# Each crisis TYPE is scored independently by its OWN formula and judged
+# against its OWN threshold — there is NO aggregate. The AI extracts factors
+# (0–10); risk_formulas computes scores; custom client formulas (formula_defs)
+# replace the standard one per type via formula_eval (sandbox, never eval()).
+
+async def _user_role_rows(company_id, user_id, access_token):
+    try:
+        return await supabase.rest_select(
+            table="company_members", access_token=access_token, select="role",
+            query_params={"company_id": f"eq.{company_id}", "user_id": f"eq.{user_id}"},
+        ) or []
+    except Exception:
+        return []
+
+
+def _is_admin(user, role_rows) -> bool:
+    if (user.get("email") or "").lower().strip() in _ALLOWED_EMAILS:
+        return True
+    return bool(role_rows and role_rows[0].get("role") == "admin")
+
+
+async def _resolve_active_formulas(company_id: str) -> dict:
+    """{domain: {expression, variables}} for ACTIVE custom formulas; domains
+    without one fall through to the standard formula in code."""
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {}
+    try:
+        rows = await supabase.rest_select_service(
+            table="formula_defs", service_key=svc,
+            select="domain,expression,variables,source",
+            query_params={"company_id": f"eq.{company_id}", "is_active": "eq.true"},
+        ) or []
+    except Exception:
+        rows = []
+    fm = {}
+    for r in rows:
+        d = r.get("domain")
+        if d in rf.DOMAINS and r.get("source") == "custom" and r.get("expression"):
+            fm[d] = {"expression": r["expression"],
+                     "variables": r.get("variables") or list(rf.DOMAIN_FACTORS[d])}
+    return fm
+
+
+async def _resolve_risk_config(company_id: str, user_id, access_token: str) -> dict:
+    """Per-type config. Resolution: user → department → company → default."""
+    rows = []
+    try:
+        rows = await supabase.rest_select(
+            table="risk_configs", access_token=access_token,
+            select="scope,owner_id,per_type,preset,version",
+            query_params={"company_id": f"eq.{company_id}"},
+        ) or []
+    except Exception:
+        rows = []
+    chosen = (next((r for r in rows if r.get("scope") == "user"
+                    and str(r.get("owner_id")) == str(user_id)), None)
+              or next((r for r in rows if r.get("scope") == "department"), None)
+              or next((r for r in rows if r.get("scope") == "company"), None))
+    c = chosen or {}
+    return {
+        "per_type": rf.normalize_per_type(c.get("per_type")),
+        "preset":   c.get("preset", "balanced"),
+        "version":  int(c.get("version", 0) or 0),
+        "scope":    c.get("scope", "default"),
+    }
+
+
+def _score_by_type(factors: dict, per_type: dict, formulas: dict) -> dict:
+    """Independent per-type scoring + alert flags. No aggregate."""
+    pt = rf.normalize_per_type(per_type)
+    by_type = {}
+    for d in rf.DOMAINS:
+        cf = (formulas or {}).get(d) or {}
+        fd = (factors or {}).get(d, {}) or {}
+        sc = rf.domain_score(d, fd, cf.get("expression"), cf.get("variables"))
+        custom = bool(cf.get("expression"))
+        by_type[d] = {
+            "type": d, "type_ru": rf.DOMAIN_RU[d],
+            "score": sc, "level": rf.risk_level(sc), "level_ru": rf.risk_level_ru(sc),
+            "enabled": pt[d]["enabled"], "threshold": pt[d]["threshold"],
+            "alert": pt[d]["enabled"] and sc >= pt[d]["threshold"],
+            "formula": cf.get("expression") or rf.STANDARD_FORMULAS[d]["expression"],
+            "source": "custom" if custom else "standard",
+            "factors": {k: v for k, v in fd.items() if k != "why"},
+            "why": fd.get("why", ""),
+            "explain": (f"{cf['expression']} = {sc}" if custom else rf.formula_explain(d, fd)),
+        }
+    return {"by_type": by_type, "alerts": [d for d in rf.DOMAINS if by_type[d]["alert"]]}
+
+
+@app.get("/companies/{company_id}/risk-config")
+async def get_risk_config(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    cfg = await _resolve_risk_config(company_id, user.get("id"), access_token)
+    return {**cfg, "domains": list(rf.DOMAINS), "domain_ru": rf.DOMAIN_RU,
+            "thresholds": list(rf.ALLOWED_THRESHOLDS)}
+
+
+@app.put("/companies/{company_id}/risk-config")
+async def put_risk_config(req: Request, company_id: str):
+    """Save this user's per-type tuning. Simple change, no approvals. Backend
+    clamps threshold∈{60,70,80} and enabled→bool — scoring can't be broken."""
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"error": "Хранилище не настроено"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    per_type = rf.normalize_per_type(body.get("per_type"))
+    preset = (body.get("preset") or "custom")[:40]
+    try:
+        existing = await supabase.rest_select_service(
+            table="risk_configs", service_key=svc, select="id,version",
+            query_params={"company_id": f"eq.{company_id}", "scope": "eq.user",
+                          "owner_id": f"eq.{user.get('id')}"},
+        )
+        row = {"company_id": company_id, "scope": "user", "owner_id": user.get("id"),
+               "per_type": per_type, "preset": preset, "updated_by": user.get("id")}
+        if existing:
+            from datetime import datetime, timezone
+            new_ver = int(existing[0].get("version", 1) or 1) + 1
+            await supabase.rest_update_service(
+                f"rest/v1/risk_configs?id=eq.{existing[0]['id']}", svc,
+                {**row, "version": new_ver, "updated_at": datetime.now(timezone.utc).isoformat()})
+            version = new_ver
+        else:
+            await supabase.rest_insert_service("risk_configs", svc, [{**row, "version": 1}])
+            version = 1
+    except Exception as e:
+        logger.warning("risk-config save failed: %s", e)
+        return {"error": "Не удалось сохранить"}
+    return {"ok": True, "per_type": per_type, "preset": preset, "version": version}
+
+
+@app.post("/companies/{company_id}/risk-config/reset")
+async def reset_risk_config(req: Request, company_id: str):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"error": "Хранилище не настроено"}
+    try:
+        await supabase.rest_delete_service(
+            table="risk_configs", service_key=svc,
+            query_params={"company_id": f"eq.{company_id}", "scope": "eq.user",
+                          "owner_id": f"eq.{user.get('id')}"})
+    except Exception as e:
+        logger.warning("risk-config reset failed: %s", e)
+        return {"error": "Не удалось сбросить"}
+    return {"ok": True, **rf.default_config()}
+
+
+@app.post("/companies/{company_id}/risk/extract")
+async def risk_extract(req: Request, company_id: str):
+    """AI extracts risk factors (0–10) from a signal. The model never scores."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    if not settings.ANTHROPIC_API_KEY:
+        return {"error": "ИИ не настроен"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    text = (body.get("text") or body.get("signal") or "").strip()
+    if not text:
+        return {"error": "Пустой сигнал"}
+    factors = await ai_client.extract_risk_factors(text, settings.ANTHROPIC_API_KEY)
+    if settings.SUPABASE_SERVICE_KEY and body.get("store", True):
+        try:
+            await supabase.rest_insert_service("signal_factors", settings.SUPABASE_SERVICE_KEY, [{
+                "company_id": company_id, "signal_text": text[:240],
+                "source": (body.get("source") or "")[:40], "factors": factors}])
+        except Exception as e:
+            logger.warning("signal_factors store failed: %s", e)
+    return {"factors": factors}
+
+
+@app.post("/companies/{company_id}/risk/score")
+async def risk_score(req: Request, company_id: str):
+    """Independent score PER TYPE + alert flag. No aggregate total."""
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    factors = body.get("factors") or {}
+    cfg = await _resolve_risk_config(company_id, user.get("id"), access_token)
+    per_type = rf.normalize_per_type(body.get("per_type") or cfg["per_type"])
+    formulas = await _resolve_active_formulas(company_id)
+    return _score_by_type(factors, per_type, formulas)
+
+
+@app.post("/companies/{company_id}/risk/preview")
+async def risk_preview(req: Request, company_id: str):
+    """Before→after alert counts PER TYPE on real recent signals. No DB write."""
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    cur = await _resolve_risk_config(company_id, user.get("id"), access_token)
+    before = cur["per_type"]
+    after = rf.normalize_per_type(body.get("per_type") or before)
+    formulas = await _resolve_active_formulas(company_id)
+    rows = []
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            rows = await supabase.rest_select_service(
+                table="signal_factors", service_key=settings.SUPABASE_SERVICE_KEY,
+                select="signal_text,factors",
+                query_params={"company_id": f"eq.{company_id}",
+                              "order": "created_at.desc", "limit": "120"}) or []
+        except Exception:
+            rows = []
+    before_cnt = {d: 0 for d in rf.DOMAINS}
+    after_cnt = {d: 0 for d in rf.DOMAINS}
+    example = {d: None for d in rf.DOMAINS}
+    for r in rows:
+        sc = rf.score_all(r.get("factors") or {}, formulas)
+        for d in rf.DOMAINS:
+            if rf.is_alert(d, sc[d], before):
+                before_cnt[d] += 1
+            if rf.is_alert(d, sc[d], after):
+                after_cnt[d] += 1
+            if example[d] is None and sc[d] > 0:
+                example[d] = {"signal": (r.get("signal_text") or "")[:80],
+                              "before": sc[d], "after": sc[d]}
+    by_type = [{"type": d, "type_ru": rf.DOMAIN_RU[d],
+                "alerts_before": before_cnt[d], "alerts_after": after_cnt[d],
+                "example": example[d]} for d in rf.DOMAINS]
+    return {"sample_size": len(rows), "by_type": by_type}
+
+
+# ── Custom formulas (admin): formulas-as-data + sandbox validation ────────
+@app.get("/companies/{company_id}/formulas")
+async def list_formulas(req: Request, company_id: str, domain: str = ""):
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    custom = []
+    if svc:
+        try:
+            qp = {"company_id": f"eq.{company_id}", "order": "created_at.desc"}
+            if domain:
+                qp["domain"] = f"eq.{domain}"
+            custom = await supabase.rest_select_service(
+                table="formula_defs", service_key=svc,
+                select="id,domain,source,expression,variables,is_active,version,created_at",
+                query_params=qp) or []
+        except Exception:
+            custom = []
+    doms = [domain] if domain in rf.DOMAINS else list(rf.DOMAINS)
+    standard = [{"domain": d, "source": "standard", "is_active": True,
+                 **rf.STANDARD_FORMULAS[d]} for d in doms]
+    return {"standard": standard, "custom": custom}
+
+
+@app.post("/companies/{company_id}/formulas/validate-expression")
+async def validate_expression_live(req: Request, company_id: str):
+    """Validate a draft expression WITHOUT saving (for the editor's «Проверить»).
+    Runs parse + whitelist + range-check + backtest on recent signals."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    domain = (body.get("domain") or "").strip()
+    if domain not in rf.DOMAINS:
+        return {"ok": False, "error": "Неизвестный тип риска"}
+    expression = (body.get("expression") or "").strip()
+    variables = [str(v).strip() for v in (body.get("variables")
+                 or list(rf.DOMAIN_FACTORS[domain])) if str(v).strip()][:12]
+    from . import formula_eval as fe
+    try:
+        fe.validate_expression(expression, variables)
+        range_table = fe.range_check(expression, variables)
+    except fe.FormulaError as e:
+        return {"ok": False, "error": str(e)}
+    backtest = []
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            sig = await supabase.rest_select_service(
+                table="signal_factors", service_key=settings.SUPABASE_SERVICE_KEY,
+                select="signal_text,factors",
+                query_params={"company_id": f"eq.{company_id}",
+                              "order": "created_at.desc", "limit": "20"}) or []
+        except Exception:
+            sig = []
+        for s in sig:
+            fd = (s.get("factors") or {}).get(domain, {}) or {}
+            std = rf.domain_score(domain, fd)
+            cus = rf.domain_score(domain, fd, expression, variables)
+            if std or cus:
+                backtest.append({"signal": (s.get("signal_text") or "")[:70],
+                                 "standard": std, "custom": cus})
+            if len(backtest) >= 8:
+                break
+    return {"ok": True, "domain": domain, "variables": variables,
+            "range_check": range_table, "backtest": backtest}
+
+
+@app.post("/companies/{company_id}/formulas")
+async def create_formula(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    role_rows = await _user_role_rows(company_id, user.get("id"), access_token)
+    if not _is_admin(user, role_rows):
+        return {"error": "Только администратор может менять формулы"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"error": "Хранилище не настроено"}
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    domain = (body.get("domain") or "").strip()
+    if domain not in rf.DOMAINS:
+        return {"error": "Неизвестный тип риска"}
+    expression = (body.get("expression") or "").strip()
+    variables = [str(v).strip() for v in (body.get("variables")
+                 or list(rf.DOMAIN_FACTORS[domain])) if str(v).strip()][:12]
+    from . import formula_eval as fe
+    try:
+        fe.validate_expression(expression, variables)
+    except fe.FormulaError as e:
+        return {"error": f"Невалидная формула: {e}"}
+    try:
+        await supabase.rest_insert_service("formula_defs", svc, [{
+            "company_id": company_id, "domain": domain, "source": "custom",
+            "expression": expression, "variables": variables,
+            "is_active": False, "version": 1, "created_by": user.get("id")}])
+    except Exception as e:
+        logger.warning("create_formula failed: %s", e)
+        return {"error": "Не удалось сохранить формулу"}
+    return {"ok": True, "domain": domain, "expression": expression, "variables": variables}
+
+
+@app.post("/companies/{company_id}/formulas/{formula_id}/validate")
+async def validate_formula(req: Request, company_id: str, formula_id: str):
+    """parse + whitelist + range-check + backtest on historical signals."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"error": "Хранилище не настроено"}
+    rows = await supabase.rest_select_service(
+        table="formula_defs", service_key=svc, select="domain,expression,variables",
+        query_params={"id": f"eq.{formula_id}", "company_id": f"eq.{company_id}"})
+    if not rows:
+        return {"error": "Формула не найдена"}
+    fdef = rows[0]
+    domain, expression = fdef["domain"], fdef["expression"]
+    variables = fdef.get("variables") or list(rf.DOMAIN_FACTORS.get(domain, []))
+    from . import formula_eval as fe
+    try:
+        fe.validate_expression(expression, variables)
+        range_table = fe.range_check(expression, variables)
+    except fe.FormulaError as e:
+        return {"ok": False, "stage": "whitelist/range", "error": str(e)}
+    # Backtest: standard vs custom on recent signals of this domain.
+    backtest = []
+    try:
+        sig = await supabase.rest_select_service(
+            table="signal_factors", service_key=svc, select="signal_text,factors",
+            query_params={"company_id": f"eq.{company_id}",
+                          "order": "created_at.desc", "limit": "30"}) or []
+    except Exception:
+        sig = []
+    for s in sig[:10]:
+        fd = (s.get("factors") or {}).get(domain, {}) or {}
+        std = rf.domain_score(domain, fd)
+        cus = rf.domain_score(domain, fd, expression, variables)
+        if std or cus:
+            backtest.append({"signal": (s.get("signal_text") or "")[:80],
+                             "standard": std, "custom": cus})
+    return {"ok": True, "domain": domain, "expression": expression,
+            "range_check": range_table, "backtest": backtest}
+
+
+@app.post("/companies/{company_id}/formulas/{formula_id}/activate")
+async def activate_formula(req: Request, company_id: str, formula_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    role_rows = await _user_role_rows(company_id, user.get("id"), access_token)
+    if not _is_admin(user, role_rows):
+        return {"error": "Только администратор может активировать формулу"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    rows = await supabase.rest_select_service(
+        table="formula_defs", service_key=svc, select="domain,expression,variables",
+        query_params={"id": f"eq.{formula_id}", "company_id": f"eq.{company_id}"})
+    if not rows:
+        return {"error": "Формула не найдена"}
+    fdef = rows[0]
+    from . import formula_eval as fe
+    try:
+        fe.validate_expression(fdef["expression"],
+                               fdef.get("variables") or list(rf.DOMAIN_FACTORS.get(fdef["domain"], [])))
+        fe.range_check(fdef["expression"], fdef.get("variables") or [])
+    except fe.FormulaError as e:
+        return {"error": f"Не прошла валидацию: {e}"}
+    try:
+        # one active per (company, domain): deactivate others first
+        await supabase.rest_update_service(
+            f"rest/v1/formula_defs?company_id=eq.{company_id}&domain=eq.{fdef['domain']}&is_active=eq.true",
+            svc, {"is_active": False})
+        await supabase.rest_update_service(
+            f"rest/v1/formula_defs?id=eq.{formula_id}", svc, {"is_active": True})
+    except Exception as e:
+        logger.warning("activate_formula failed: %s", e)
+        return {"error": "Не удалось активировать"}
+    return {"ok": True, "domain": fdef["domain"], "active_formula_id": formula_id}
+
+
+@app.post("/companies/{company_id}/formulas/{formula_id}/rollback")
+async def rollback_formula(req: Request, company_id: str, formula_id: str):
+    """Deactivate the given formula → revert to the previous custom version for
+    that type, or to the standard formula if none."""
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return {"error": "Не авторизован"}
+    role_rows = await _user_role_rows(company_id, user.get("id"), access_token)
+    if not _is_admin(user, role_rows):
+        return {"error": "Только администратор"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    rows = await supabase.rest_select_service(
+        table="formula_defs", service_key=svc, select="domain",
+        query_params={"id": f"eq.{formula_id}", "company_id": f"eq.{company_id}"})
+    if not rows:
+        return {"error": "Формула не найдена"}
+    domain = rows[0]["domain"]
+    try:
+        await supabase.rest_update_service(
+            f"rest/v1/formula_defs?id=eq.{formula_id}", svc, {"is_active": False})
+        prev = await supabase.rest_select_service(
+            table="formula_defs", service_key=svc, select="id",
+            query_params={"company_id": f"eq.{company_id}", "domain": f"eq.{domain}",
+                          "id": f"neq.{formula_id}", "order": "version.desc", "limit": "1"})
+        reverted_to = "standard"
+        if prev:
+            await supabase.rest_update_service(
+                f"rest/v1/formula_defs?id=eq.{prev[0]['id']}", svc, {"is_active": True})
+            reverted_to = prev[0]["id"]
+    except Exception as e:
+        logger.warning("rollback_formula failed: %s", e)
+        return {"error": "Не удалось откатить"}
+    return {"ok": True, "domain": domain, "reverted_to": reverted_to}
+
+
+@app.post("/companies/{company_id}/delete")
+async def delete_company(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    # Remove dependent rows first (best-effort), then the company itself.
+    if svc:
+        for tbl in ("risk_runs", "risk_score_history", "news_archive", "analysis_articles",
+                    "monitoring_snapshots", "ci_reports", "market_cache", "competitors",
+                    "employees", "emails", "company_members", "crisis_actions"):
+            try:
+                await supabase.rest_delete_service(tbl, svc, {"company_id": f"eq.{company_id}"})
+            except Exception as e:
+                logger.warning("delete_company: %s cleanup failed: %s", tbl, e)
+    try:
+        if svc:
+            await supabase.rest_delete_service("companies", svc, {"id": f"eq.{company_id}"})
+        else:
+            await supabase.rest_delete(
+                "companies", access_token=effective_token, query_params={"id": f"eq.{company_id}"},
+            )
+    except Exception as e:
+        logger.error("delete_company failed: %s", e)
+        return RedirectResponse(url=f"/companies/{company_id}?error=delete_failed", status_code=302)
+
+    return RedirectResponse(url="/dashboard?msg=company_deleted", status_code=302)
+
+
 @app.get("/signal", response_class=HTMLResponse)
 async def signal_page(req: Request):
     return templates.TemplateResponse(req, "signal.html", {})
@@ -769,6 +1479,9 @@ async def _company_detail_inner(req: Request, company_id: str):
             return []
 
     async def _get_user_role():
+        # Allowlisted owner(s) are always admin.
+        if (user.get("email") or "").lower().strip() in _ALLOWED_EMAILS:
+            return "admin"
         try:
             rows = await supabase.rest_select(
                 table="company_members",
@@ -862,6 +1575,8 @@ async def _company_detail_inner(req: Request, company_id: str):
 
     async def _safe_risk_runs(token: str, cid: str):
         _selects = [
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios,domain_factors,domain_scores",
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints",
@@ -972,11 +1687,37 @@ async def _company_detail_inner(req: Request, company_id: str):
         ]
     delta = _compute_delta(risk_runs)
 
-    # Compute financial impact metrics for Risk Overview
+    # ── Category settings (weights + sensitivity) → effective score ──────────
+    category_settings: dict = {}
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            _cs_rows = await supabase.rest_select_service(
+                table="category_settings",
+                service_key=settings.SUPABASE_SERVICE_KEY,
+                select="category,weight,sensitivity,preferred_sources,custom_keywords",
+                query_params={"company_id": f"eq.{company_id}"},
+            ) or []
+            category_settings = {
+                r["category"]: {
+                    "weight": r.get("weight", 1.0),
+                    "sensitivity": r.get("sensitivity", 1.0),
+                    "preferred_sources": r.get("preferred_sources") or [],
+                    "custom_keywords": r.get("custom_keywords") or [],
+                }
+                for r in _cs_rows if r.get("category")
+            }
+        except Exception as e:
+            logger.warning("category_settings load failed: %s", e)
+
     latest_run = risk_runs[0] if risk_runs else None
+    effective_score = None
+    if latest_run and latest_run.get("categories") and category_settings:
+        effective_score, _adj_cats = _apply_category_settings(latest_run["categories"], category_settings)
+
+    # Compute financial impact metrics for Risk Overview
     risk_impact: dict = {}
     if latest_run and latest_run.get("score") is not None:
-        score = int(latest_run["score"])
+        score = effective_score if effective_score is not None else int(latest_run["score"])
         industry_str = (company.get("industry") or "").lower()
         sect_mult = 1.5
         for kw, mult in _SECTOR_MULTIPLIERS.items():
@@ -1012,6 +1753,11 @@ async def _company_detail_inner(req: Request, company_id: str):
             "risk_impact": risk_impact,
             "score_history": score_history,
             "delta": delta,
+            "playbooks": _PLAYBOOKS,
+            "category_settings": category_settings,
+            "effective_score": effective_score,
+            "editable_categories": (list(_RISK_CATEGORIES) if user_role == "admin"
+                                    else ([user_role] if user_role in _RISK_CATEGORIES else [])),
             "msg": msg,
             "error": error,
             "app_name": settings.APP_NAME,
@@ -1173,6 +1919,13 @@ async def _run_combined_job(
         sel_own             = [r for r in staging_rows if r["entity_type"] == "own"]
         sel_competitor_rows = [r for r in staging_rows if r["entity_type"] == "competitor"]
 
+        # Real "materials found" count — the `total` param is the (often empty)
+        # frontend pre-fetch; the pipeline gathers/filters server-side. Use the
+        # number that passed the AI filter, falling back to raw gathered.
+        materials_found = len(staging_rows) or sum(
+            int(b.get("raw", 0) or 0) for b in pipeline_result.get("source_stats", [])
+        ) or total
+
         # Convert staging rows to format expected by CI / crisis / monitoring
         sel_competitor_articles = [
             {
@@ -1200,7 +1953,7 @@ async def _run_combined_job(
                 {"title": r["title"], "url": r["url"], "source": r["source_type"], "date": r["pub_date"]}
                 for r in sel_own[:20]
             ],
-            "total_items":    total,
+            "total_items":    materials_found,
             "selected_items": len(sel_own),
             "generated_at":   pipeline_result.get("generated_at"),
             "source_stats":   pipeline_result.get("source_stats", []),
@@ -1228,6 +1981,9 @@ async def _run_combined_job(
                         "risk_fingerprints": pipeline_result.get("risk_fingerprints", []),
                         "previous_run_id":   pipeline_result.get("previous_run_id"),
                         "positive_signals":  pipeline_result.get("positive_signals", []),
+                        "loss_scenarios":    pipeline_result.get("loss_scenarios", []),
+                        "domain_factors":    pipeline_result.get("domain_factors", {}),
+                        "domain_scores":     pipeline_result.get("domain_scores", {}),
                         "top_articles": [
                             {
                                 "title":     r["title"],
@@ -1486,6 +2242,193 @@ async def company_analyze_combined(req: Request, company_id: str):
     ))
     logger.info("[job %s] created for company %s (pipeline v2)", job_id, company_id)
     return {"job_id": job_id}
+
+
+@app.post("/companies/{company_id}/copilot")
+async def risk_copilot(req: Request, company_id: str):
+    """AI copilot — answers questions grounded in this company's risk data."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    if not settings.ANTHROPIC_API_KEY:
+        return {"error": "AI не настроен"}
+
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    question = (body.get("question") or "").strip()[:500]
+    if not question:
+        return {"error": "Пустой вопрос"}
+    # Prior turns for multi-turn context (last 6 messages, sanitized)
+    history_msgs: list[dict] = []
+    for m in (body.get("history") or [])[-6:]:
+        role = m.get("role")
+        text = (m.get("text") or "").strip()[:1000]
+        if role in ("user", "assistant") and text:
+            history_msgs.append({"role": role, "content": text})
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    company_name = ""
+    ctx_parts: list[str] = []
+    try:
+        if svc:
+            crows = await supabase.rest_select_service(
+                table="companies", service_key=svc, select="name,industry",
+                query_params={"id": f"eq.{company_id}"},
+            )
+            if crows:
+                company_name = crows[0].get("name", "")
+                ctx_parts.append(f"Компания: {company_name} ({crows[0].get('industry','') or 'отрасль н/д'})")
+
+            rruns = await supabase.rest_select_service(
+                table="risk_runs", service_key=svc,
+                select="score,advice,categories,risks,positive_signals,loss_scenarios,created_at",
+                query_params={"company_id": f"eq.{company_id}", "order": "created_at.desc", "limit": "2"},
+            )
+            if rruns:
+                r = rruns[0]
+                ctx_parts.append(f"Общий риск-скор: {r.get('score')}/100")
+                # Trend vs previous run
+                if len(rruns) > 1 and rruns[1].get("score") is not None and r.get("score") is not None:
+                    diff = int(r["score"]) - int(rruns[1]["score"])
+                    trend = "вырос" if diff > 0 else "снизился" if diff < 0 else "без изменений"
+                    ctx_parts.append(f"Динамика: {trend} ({'+' if diff>0 else ''}{diff} с прошлого прогона)")
+                cats = r.get("categories") or {}
+                cat_line = ", ".join(
+                    f"{k}={(v.get('score') if isinstance(v, dict) else '?')}" for k, v in cats.items()
+                )
+                if cat_line:
+                    ctx_parts.append(f"Скоры по категориям: {cat_line}")
+                # Split incidents vs forecast risks
+                risks = r.get("risks") or []
+                incidents = [rr for rr in risks if rr.get("type") == "incident"]
+                forecasts = [rr for rr in risks if rr.get("type") != "incident"]
+                if incidents:
+                    il = "\n".join(
+                        f"  • [{rr.get('category','')}] {rr.get('title') or rr.get('text','')} (скор {rr.get('score','?')})"
+                        for rr in incidents[:8]
+                    )
+                    ctx_parts.append(f"АКТИВНЫЕ ИНЦИДЕНТЫ (уже произошло):\n{il}")
+                if forecasts:
+                    fl = "\n".join(
+                        f"  • [{rr.get('category','')}] {rr.get('title') or rr.get('text','')} (скор {rr.get('score','?')}"
+                        f"{', повтор ×'+str(rr.get('consecutive_runs')) if rr.get('consecutive_runs',1)>1 else ''})"
+                        for rr in forecasts[:10]
+                    )
+                    ctx_parts.append(f"ПРОГНОЗЫ РИСКОВ (могут произойти):\n{fl}")
+                pos = r.get("positive_signals") or []
+                if pos:
+                    pl = ", ".join(s.get("title", "") for s in pos[:5] if s.get("title"))
+                    if pl:
+                        ctx_parts.append(f"Позитивные сигналы: {pl}")
+                loss = r.get("loss_scenarios") or []
+                if loss:
+                    ll = "\n".join(
+                        f"  • {ls.get('title','')}: базовый сценарий — {((ls.get('base') or {}).get('money','н/д'))}"
+                        for ls in loss[:4]
+                    )
+                    ctx_parts.append(f"Оценка потерь (если риск реализуется):\n{ll}")
+                if r.get("advice"):
+                    ctx_parts.append(f"Текущая рекомендация системы: {r['advice']}")
+    except Exception as e:
+        logger.warning("copilot context load failed: %s", e)
+
+    context = "\n".join(ctx_parts) or "Данных анализа пока нет."
+
+    def _call():
+        import anthropic as _a
+        c = _a.Anthropic(api_key=settings.ANTHROPIC_API_KEY, max_retries=1)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=900,
+            system=(
+                "Ты — Senior Risk Analyst платформы CONEXIAI: опытный риск-аналитик уровня "
+                "консультанта Big-4. Отвечаешь на русском, как живой эксперт — уверенно, "
+                "конкретно, с цифрами из данных компании.\n\n"
+                "ФОРМАТ ОТВЕТА (адаптируй под вопрос, не лей воду):\n"
+                "1. **Короткий вывод** — 1-2 предложения, прямой ответ по сути.\n"
+                "2. **Почему / на чём основано** — 2-4 пункта списком (используй «• »), "
+                "ссылайся на конкретные риски, скоры, динамику, цифры потерь.\n"
+                "3. **Что делать** — 1-3 конкретных действия (если уместно), с приоритетом.\n\n"
+                "ПРАВИЛА:\n"
+                "- Используй лёгкое форматирование: **жирный** для акцентов, «• » для списков.\n"
+                "- Оперируй цифрами из данных (скоры, потери в ₸/$, динамика), не общими фразами.\n"
+                "- Различай ИНЦИДЕНТ (факт) и РИСК (прогноз) — это разные вещи.\n"
+                "- Если данных не хватает — честно скажи, не выдумывай.\n"
+                "- Тон: спокойный профессионал, который видел сотни кризисов. Без канцелярита и воды.\n"
+                "- Объём: по делу, обычно 4-8 строк. Глубже — только если вопрос требует.\n\n"
+                f"ДАННЫЕ КОМПАНИИ:\n{context}"
+            ),
+            messages=history_msgs + [{"role": "user", "content": question}],
+        )
+        return msg.content[0].text.strip()
+
+    try:
+        answer = await asyncio.to_thread(_call)
+        return {"answer": answer}
+    except Exception as e:
+        logger.warning("copilot call failed: %s", e)
+        return {"error": "Не удалось получить ответ"}
+
+
+@app.post("/companies/{company_id}/loss-scenarios")
+async def loss_scenarios(req: Request, company_id: str):
+    """Lazily generate (and cache) loss scenarios for the latest run's top risks (AI-1)."""
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "Не авторизован"}
+    if not settings.ANTHROPIC_API_KEY or not settings.SUPABASE_SERVICE_KEY:
+        return {"error": "AI не настроен"}
+
+    svc = settings.SUPABASE_SERVICE_KEY
+    try:
+        rows = await supabase.rest_select_service(
+            table="risk_runs", service_key=svc,
+            select="id,risks,loss_scenarios",
+            query_params={"company_id": f"eq.{company_id}", "order": "created_at.desc", "limit": "1"},
+        )
+    except Exception as e:
+        logger.warning("loss_scenarios load failed: %s", e)
+        rows = []
+    if not rows:
+        return {"scenarios": []}
+
+    run = rows[0]
+    cached = run.get("loss_scenarios")
+    if cached:                       # already generated — return cache
+        return {"scenarios": cached, "cached": True}
+
+    risks = run.get("risks") or []
+    if not risks:
+        return {"scenarios": []}
+
+    industry = ""
+    try:
+        crows = await supabase.rest_select_service(
+            table="companies", service_key=svc, select="name,industry",
+            query_params={"id": f"eq.{company_id}"},
+        )
+        company_name = crows[0]["name"] if crows else ""
+        industry = (crows[0].get("industry") or "") if crows else ""
+    except Exception:
+        company_name = ""
+
+    from .ai import generate_loss_scenarios as _gls
+    top = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
+    scen = await asyncio.to_thread(_gls, company_name, top, industry, settings.ANTHROPIC_API_KEY)
+
+    # Cache back onto the run so next load is instant
+    if scen:
+        try:
+            await supabase.rest_update_service(
+                f"rest/v1/risk_runs?id=eq.{run['id']}", service_key=svc,
+                patch={"loss_scenarios": scen},
+            )
+        except Exception as e:
+            logger.warning("loss_scenarios cache write failed: %s", e)
+
+    return {"scenarios": scen}
 
 
 @app.get("/companies/{company_id}/analyze-status/{job_id}")
@@ -1872,6 +2815,7 @@ async def members_invite(
                     "role": role_clean,
                     "owner_user_id": user.get("id"),
                     "invite_token": invite_token,
+                    "status": "pending",
                 },
             )
             logger.info("Member row created for %s", email_clean)
@@ -1900,14 +2844,36 @@ async def members_invite(
             else:
                 raise
 
-        # Send invite email via n8n if webhook is configured
-        if settings.N8N_INVITE_WEBHOOK_URL:
-            logger.info("Sending invite webhook to %s", settings.N8N_INVITE_WEBHOOK_URL)
-            _role_labels = {
-                "media": "InfoField & Media", "hr": "Human Resources",
-                "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
-            }
-            base_url = str(req.base_url).rstrip("/")
+        _role_labels = {
+            "media": "InfoField & Media", "hr": "Human Resources",
+            "gr": "Gov. Relations", "pr": "PR Environment", "market": "Market & Industry",
+        }
+        base_url = str(req.base_url).rstrip("/")
+        join_url = f"{base_url}/join/{invite_token}"
+        role_label = _role_labels.get(role_clean or "", "")
+        _email_sent = False
+
+        # 1) Preferred: direct Gmail send (if Google OAuth configured)
+        if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_REFRESH_TOKEN:
+            try:
+                res = await gcal_client.send_invite_email(
+                    to_email=email_clean,
+                    company_name=company_name,
+                    role_label=role_label,
+                    join_url=join_url,
+                    inviter_name=(user.get("user_metadata", {}) or {}).get("full_name") or user.get("email", ""),
+                    client_id=settings.GOOGLE_CLIENT_ID,
+                    client_secret=settings.GOOGLE_CLIENT_SECRET,
+                    refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                )
+                _email_sent = bool(res.get("ok"))
+                if not _email_sent:
+                    logger.warning("Invite Gmail send: %s", res.get("error"))
+            except Exception as e:
+                logger.error("Invite Gmail send failed: %s", e)
+
+        # 2) Fallback: n8n webhook (if configured and Gmail didn't send)
+        if not _email_sent and settings.N8N_INVITE_WEBHOOK_URL:
             try:
                 await supabase.webhook_post(
                     settings.N8N_INVITE_WEBHOOK_URL,
@@ -1916,16 +2882,18 @@ async def members_invite(
                         "company_id": company_id,
                         "company_name": company_name,
                         "role": role_clean,
-                        "role_label": _role_labels.get(role_clean or "", ""),
-                        "join_url": f"{base_url}/join/{invite_token}",
+                        "role_label": role_label,
+                        "join_url": join_url,
                         "invited_by_user_id": user.get("id"),
                     },
                 )
+                _email_sent = True
                 logger.info("Invite webhook sent OK")
             except Exception as e:
                 logger.error("Invite webhook failed: %s", e)
-        else:
-            logger.warning("N8N_INVITE_WEBHOOK_URL not set, skipping email")
+
+        if not _email_sent:
+            logger.warning("Invite created but no email sent (no Google/n8n configured). Join URL: %s", join_url)
 
     except Exception as e:
         logger.error("Invite failed: %s", e)
@@ -1935,6 +2903,31 @@ async def members_invite(
 @app.get("/join/{token}", response_class=HTMLResponse)
 async def join_page(req: Request, token: str):
     service_key = settings.SUPABASE_SERVICE_KEY
+
+    # Look up the invite first so we know who it's for
+    _invited_email = ""
+    try:
+        if service_key:
+            _pre = await supabase.rest_select_service(
+                table="company_members", service_key=service_key,
+                select="invited_email,company_id",
+                query_params={"invite_token": f"eq.{token}"},
+            )
+            if _pre:
+                _invited_email = (_pre[0].get("invited_email") or "").lower().strip()
+    except Exception:
+        pass
+
+    # Already logged in AS THE INVITED PERSON → activate immediately
+    existing_user = await get_current_user(req)
+    if existing_user:
+        cur_email = (existing_user.get("email") or "").lower().strip()
+        if _invited_email and cur_email == _invited_email:
+            cid = await _activate_invite_token(token, existing_user.get("id", ""))
+            if cid:
+                return RedirectResponse(url=f"/companies/{cid}?msg=joined", status_code=302)
+        # Logged in as someone else → show the invite page (don't auto-join the wrong account)
+
     try:
         if service_key:
             rows = await supabase.rest_select_service(
@@ -2458,7 +3451,7 @@ async def category_detail(req: Request, company_id: str, category_key: str):
         supabase.rest_select(
             table="risk_runs",
             access_token=effective_token,
-            select="id,categories",
+            select="id,categories,created_at",
             order_by="created_at.desc",
             query_params={"company_id": f"eq.{company_id}"},
         ),
@@ -2515,6 +3508,20 @@ async def category_detail(req: Request, company_id: str, category_key: str):
 
     icon, label, color = _CAT_META[category_key]
     cat_data = cats.get(category_key) if cats else None
+
+    # Per-category score history across runs (oldest → newest, last 12) for the trend chart
+    cat_history: list[dict] = []
+    for run in reversed(risk_runs or []):
+        rc = (run.get("categories") or {}).get(category_key)
+        if rc and rc.get("score") is not None:
+            try:
+                cat_history.append({
+                    "score": int(rc["score"]),
+                    "date": (run.get("created_at") or "")[:10],
+                })
+            except (TypeError, ValueError):
+                pass
+    cat_history = cat_history[-12:]
 
     # ── HR: live hh.kz vacancies ─────────────────────────────────────
     hh_data: dict = {}
@@ -2579,6 +3586,7 @@ async def category_detail(req: Request, company_id: str, category_key: str):
             "cat_color": color,
             "cat": cat_data,
             "cats": cats,
+            "cat_history": cat_history,
             "recent_news": recent_news,
             "hh_data": hh_data,
             "app_name": settings.APP_NAME,

@@ -5,6 +5,8 @@ from typing import Any
 
 import anthropic
 
+from . import risk_formulas as rf
+
 logger = logging.getLogger("conexiai")
 
 _client: anthropic.AsyncAnthropic | None = None
@@ -1195,6 +1197,162 @@ async def generate_communication(
     return ""
 
 
+def generate_loss_scenarios(
+    company_name: str,
+    risks: list[dict],
+    industry: str,
+    api_key: str,
+) -> list[dict]:
+    """For the top risks, quantify loss in 3 branches: worst / base / reacted.
+    Returns list aligned to input risks: [{title, category, worst:{...}, base:{...}, reacted:{...}}].
+    Sync — call via asyncio.to_thread()."""
+    import anthropic as _a, json as _json
+    top = [r for r in (risks or []) if (r.get("title") or r.get("text"))][:5]
+    if not top or not api_key:
+        return []
+
+    lines = "\n".join(
+        f"[{i}] ({r.get('category','')}) {r.get('title') or r.get('text','')}"
+        for i, r in enumerate(top)
+    )
+    prompt = (
+        f"Компания: «{company_name}» (отрасль: {industry or 'н/д'}).\n\n"
+        f"Для каждого риска оцени ПОТЕРИ в 3 сценариях. Будь конкретным с цифрами "
+        f"(деньги в USD, отток клиентов в %, удар по репутации −баллов из 100, срок в днях).\n\n"
+        f"Риски:\n{lines}\n\n"
+        f"Верни JSON: {{\"scenarios\": [\n"
+        f"  {{\"i\": 0,\n"
+        f"    \"worst\":   {{\"money\": \"$500K\", \"churn\": \"25%\", \"rep\": -30, \"days\": 7,  \"text\": \"что произойдёт без реакции\"}},\n"
+        f"    \"base\":    {{\"money\": \"$200K\", \"churn\": \"10%\", \"rep\": -15, \"days\": 14, \"text\": \"наиболее вероятный исход\"}},\n"
+        f"    \"reacted\": {{\"money\": \"$50K\",  \"churn\": \"3%\",  \"rep\": -5,  \"days\": 30, \"text\": \"если среагировать быстро\"}}\n"
+        f"  }}\n"
+        f"]}} — ровно {len(top)} элементов, по индексу i."
+    )
+
+    def _call():
+        c = _a.Anthropic(api_key=api_key, max_retries=0)
+        msg = c.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        return _parse_json(raw).get("scenarios", [])
+
+    try:
+        scen = _call()
+    except Exception as e:
+        logger.warning("generate_loss_scenarios failed: %s", e)
+        return []
+
+    by_i = {s.get("i"): s for s in scen if isinstance(s, dict)}
+    out = []
+    for idx, r in enumerate(top):
+        s = by_i.get(idx, {})
+        if not s:
+            continue
+        out.append({
+            "title":    (r.get("title") or r.get("text") or "")[:100],
+            "category": r.get("category", ""),
+            "worst":    s.get("worst", {}),
+            "base":     s.get("base", {}),
+            "reacted":  s.get("reacted", {}),
+        })
+    return out
+
+
+# ── Risk Score formula ────────────────────────────────────────────────────
+# Risk Score = (Severity × Probability × Velocity) + Signal Density
+# The AI rates each of the 4 fundamentals 0–10 per category; the score is then
+# computed deterministically here (transparent + tunable). Default mapping to
+# 0–100: the multiplicative core (S×P×V) contributes up to CORE_W points,
+# Signal Density adds up to DENSITY_W points.
+RISK_FORMULA_CORE_W = 70
+RISK_FORMULA_DENSITY_W = 30
+
+
+def compute_risk_score(severity, probability, velocity, signal_density,
+                       core_w: float = RISK_FORMULA_CORE_W,
+                       density_w: float = RISK_FORMULA_DENSITY_W) -> int:
+    """4-factor risk score. Each factor expected on a 0–10 scale.
+
+    Risk Score = (Severity × Probability × Velocity) + Signal Density,
+    normalised to 0–100 via (core_w, density_w)."""
+    def _c(v):
+        try:
+            return max(0.0, min(10.0, float(v)))
+        except (TypeError, ValueError):
+            return 5.0
+    s, p, v, d = _c(severity), _c(probability), _c(velocity), _c(signal_density)
+    core = (s / 10.0) * (p / 10.0) * (v / 10.0)          # 0..1
+    return int(round(max(0, min(100, core * core_w + (d / 10.0) * density_w))))
+
+
+_FACTOR_EXTRACT_PROMPT = """Ты — экстрактор факторов риска. НЕ оценивай общий риск и НЕ выставляй итоговый балл.
+
+Прочитай сигнал (новость, пост, ответ руководителя) и оцени КАЖДЫЙ фактор по шкале 0–10
+(0 = отсутствует, 10 = максимум). Для каждого типа риска дай короткое обоснование «why» (1 строка).
+Если тип риска нерелевантен сигналу — ставь все его факторы в 0.
+
+Факторы по типам риска:
+- Финансовый (financial): probability, loss
+- Операционный (operational): probability, impact, duration
+- Репутационный (reputational): reach, sentiment, audience_influence
+- Регуляторный (regulatory): inspection_probability, potential_fine
+- Поставщик (supplier): failure_probability, downtime_loss
+
+Верни СТРОГО такой JSON:
+{
+  "financial":    {"probability": 0-10, "loss": 0-10, "why": "..."},
+  "operational":  {"probability": 0-10, "impact": 0-10, "duration": 0-10, "why": "..."},
+  "reputational": {"reach": 0-10, "sentiment": 0-10, "audience_influence": 0-10, "why": "..."},
+  "regulatory":   {"inspection_probability": 0-10, "potential_fine": 0-10, "why": "..."},
+  "supplier":     {"failure_probability": 0-10, "downtime_loss": 0-10, "why": "..."}
+}"""
+
+
+def clean_extracted_factors(data: dict | None) -> dict:
+    """Validate + clamp the model's factor JSON into the canonical 0–10 shape.
+    Each domain keeps its formula factors plus a one-line 'why' (transparency)."""
+    data = data or {}
+    out: dict[str, dict] = {}
+    for domain, keys in rf.DOMAIN_FACTORS.items():
+        d = data.get(domain) if isinstance(data.get(domain), dict) else {}
+        cleaned: dict[str, Any] = {k: rf.clamp_factor(d.get(k)) for k in keys}
+        cleaned["why"] = str(d.get("why") or d.get("reason") or "")[:200]
+        out[domain] = cleaned
+    return out
+
+
+async def extract_risk_factors(text: str, api_key: str) -> dict:
+    """The model's ONLY scoring job: read a signal and extract risk factors
+    (0–10) per domain + a one-line justification. It never produces a score —
+    `risk_formulas` does that deterministically from these factors."""
+    client = get_client(api_key)
+    try:
+        msg = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=900,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user",
+                       "content": _FACTOR_EXTRACT_PROMPT + "\n\nСИГНАЛ:\n" + (text or "")[:6000]}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = _parse_json(raw) or {}
+    except Exception as e:
+        logger.warning("extract_risk_factors failed: %s", e)
+        data = {}
+    return clean_extracted_factors(data)
+
+
 def analyze_with_history(
     company_name: str,
     own_rows: list[dict],
@@ -1202,6 +1360,8 @@ def analyze_with_history(
     prev_fps: list[dict],
     api_key: str,
     prev_articles: list[dict] | None = None,
+    category_hints: dict | None = None,
+    scoring_instruction: str = "",
 ) -> dict[str, Any]:
     """
     Risk analysis with previous-run history context.
@@ -1264,6 +1424,35 @@ def analyze_with_history(
 {_fmt_prev_articles(prev_articles)}
 """
 
+    # Department preferences (preferred sources + watch-keywords per category)
+    hints_section = ""
+    _cat_ru = {"media": "InfoField & Media", "hr": "HR", "gr": "Gov. Relations",
+               "pr": "PR", "market": "Market"}
+    if category_hints:
+        _hl = []
+        for cat, h in category_hints.items():
+            parts = []
+            if h.get("sources"):
+                parts.append("приоритетные источники: " + ", ".join(h["sources"]))
+            if h.get("keywords"):
+                parts.append("следить за словами: " + ", ".join(h["keywords"]))
+            if parts:
+                _hl.append(f"  [{_cat_ru.get(cat, cat)}] " + "; ".join(parts))
+        if _hl:
+            hints_section = (
+                "\n=== НАСТРОЙКИ ОТДЕЛОВ (учитывай при оценке категорий) ===\n"
+                + "\n".join(_hl)
+                + "\nЕсли встречаешь указанные ключевые слова или материалы из приоритетных "
+                  "источников в соответствующей категории — придай им больший вес.\n"
+            )
+
+    scoring_instruction_section = ""
+    if scoring_instruction and scoring_instruction.strip():
+        scoring_instruction_section = (
+            "\n=== ДОПОЛНИТЕЛЬНАЯ ИНСТРУКЦИЯ ПО ОЦЕНКЕ (от пользователя) ===\n"
+            + scoring_instruction.strip()[:1500] + "\n"
+        )
+
     prompt = f"""Компания: «{company_name}». Дата: {today}.
 
 === МАТЕРИАЛЫ ПО НАШЕЙ КОМПАНИИ (прошли строгий AI-фильтр) ===
@@ -1273,13 +1462,27 @@ def analyze_with_history(
 {_fmt_comp(comp_rows)}
 
 === РИСКИ ИЗ ПРЕДЫДУЩЕГО АНАЛИЗА ===
-{_fmt_prev(prev_fps)}{prev_arts_section}
+{_fmt_prev(prev_fps)}{prev_arts_section}{hints_section}
 
+=== 4 ОСНОВЫ RISK SCORE (оценивай каждую категорию по этим факторам, шкала 0–10) ===
+1. severity (серьёзность) — насколько это опасно для компании
+2. probability (вероятность) — насколько вероятно развитие/реализация
+3. velocity (скорость) — насколько быстро это развивается
+4. signal_density (плотность сигналов) — сколько подтверждений есть (внутренних + внешних источников)
+Итоговый score категории считается по формуле: Risk Score = (Severity × Probability × Velocity) + Signal Density.
+НЕ вычисляй score сам — просто честно проставь 4 фактора (0–10), систему посчитает балл сама.
+{scoring_instruction_section}
 Задача:
-1. Выяви риски по 5 категориям на основе новых материалов
-2. Сравни с предыдущими рисками — повторяющийся риск важнее нового
+1. Выяви риски по 5 категориям на основе новых материалов и оцени 4 фактора для каждой категории
+2. Сравни с предыдущими рисками — повторяющийся риск важнее нового (выше probability/velocity)
 3. Учти активность конкурентов при оценке market-рисков
 4. Отдельно выдели ПОЛОЖИТЕЛЬНЫЕ сигналы — новости которые снижают риск компании
+5. Для КАЖДОГО риска определи тип:
+   - "incident" — событие УЖЕ ПРОИЗОШЛО, есть факт в материалах (иск подан, скандал опубликован,
+     сокращения объявлены, штраф выписан, авария случилась). Указывай тип incident ТОЛЬКО при наличии
+     свершившегося факта в источниках.
+   - "risk" — прогноз/угроза, которая МОЖЕТ случиться (возможен отток, репутация под угрозой, риск проверки).
+   Инцидент важнее риска — это уже реальность, а не вероятность.
 
 Положительные сигналы: рост прибыли, выигранные суды, награды, расширение бизнеса,
 позитивные отзывы, успешные партнёрства, рост найма, ESG-инициативы и т.д.
@@ -1287,16 +1490,16 @@ def analyze_with_history(
 Верни JSON строго такой структуры:
 {{
   "categories": {{
-    "media":  {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "hr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "gr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "pr":     {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}},
-    "market": {{"score": 0-100, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low"}}]}}
+    "media":  {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "hr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "gr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "pr":     {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}},
+    "market": {{"severity": 0-10, "probability": 0-10, "velocity": 0-10, "signal_density": 0-10, "risks": [{{"title": "...", "text": "...", "severity": "high|medium|low", "type": "risk|incident"}}]}}
   }},
   "overall_score": 0-100,
   "advice": "2-3 предложения руководству",
   "risks": [
-    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "text": "описание", "severity": "high|medium|low", "score": 0-100}}
+    {{"category": "media|hr|gr|pr|market", "title": "краткое название", "text": "описание", "severity": "high|medium|low", "score": 0-100, "type": "risk|incident"}}
   ],
   "positive_signals": [
     {{"category": "media|hr|gr|pr|market", "title": "краткое название", "weight": "low|medium|high"}}
@@ -1346,17 +1549,34 @@ def analyze_with_history(
     categories: dict[str, Any] = {}
     for cat in ("media", "hr", "gr", "pr", "market"):
         cd = raw_cats.get(cat, {})
-        score = max(0, min(100, int(cd.get("score", 50))))
+        # 4-factor formula: (Severity × Probability × Velocity) + Signal Density.
+        # Falls back to a direct "score" if the model didn't return the factors.
+        if any(k in cd for k in ("severity", "probability", "velocity", "signal_density")):
+            score = compute_risk_score(
+                cd.get("severity", 5), cd.get("probability", 5),
+                cd.get("velocity", 5), cd.get("signal_density", 5))
+            factors = {
+                "severity":       cd.get("severity", 5),
+                "probability":    cd.get("probability", 5),
+                "velocity":       cd.get("velocity", 5),
+                "signal_density": cd.get("signal_density", 5),
+            }
+        else:
+            score = max(0, min(100, int(cd.get("score", 50))))
+            factors = None
         risks = [
             {
                 "title":    (r.get("title") or r.get("text") or "")[:100],
                 "text":     r.get("text", "")[:300],
                 "severity": r.get("severity", "medium") if isinstance(r, dict) else "medium",
                 "sources":  [],
+                "type":     "incident" if isinstance(r, dict) and r.get("type") == "incident" else "risk",
             }
             for r in cd.get("risks", [])[:5]
         ]
         categories[cat] = {"score": score, "risks": risks}
+        if factors:
+            categories[cat]["factors"] = factors
 
     overall = max(0, min(100,
         round(sum(v["score"] for v in categories.values()) / len(categories))
@@ -1379,6 +1599,7 @@ def analyze_with_history(
                 "severity": r.get("severity", "medium"),
                 "score":    50,
                 "sources":  [],
+                "type":     "incident" if r.get("type") == "incident" else "risk",
             })
     for r in raw.get("risks", []):
         if not isinstance(r, dict):
@@ -1394,6 +1615,7 @@ def analyze_with_history(
             "severity": r.get("severity", "medium"),
             "score":    r.get("score", 50),
             "sources":  [],
+            "type":     "incident" if r.get("type") == "incident" else "risk",
         })
 
     # Validate and clean positive signals

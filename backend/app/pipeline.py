@@ -491,6 +491,26 @@ async def run_pipeline(
         except Exception as e:
             logger.warning("[pipeline] load prev run failed: %s", e)
 
+    # ── Load per-category settings (preferred sources + keywords) ─────────────
+    category_hints: dict = {}
+    if sk:
+        try:
+            cs_rows = await supabase.rest_select_service(
+                table="category_settings", service_key=sk,
+                select="category,preferred_sources,custom_keywords",
+                query_params={"company_id": f"eq.{company_id}"},
+            ) or []
+            for r in cs_rows:
+                cat = r.get("category")
+                srcs = r.get("preferred_sources") or []
+                kws = r.get("custom_keywords") or []
+                if cat and (srcs or kws):
+                    category_hints[cat] = {"sources": srcs, "keywords": kws}
+            if category_hints:
+                logger.info("[pipeline] category hints: %s", list(category_hints.keys()))
+        except Exception as e:
+            logger.warning("[pipeline] category_settings load failed: %s", e)
+
     # ── Step 4: AI risk analysis with history ─────────────────────────────────
     _stage(" Анализ рисков с учётом истории…")
 
@@ -508,6 +528,7 @@ async def run_pipeline(
         prev_fps=prev_fps,
         prev_articles=prev_articles,
         api_key=api_key,
+        category_hints=category_hints,
     )
 
     # Apply escalation + decay + positive signal reduction
@@ -518,6 +539,18 @@ async def run_pipeline(
                     ", ".join(f"{s.get('category')}:{s.get('weight')}" for s in positive_signals[:5]))
     risks, decayed_fps = escalate_risks(analysis.get("risks", []), prev_fps, positive_signals)
     analysis["risks"] = risks
+
+    # ── Loss scenarios for top risks (AI-1) ──────────────────────────────────
+    loss_scenarios: list[dict] = []
+    if api_key and risks:
+        try:
+            from .ai import generate_loss_scenarios as _gls
+            _top_sorted = sorted(risks, key=lambda r: r.get("score", 0), reverse=True)
+            loss_scenarios = await asyncio.to_thread(_gls, company_name, _top_sorted, "", api_key)
+            logger.info("[pipeline] generated %d loss scenarios", len(loss_scenarios))
+        except Exception as e:
+            logger.warning("[pipeline] loss scenarios failed: %s", e)
+    analysis["loss_scenarios"] = loss_scenarios
 
     # Fingerprints = active risks + decaying (not yet resolved) risks
     new_fps = [
@@ -536,6 +569,7 @@ async def run_pipeline(
         "generated_at":      datetime.now(timezone.utc).isoformat(),
         "previous_run_id":   prev_run_id,
         "positive_signals":  positive_signals,
+        "loss_scenarios":    loss_scenarios,
         "risk_fingerprints": new_fps,
         "staging_rows":      staging_rows,
         "source_stats": [
@@ -550,5 +584,46 @@ async def run_pipeline(
             for b in batches
         ],
     })
+
+    # ── Client per-type risk model (financial/operational/reputational/…) ────
+    # Extract 0–10 factors from gathered signals; scores computed by formula.
+    try:
+        from . import risk_formulas as _rf
+        from .ai import extract_risk_factors as _erf
+        _sig_lines = []
+        for r in own_rows[:40]:
+            _note = (r.get("risk_note") or "").strip()
+            _sig_lines.append(f"- {r.get('title','')}" + (f" | {_note}" if _note else ""))
+        domain_factors: dict = {}
+        if _sig_lines and api_key:
+            _sig_text = (f"Компания: {company_name}\nСигналы:\n" + "\n".join(_sig_lines))[:6000]
+            domain_factors = await _erf(_sig_text, api_key)
+        active_formulas: dict = {}
+        if sk:
+            try:
+                _frows = await supabase.rest_select_service(
+                    table="formula_defs", service_key=sk,
+                    select="domain,expression,variables",
+                    query_params={"company_id": f"eq.{company_id}",
+                                  "is_active": "eq.true", "source": "eq.custom"}) or []
+                for _fr in _frows:
+                    if _fr.get("domain") in _rf.DOMAINS and _fr.get("expression"):
+                        active_formulas[_fr["domain"]] = {
+                            "expression": _fr["expression"], "variables": _fr.get("variables")}
+            except Exception:
+                active_formulas = {}
+        analysis["domain_factors"] = domain_factors
+        analysis["domain_scores"] = _rf.score_all(domain_factors, active_formulas) if domain_factors else {}
+        if sk and domain_factors:
+            try:
+                await supabase.rest_insert_service("signal_factors", sk, [{
+                    "company_id": company_id, "signal_text": f"Прогон · {company_name}",
+                    "source": "analysis", "factors": domain_factors}])
+            except Exception:
+                pass
+    except Exception as _e:
+        logger.warning("[pipeline] per-type risk model failed: %s", _e)
+        analysis.setdefault("domain_factors", {})
+        analysis.setdefault("domain_scores", {})
 
     return analysis

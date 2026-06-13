@@ -20,4 +20,23 @@ alter table risk_runs
   add column if not exists categories       jsonb,
   add column if not exists scenarios        jsonb,
   add column if not exists positive_signals jsonb,
-  add column if not exists top_articles     jsonb;
+  add column if not exists top_articles     jsonb,
+  add column if not exists loss_scenarios   jsonb;
+
+-- Per-category scoring settings (weight + sensitivity) — department "cabinets"
+create table if not exists category_settings (
+  company_id        uuid not null,
+  category          text not null,
+  weight            numeric not null default 1.0,
+  sensitivity       numeric not null default 1.0,
+  preferred_sources jsonb,
+  custom_keywords   jsonb,
+  updated_by        uuid,
+  updated_at        timestamptz default now(),
+  primary key (company_id, category)
+);
+
+-- If the table already exists, add the new columns:
+alter table category_settings
+  add column if not exists preferred_sources jsonb,
+  add column if not exists custom_keywords   jsonb;

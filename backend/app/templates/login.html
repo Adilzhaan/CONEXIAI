@@ -86,6 +86,7 @@
         <div class="divider"><span class="divider-text">или email</span></div>
 
         <form method="post" action="/login" id="login-form">
+          {% if invite %}<input type="hidden" name="invite" value="{{ invite }}" />{% endif %}
           <div class="field">
             <label for="email">Email</label>
             <input id="email" name="email" type="email" placeholder="you@company.com"
@@ -108,7 +109,7 @@
 
       <div style="text-align:center;margin-top:20px;font-size:13px;color:rgba(255,255,255,0.45)">
         Нет аккаунта?
-        <a href="/register" style="color:#a78bfa;font-weight:600;margin-left:4px">Создать аккаунт →</a>
+        <a href="/register{% if invite %}?invite={{ invite }}{% endif %}" style="color:#8fbcff;font-weight:600;margin-left:4px">Создать аккаунт →</a>
       </div>
 
     </div>

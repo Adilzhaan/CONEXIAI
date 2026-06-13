@@ -41,6 +41,11 @@ class ReportPDF(FPDF):
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
+    def rounded_rect(self, x: float, y: float, w: float, h: float,
+                     r: float, style: str = ""):
+        """Compat shim: fpdf2 ≥2.8 folded rounded_rect into rect(round_corners=…)."""
+        self.rect(x, y, w, h, style=style, round_corners=True, corner_radius=r)
+
     def section_title(self, text: str):
         self.ln(4)
         self.set_font(_FONT_NAME_BOLD, size=11)

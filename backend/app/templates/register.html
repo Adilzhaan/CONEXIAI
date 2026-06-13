@@ -22,7 +22,7 @@
         <span class="alert-icon">!</span>
         <div>
           Аккаунт с этим email уже существует.<br>
-          <a href="/login?email={{ prefill_email }}" style="color:#a78bfa;font-weight:600">Войдите в аккаунт →</a>
+          <a href="/login?email={{ prefill_email }}" style="color:#8fbcff;font-weight:600">Войдите в аккаунт →</a>
         </div>
       </div>
     {% endif %}
@@ -58,6 +58,7 @@
         <div class="divider"><span class="divider-text">или</span></div>
 
         <form method="post" action="/register" id="reg-form">
+          {% if invite %}<input type="hidden" name="invite" value="{{ invite }}" />{% endif %}
           <div class="field">
             <label for="full_name">Имя и фамилия</label>
             <input id="full_name" name="full_name" type="text"
@@ -95,7 +96,7 @@
 
       <div style="text-align:center;margin-top:20px;font-size:13px;color:rgba(255,255,255,0.45)">
         Уже есть аккаунт?
-        <a href="/login" style="color:#a78bfa;font-weight:600;margin-left:4px">Войти →</a>
+        <a href="/login{% if invite %}?invite={{ invite }}{% endif %}" style="color:#8fbcff;font-weight:600;margin-left:4px">Войти →</a>
       </div>
     {% endif %}
 

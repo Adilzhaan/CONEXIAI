@@ -6,13 +6,14 @@
 {% set member_only_rows = member_rows | rejectattr('role', 'eq', 'admin') | list %}
 {% set total = admin_rows|length + member_only_rows|length %}
 
-{% set ns = namespace(high=0, medium=0, low=0, no_data=0) %}
+{% set ns = namespace(high=0, medium=0, low=0, no_data=0, sum=0, cnt=0) %}
 {% for m in admin_rows %}
   {% set c = m.companies %}
   {% if c %}
     {% set risk = risk_map.get(c.id) %}
     {% if risk and risk.score is not none %}
       {% set s = risk.score | int %}
+      {% set ns.sum = ns.sum + s %}{% set ns.cnt = ns.cnt + 1 %}
       {% if s >= 65 %}{% set ns.high = ns.high + 1 %}
       {% elif s >= 35 %}{% set ns.medium = ns.medium + 1 %}
       {% else %}{% set ns.low = ns.low + 1 %}{% endif %}
@@ -41,16 +42,7 @@
   </aside>
 
   <div class="sidebar-content">
-    <div class="sidebar-topbar">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">Command Center</div>
-        <div style="font-size:11px;color:var(--text-muted)">{{ total }} компани{{ 'я' if total == 1 else ('и' if 2 <= total <= 4 else 'й') }} под наблюдением</div>
-      </div>
-      <a href="/companies/new" class="btn btn-primary btn-sm">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Добавить компанию
-      </a>
-    </div>
+    <div class="sidebar-topbar" style="display:none"></div>
 
     <div class="sidebar-wrap">
       <style>
@@ -144,13 +136,13 @@
         .co-cell-action { display:flex; justify-content:flex-end; }
         .co-open-btn {
           display:inline-flex; align-items:center; gap:6px;
-          font-size:13px; font-weight:600; color:#a78bfa;
+          font-size:13px; font-weight:600; color:#8fbcff;
           text-decoration:none; padding:8px 18px; border-radius:999px;
-          background:rgba(124,58,237,0.10); border:1px solid rgba(124,58,237,0.22);
+          background:rgba(59,130,246,0.10); border:1px solid rgba(59,130,246,0.22);
           transition:background 0.15s, transform 0.15s;
           white-space:nowrap;
         }
-        .co-open-btn:hover { background:rgba(124,58,237,0.20); text-decoration:none; transform:translateY(-1px); }
+        .co-open-btn:hover { background:rgba(59,130,246,0.20); text-decoration:none; transform:translateY(-1px); }
 
         /* ── Empty ── */
         .empty-state {
@@ -182,7 +174,7 @@
           transition:border-color 0.15s,box-shadow 0.15s;
         }
         .modal-field input:focus,.modal-field textarea:focus,.modal-field select:focus {
-          border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,0.18);
+          border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.18);
         }
         .modal-field input::placeholder,.modal-field textarea::placeholder { color:rgba(255,255,255,0.22); }
         .modal-field select option { background:#1a1040; }
@@ -204,9 +196,9 @@
         .tag-chip {
           display:inline-flex;align-items:center;gap:5px;
           padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;
-          background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;
+          background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);color:#8fbcff;
         }
-        .tag-chip-del { cursor:pointer;color:rgba(167,139,250,0.60);font-size:14px;line-height:1; }
+        .tag-chip-del { cursor:pointer;color:rgba(143,188,255,0.60);font-size:14px;line-height:1; }
         .tag-chip-del:hover { color:#f87171; }
 
         @media(max-width:900px) {
@@ -418,7 +410,143 @@
           .top-risks-hdr > :nth-child(4), .top-risk-row > :nth-child(4) { display:none; }
         }
       </style>
+      {% endif %}{# /legacy CEO if-false #}
 
+      {# ══════════════ DESIGN: Command Center (companies) ══════════════ #}
+      <style>
+        .cc-stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:30px; }
+        @media(max-width:800px){ .cc-stat-grid{ grid-template-columns:1fr; } }
+        .cc-co-track { display:flex; gap:18px; overflow-x:auto; scroll-snap-type:x mandatory; padding:4px 2px 16px; scrollbar-width:none; }
+        .cc-co-track::-webkit-scrollbar { display:none; }
+        .cc-co-card { scroll-snap-align:start; flex:0 0 460px; max-width:460px; }
+        @media(max-width:560px){ .cc-co-card{ flex-basis:86vw; } }
+      </style>
+
+      <div style="max-width:1180px;margin:0 auto">
+
+        <!-- header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:26px">
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:46px;font-weight:700;letter-spacing:-0.02em;line-height:1.05">Мои компании</div>
+          </div>
+          <a href="/companies/new" class="btn btn-primary" style="flex:0 0 auto;font-size:15px;padding:14px 22px">
+            <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Добавить компанию
+          </a>
+        </div>
+
+        <!-- stat cards -->
+        {% set _avg = ((ns.sum / ns.cnt) | round | int) if ns.cnt else None %}
+        {% set _stats = [
+          ('#f2766e','ВЫСОКИЙ РИСК','требует внимания', ns.high),
+          ('#f5b544','СРЕДНИЙ РИСК','под контролем', ns.medium),
+          ('#5b9dff','СРЕДНИЙ СКОР','по портфелю', (_avg if _avg is not none else '—')),
+        ] %}
+        <div class="cc-stat-grid">
+          {% for _col,_eyebrow,_sub,_val in _stats %}
+          <div style="display:flex;align-items:center;gap:18px;border-radius:18px;padding:20px 24px;background:linear-gradient(150deg, {{ _col }}14, rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07)">
+            <span style="width:11px;height:11px;border-radius:50%;background:{{ _col }};box-shadow:0 0 12px {{ _col }};flex:0 0 11px"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#8b86ab;margin-bottom:4px">{{ _eyebrow }}</div>
+              <div style="font-size:17px;font-weight:700;color:#f4f2fb">{{ _sub }}</div>
+            </div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:700;line-height:1;color:{{ _col }};font-variant-numeric:tabular-nums">{{ _val }}</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {% if admin_rows %}
+        <!-- under watch + carousel -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab">
+            <span style="width:7px;height:7px;border-radius:50%;background:#3b82f6;box-shadow:0 0 10px #3b82f6"></span>ПОД НАБЛЮДЕНИЕМ
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="ccScroll(-1)" aria-label="Назад" style="width:44px;height:40px;border-radius:11px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);color:#cdc9e4;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button onclick="ccScroll(1)" aria-label="Вперёд" style="width:44px;height:40px;border-radius:11px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);color:#cdc9e4;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+        </div>
+
+        <div class="cc-co-track" id="ccTrack">
+          {% for m in admin_rows %}
+            {% set c = m.companies %}
+            {% if c %}
+              {% set risk = risk_map.get(c.id) %}
+              {% set snap = snapshot_map.get(c.id) %}
+              {% set _avatars = ['#d44040','#2563eb','#16a34a','#d97706','#3b82f6','#0891b2','#be185d'] %}
+              {% set _av = _avatars[loop.index0 % _avatars|length] %}
+              {% if risk and risk.score is not none %}
+                {% set s = risk.score | int %}
+                {% if s >= 65 %}{% set rc='#f2766e' %}{% set rl='ВЫСОКИЙ' %}
+                {% elif s >= 35 %}{% set rc='#f5b544' %}{% set rl='СРЕДНИЙ' %}
+                {% else %}{% set rc='#38d6b8' %}{% set rl='НИЗКИЙ' %}{% endif %}
+              {% else %}{% set s=none %}{% set rc='rgba(255,255,255,0.25)' %}{% set rl='НЕТ ДАННЫХ' %}{% endif %}
+              {% set _cm = {'media':('#5b9dff','MI'),'hr':('#38d6b8','HR'),'gr':('#f2766e','GR'),'pr':('#a78bfa','PR'),'market':('#f5b544','MK')} %}
+              {% set _tc = [] %}
+              {% if risk and risk.categories %}{% for k,cat in risk.categories.items() %}{% if cat.score is not none %}{% set _ = _tc.append((cat.score|int, k)) %}{% endif %}{% endfor %}{% set _tc = _tc|sort(attribute=0,reverse=True) %}{% endif %}
+              {% set _circ = 2*3.14159*52 %}
+              <div class="cc-co-card" style="position:relative;border-radius:22px;padding:26px 28px;background:linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.08);box-shadow:0 26px 60px -44px rgba(0,0,0,0.8);overflow:hidden">
+                <span style="position:absolute;left:0;top:20px;bottom:20px;width:4px;border-radius:4px;background:{{ rc }}"></span>
+                <div style="display:flex;align-items:center;gap:16px;margin-bottom:22px">
+                  <span style="width:58px;height:58px;border-radius:15px;flex:0 0 58px;background:{{ _av }};display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.3)">{{ c.name[0]|upper }}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:23px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</div>
+                    <div style="font-size:14px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.ceo_email }}</div>
+                  </div>
+                  <button onclick="deleteCompany('{{ c.id }}','{{ c.name|replace("'","\\'") }}')" title="Удалить" style="width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#6f6b8f;cursor:pointer;flex:0 0 36px;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(242,118,110,0.16)';this.style.color='#ffb4ad'" onmouseout="this.style.background='transparent';this.style.color='#6f6b8f'">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                  </button>
+                </div>
+                <div style="display:flex;align-items:center;gap:24px;margin-bottom:22px">
+                  <div style="position:relative;width:120px;height:120px;flex:0 0 120px">
+                    <svg width="120" height="120" viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="9"/>
+                      {% if s is not none %}<circle cx="60" cy="60" r="52" fill="none" stroke="{{ rc }}" stroke-width="9" stroke-linecap="round" stroke-dasharray="{{ _circ }}" stroke-dashoffset="{{ _circ * (1 - s/100) }}"/>{% endif %}
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1;color:{{ rc }}">{{ s if s is not none else '—' }}</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6b8f;margin-top:2px">/ 100</div>
+                    </div>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <span style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;background:{{ rc }}1f;border:1px solid {{ rc }}44;color:{{ rc }};font-weight:700;font-size:13px;letter-spacing:0.04em">
+                      <span style="width:7px;height:7px;border-radius:50%;background:{{ rc }}"></span>{{ rl }}
+                    </span>
+                    <div style="display:flex;align-items:center;gap:7px;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>
+                      обновлено {{ snap.last_checked_at[:10] if snap and snap.last_checked_at else '—' }}
+                    </div>
+                  </div>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:11px">КАТЕГОРИИ РИСКА</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px">
+                  {% for sc,k in _tc[:3] %}
+                    {% set cc,cl = _cm.get(k, ('#8b86ab','?')) %}
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;padding:6px 12px;border-radius:9px;color:{{ cc }};background:{{ cc }}18;border:1px solid {{ cc }}3a"><span style="opacity:.8">{{ cl }}</span> {{ sc }}</span>
+                  {% else %}
+                    <span style="font-size:13px;color:rgba(255,255,255,0.3)">Нет данных</span>
+                  {% endfor %}
+                </div>
+                <a href="/companies/{{ c.id }}" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:14px;border-radius:13px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#bcd6ff;font-weight:600;font-size:15px;text-decoration:none;transition:background .15s" onmouseover="this.style.background='rgba(59,130,246,0.2)'" onmouseout="this.style.background='rgba(59,130,246,0.12)'">
+                  Открыть профиль
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m0 0-5-5m5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:48px 20px;text-align:center;background:rgba(255,255,255,0.02)">
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">Нет компаний</div>
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px">Нажмите «Добавить компанию» чтобы начать</div>
+          <a href="/companies/new" class="btn btn-primary">+ Добавить компанию</a>
+        </div>
+        {% endif %}
+
+      </div>
+      {# ══════════════ END DESIGN ══════════════ #}
+
+      {% if false %}{# keep legacy CEO panel hidden #}
       <div class="ceo-panel">
         <div class="sec-hdr" style="margin-bottom:14px">
           <div class="sec-hdr-left">
@@ -540,7 +668,7 @@
           </div>
           {% set cat_colors = {'media':'#93bbff','hr':'#4ade80','gr':'#f87171','pr':'#c084fc','market':'#fbbf24'} %}
           {% for r in ceo_view.top_risks %}
-          {% set cc2 = cat_colors.get(r.cat_key, '#a78bfa') %}
+          {% set cc2 = cat_colors.get(r.cat_key, '#8fbcff') %}
           <div class="top-risk-row">
             <div>
               <div class="risk-text">{{ r.text }}</div>
@@ -592,8 +720,8 @@
             <div class="ap-col-text">{{ ceo_view.dont_text }}</div>
           </div>
           <div class="ap-col">
-            <div class="ap-col-hdr" style="color:#a78bfa">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+            <div class="ap-col-hdr" style="color:#8fbcff">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fbcff" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
               Ожидаемый результат
             </div>
             <div class="ap-col-text">{{ ceo_view.result_text }}</div>
@@ -605,6 +733,7 @@
       {% endif %}
       <!-- ══ END CEO PANEL ══ -->
 
+      <div style="display:none" aria-hidden="true">{# legacy company table — replaced by design cards above #}
       <!-- Admin companies -->
       {% if admin_rows %}
       <div style="margin-bottom:28px">
@@ -630,7 +759,7 @@
             {% if c %}
               {% set risk = risk_map.get(c.id) %}
               {% set snap = snapshot_map.get(c.id) %}
-              {% set colors = ['#d44040','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d'] %}
+              {% set colors = ['#d44040','#2563eb','#16a34a','#d97706','#3b82f6','#0891b2','#be185d'] %}
               {% set color = colors[loop.index0 % colors|length] %}
 
               {% if risk and risk.score is not none %}
@@ -699,11 +828,17 @@
                 </div>
 
                 <!-- Action -->
-                <div class="co-cell-action">
+                <div class="co-cell-action" style="display:flex;align-items:center;gap:8px">
                   <a href="/companies/{{ c.id }}" class="co-open-btn">
                     Открыть
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </a>
+                  <button onclick="deleteCompany('{{ c.id }}', '{{ c.name|replace("'","\\'") }}')" title="Удалить компанию"
+                    style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;
+                           background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.30);color:#f87171;cursor:pointer;transition:background .15s"
+                    onmouseover="this.style.background='rgba(248,113,113,0.22)'" onmouseout="this.style.background='rgba(248,113,113,0.10)'">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 8v4M10 8v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/></svg>
+                  </button>
                 </div>
               </div>
             {% endif %}
@@ -739,7 +874,7 @@
           {% for m in member_only_rows %}
             {% set c = m.companies %}
             {% if c %}
-              {% set colors = ['#7c3aed','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
+              {% set colors = ['#3b82f6','#0891b2','#be185d','#d97706','#16a34a','#2563eb','#d44040'] %}
               {% set color = colors[loop.index0 % colors|length] %}
               <div class="co-row">
                 <div class="co-cell-company">
@@ -753,7 +888,7 @@
                 <div class="co-cell-cats">
                   <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.10)">Member</span>
                   {% if m.role and m.role != 'member' %}
-                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(167,139,250,0.10);color:#a78bfa;border:1px solid rgba(167,139,250,0.22)">{{ role_labels.get(m.role, m.role) }}</span>
+                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(143,188,255,0.10);color:#8fbcff;border:1px solid rgba(143,188,255,0.22)">{{ role_labels.get(m.role, m.role) }}</span>
                   {% endif %}
                 </div>
                 <div></div>
@@ -769,6 +904,7 @@
         </div>
       </div>
       {% endif %}
+      </div>{# end hidden legacy #}
 
 
     </div>
@@ -776,6 +912,17 @@
 </div>
 
 <script>
+function ccScroll(d){ var t=document.getElementById('ccTrack'); if(t) t.scrollBy({left:d*(t.clientWidth*0.85),behavior:'smooth'}); }
+function deleteCompany(id, name) {
+  if (!confirm(`Удалить «${name}»?\n\nВсе анализы, новости, конкуренты и история будут удалены безвозвратно.`)) return;
+  if (!confirm('Точно удалить? Это действие нельзя отменить.')) return;
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = `/companies/${id}/delete`;
+  document.body.appendChild(f);
+  f.submit();
+}
+
 function toggleAddForm() { openAddModal(); }
 function openAddModal() {
   document.getElementById('addModal').classList.add('open');
