@@ -585,4 +585,45 @@ async def run_pipeline(
         ],
     })
 
+    # ── Client per-type risk model (financial/operational/reputational/…) ────
+    # Extract 0–10 factors from gathered signals; scores computed by formula.
+    try:
+        from . import risk_formulas as _rf
+        from .ai import extract_risk_factors as _erf
+        _sig_lines = []
+        for r in own_rows[:40]:
+            _note = (r.get("risk_note") or "").strip()
+            _sig_lines.append(f"- {r.get('title','')}" + (f" | {_note}" if _note else ""))
+        domain_factors: dict = {}
+        if _sig_lines and api_key:
+            _sig_text = (f"Компания: {company_name}\nСигналы:\n" + "\n".join(_sig_lines))[:6000]
+            domain_factors = await _erf(_sig_text, api_key)
+        active_formulas: dict = {}
+        if sk:
+            try:
+                _frows = await supabase.rest_select_service(
+                    table="formula_defs", service_key=sk,
+                    select="domain,expression,variables",
+                    query_params={"company_id": f"eq.{company_id}",
+                                  "is_active": "eq.true", "source": "eq.custom"}) or []
+                for _fr in _frows:
+                    if _fr.get("domain") in _rf.DOMAINS and _fr.get("expression"):
+                        active_formulas[_fr["domain"]] = {
+                            "expression": _fr["expression"], "variables": _fr.get("variables")}
+            except Exception:
+                active_formulas = {}
+        analysis["domain_factors"] = domain_factors
+        analysis["domain_scores"] = _rf.score_all(domain_factors, active_formulas) if domain_factors else {}
+        if sk and domain_factors:
+            try:
+                await supabase.rest_insert_service("signal_factors", sk, [{
+                    "company_id": company_id, "signal_text": f"Прогон · {company_name}",
+                    "source": "analysis", "factors": domain_factors}])
+            except Exception:
+                pass
+    except Exception as _e:
+        logger.warning("[pipeline] per-type risk model failed: %s", _e)
+        analysis.setdefault("domain_factors", {})
+        analysis.setdefault("domain_scores", {})
+
     return analysis

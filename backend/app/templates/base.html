@@ -452,12 +452,13 @@
     /* ── Page overlay ── */
     #page-overlay {
       position: fixed; inset: 0;
-      background: rgba(15,16,32,0);
+      background: rgba(13,12,26,0);
       z-index: 9998; pointer-events: none;
-      transition: background 0.25s;
+      transition: background 0.12s ease;
       display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(0px);
     }
-    #page-overlay.dimming { background: rgba(15,16,32,0.70); }
+    #page-overlay.dimming { background: rgba(13,12,26,0.82); backdrop-filter: blur(2px); }
     #nav-spinner {
       display: none; flex-direction: column; align-items: center; gap: 12px;
       opacity: 0; transform: scale(0.88);
@@ -618,10 +619,14 @@
     }
 
     startProgress();
-    window.addEventListener('load', finishProgress);
-    window.addEventListener('pageshow', function(e) {
-      if (e.persisted) { startProgress(); setTimeout(finishProgress, 100); }
-    });
+    // Finish as soon as the DOM is ready — do NOT wait for window 'load',
+    // which blocks on slow lazy resources (e.g. /news-image fetches) and makes
+    // navigation feel stuck behind the loading indicator.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', finishProgress);
+    } else {
+      finishProgress();
+    }
 
     const spinner = document.getElementById('nav-spinner');
     let spinnerTimer = null;
@@ -629,11 +634,23 @@
     function showSpinner() {
       overlay.classList.add('dimming');
       document.body.classList.add('navigating');
+      // Show the spinner almost immediately so navigation always has a clear
+      // dark loading state to focus on (feels faster on slow page loads).
       spinnerTimer = setTimeout(() => {
         spinner.style.display = 'flex';
         requestAnimationFrame(() => spinner.classList.add('visible'));
-      }, 120);
+      }, 40);
     }
+    function hideSpinner() {
+      if (spinnerTimer) { clearTimeout(spinnerTimer); spinnerTimer = null; }
+      overlay.classList.remove('dimming');
+      document.body.classList.remove('navigating');
+      if (spinner) { spinner.classList.remove('visible'); spinner.style.display = 'none'; }
+    }
+
+    // Back/forward navigation (bfcache restore) — clear any leftover loading
+    // overlay so the page isn't stuck behind an infinite spinner.
+    window.addEventListener('pageshow', function() { hideSpinner(); finishProgress(); });
 
     document.addEventListener('click', function(e) {
       const link = e.target.closest('a[href]');
@@ -641,8 +658,12 @@
       const href = link.getAttribute('href');
       if (!href || href.startsWith('#') || href.startsWith('http') ||
           href.startsWith('mailto') || href.startsWith('javascript') ||
+          href.endsWith('.pdf') || link.hasAttribute('download') ||
           link.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
       showSpinner();
+      // Safety: if navigation somehow doesn't happen, clear the overlay.
+      clearTimeout(window.__navSafety);
+      window.__navSafety = setTimeout(hideSpinner, 12000);
     });
 
     document.addEventListener('submit', function(e) {

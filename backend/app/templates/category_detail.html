@@ -192,6 +192,61 @@
   {% endif %}
 </div>
 
+<!-- ══ Score trend chart (X = дата, Y = риск-скор) ══ -->
+{% if cat_history and cat_history|length >= 2 %}
+{% set _scores = cat_history | map(attribute='score') | list %}
+{% set _n = _scores|length %}
+{% set _mn = _scores|min %}{% set _mx = _scores|max %}
+{% set _rng = (_mx - _mn) if (_mx - _mn) > 0 else 1 %}
+{% set _W = 640 %}{% set _H = 178 %}
+{% set _ML = 36 %}{% set _MR = 16 %}{% set _MT = 14 %}{% set _MB = 26 %}
+{% set _pw = _W - _ML - _MR %}{% set _ph = _H - _MT - _MB %}
+{% set _step = _pw / (_n - 1) %}
+{% set _pts = [] %}
+{% for v in _scores %}{% set _ = _pts.append('%.1f,%.1f'|format(_ML + loop.index0*_step, _MT + (1 - (v - _mn)/_rng)*_ph)) %}{% endfor %}
+{% set _diff = _scores[-1] - _scores[0] %}
+{% set _tcol = '#f87171' if _diff > 0 else ('#34d399' if _diff < 0 else '#94a3b8') %}
+{% set _lp = _pts[-1].split(',') %}
+<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:16px;padding:18px 20px;margin-bottom:18px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.55)">Динамика риск-скора · {{ _n }} прогон{{ 'ов' if _n > 4 else ('а' if _n > 1 else '') }}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px;color:rgba(255,255,255,0.5)">{{ _scores[0] }} → {{ _scores[-1] }}</span>
+      <span style="font-family:monospace;font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;color:{{ _tcol }};background:{{ _tcol }}1f">{% if _diff > 0 %}↑ риск растёт +{{ _diff }}{% elif _diff < 0 %}↓ риск снижается {{ _diff }}{% else %}→ без изменений{% endif %}</span>
+    </div>
+  </div>
+  <svg viewBox="0 0 {{ _W }} {{ _H }}" width="100%" height="190" style="display:block;font-family:monospace">
+    <defs>
+      <linearGradient id="catTrendFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="{{ cat_color }}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="{{ cat_color }}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- Y axis: риск-скор -->
+    {% for f in [0, 0.5, 1] %}
+      {% set _gy = _MT + f*_ph %}
+      {% set _gv = (_mx - f*(_mx - _mn))|round|int %}
+      <line x1="{{ _ML }}" y1="{{ _gy }}" x2="{{ _W - _MR }}" y2="{{ _gy }}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+      <text x="{{ _ML - 7 }}" y="{{ _gy + 3.5 }}" fill="rgba(255,255,255,0.42)" font-size="10.5" text-anchor="end">{{ _gv }}</text>
+    {% endfor %}
+    <text x="11" y="{{ _MT + _ph/2 }}" fill="rgba(255,255,255,0.35)" font-size="9.5" text-anchor="middle" transform="rotate(-90 11 {{ _MT + _ph/2 }})">риск-скор</text>
+    <!-- area + line -->
+    <polygon points="{{ _ML }},{{ _MT + _ph }} {{ _pts|join(' ') }} {{ _ML + _pw }},{{ _MT + _ph }}" fill="url(#catTrendFill)"/>
+    <polyline points="{{ _pts|join(' ') }}" fill="none" stroke="{{ cat_color }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <!-- points + X axis: даты -->
+    {% for p in _pts %}
+      {% set xy = p.split(',') %}
+      <circle cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ '3.6' if loop.last else '2.3' }}" fill="{{ cat_color if loop.last else 'rgba(255,255,255,0.5)' }}"/>
+      {% if loop.first or loop.last or loop.index0 == (_n // 2) %}
+        <text x="{{ xy[0] }}" y="{{ _H - 8 }}" fill="rgba(255,255,255,0.45)" font-size="10" text-anchor="{{ 'start' if loop.first else ('end' if loop.last else 'middle') }}">{{ (cat_history[loop.index0].date or '')[5:] }}</text>
+      {% endif %}
+    {% endfor %}
+    <text x="{{ _lp[0] }}" y="{{ (_lp[1]|float) - 9 }}" fill="#fff" font-size="13" font-weight="700" text-anchor="end">{{ _scores[-1] }}</text>
+  </svg>
+  <div style="font-size:11px;color:rgba(255,255,255,0.38);text-align:center;margin-top:1px">ось X — дата прогона · ось Y — риск-скор</div>
+</div>
+{% endif %}
+
 <!-- ══ GR-SPECIFIC METRICS BLOCK ══ -->
 {% if active_key == 'gr' and cat %}
 <style>

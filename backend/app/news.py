@@ -81,6 +81,11 @@ async def fetch_article_image(url: str) -> str:
     article URL is resolved at most once."""
     if not url or not url.startswith("http") or not _is_public_url(url):
         return ""
+    # Hosts that never expose an og:image to a logged-out fetch — skip the slow
+    # round-trip entirely (Instagram returns a login wall).
+    _host = (urlparse(url).hostname or "").lower()
+    if _host.endswith("instagram.com") or _host.endswith("threads.net"):
+        return ""
     if url in _news_img_cache:
         return _news_img_cache[url]
     img = ""

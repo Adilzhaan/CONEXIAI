@@ -5,6 +5,8 @@ from typing import Any
 
 import anthropic
 
+from . import risk_formulas as rf
+
 logger = logging.getLogger("conexiai")
 
 _client: anthropic.AsyncAnthropic | None = None
@@ -1287,6 +1289,68 @@ def compute_risk_score(severity, probability, velocity, signal_density,
     s, p, v, d = _c(severity), _c(probability), _c(velocity), _c(signal_density)
     core = (s / 10.0) * (p / 10.0) * (v / 10.0)          # 0..1
     return int(round(max(0, min(100, core * core_w + (d / 10.0) * density_w))))
+
+
+_FACTOR_EXTRACT_PROMPT = """Ты — экстрактор факторов риска. НЕ оценивай общий риск и НЕ выставляй итоговый балл.
+
+Прочитай сигнал (новость, пост, ответ руководителя) и оцени КАЖДЫЙ фактор по шкале 0–10
+(0 = отсутствует, 10 = максимум). Для каждого типа риска дай короткое обоснование «why» (1 строка).
+Если тип риска нерелевантен сигналу — ставь все его факторы в 0.
+
+Факторы по типам риска:
+- Финансовый (financial): probability, loss
+- Операционный (operational): probability, impact, duration
+- Репутационный (reputational): reach, sentiment, audience_influence
+- Регуляторный (regulatory): inspection_probability, potential_fine
+- Поставщик (supplier): failure_probability, downtime_loss
+
+Верни СТРОГО такой JSON:
+{
+  "financial":    {"probability": 0-10, "loss": 0-10, "why": "..."},
+  "operational":  {"probability": 0-10, "impact": 0-10, "duration": 0-10, "why": "..."},
+  "reputational": {"reach": 0-10, "sentiment": 0-10, "audience_influence": 0-10, "why": "..."},
+  "regulatory":   {"inspection_probability": 0-10, "potential_fine": 0-10, "why": "..."},
+  "supplier":     {"failure_probability": 0-10, "downtime_loss": 0-10, "why": "..."}
+}"""
+
+
+def clean_extracted_factors(data: dict | None) -> dict:
+    """Validate + clamp the model's factor JSON into the canonical 0–10 shape.
+    Each domain keeps its formula factors plus a one-line 'why' (transparency)."""
+    data = data or {}
+    out: dict[str, dict] = {}
+    for domain, keys in rf.DOMAIN_FACTORS.items():
+        d = data.get(domain) if isinstance(data.get(domain), dict) else {}
+        cleaned: dict[str, Any] = {k: rf.clamp_factor(d.get(k)) for k in keys}
+        cleaned["why"] = str(d.get("why") or d.get("reason") or "")[:200]
+        out[domain] = cleaned
+    return out
+
+
+async def extract_risk_factors(text: str, api_key: str) -> dict:
+    """The model's ONLY scoring job: read a signal and extract risk factors
+    (0–10) per domain + a one-line justification. It never produces a score —
+    `risk_formulas` does that deterministically from these factors."""
+    client = get_client(api_key)
+    try:
+        msg = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=900,
+            system="JSON API. Respond ONLY with valid JSON. No markdown.",
+            messages=[{"role": "user",
+                       "content": _FACTOR_EXTRACT_PROMPT + "\n\nСИГНАЛ:\n" + (text or "")[:6000]}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = _parse_json(raw) or {}
+    except Exception as e:
+        logger.warning("extract_risk_factors failed: %s", e)
+        data = {}
+    return clean_extracted_factors(data)
 
 
 def analyze_with_history(

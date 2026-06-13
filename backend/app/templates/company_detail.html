@@ -7,6 +7,33 @@
 {% set prev = risk_runs[1] if risk_runs|length > 1 else none %}
 {% set stock = finance.stock if finance and finance.found else none %}
 
+<!-- ── Entrance loader (always shows on landing on the risk page) ── -->
+<div id="risk-entrance" style="position:fixed;inset:0;z-index:10050;background:rgba(13,12,26,0.94);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;transition:opacity .45s ease">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div style="width:42px;height:42px;border:2.5px solid rgba(59,130,246,0.16);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:22px;height:22px;border-radius:50%;border:2px solid #3b82f6;display:inline-block;box-shadow:0 0 16px -2px rgba(59,130,246,0.7);position:relative;flex:0 0 22px"><span style="position:absolute;inset:5px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.55)"></span></span>
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#f4f2fb">conexi</span>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var el = document.getElementById('risk-entrance');
+  if(!el) return;
+  var start = Date.now(), MIN = 600;
+  function done(){
+    var wait = Math.max(0, MIN - (Date.now() - start));
+    setTimeout(function(){
+      el.style.opacity = '0';
+      setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 480);
+    }, wait);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', done);
+  else done();
+})();
+</script>
+
 <div class="sidebar-layout">
 
   <!-- Sidebar -->
@@ -26,11 +53,9 @@
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
       </a>
       <div class="sidebar-section-label" data-i18n="nav_system">Система</div>
-      {% if editable_categories %}
-      <a href="#" class="sidebar-item" onclick="event.preventDefault();openScoreSettings()">
-        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Настройки оценки
+      <a href="#" class="sidebar-item" onclick="event.preventDefault();openRiskScoring()">
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-3" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Настройки оценки
       </a>
-      {% endif %}
       <a href="/logout" class="sidebar-item">
         <span class="sidebar-item-icon">⎋</span> <span data-i18n="nav_logout">Выйти</span>
       </a>
@@ -226,51 +251,51 @@
 
         <!-- Robot column -->
         <div style="width:160px;flex-shrink:0;background:rgba(59,130,246,0.08);display:flex;align-items:center;justify-content:center;padding:16px 8px;border-right:1px solid rgba(59,130,246,0.15)">
-          <svg width="140" height="160" viewBox="0 0 200 220">
-            <defs><clipPath id="scan-clip2"><rect x="62" y="108" width="76" height="76" rx="10"/></clipPath></defs>
-            <g id="robot-wrap-inner">
-              <rect x="90" y="40" width="20" height="22" rx="4" fill="#3730a3" stroke="#6366f1" stroke-width="1"/>
-              <circle cx="100" cy="38" r="4" fill="#818cf8" opacity="0.9"/>
-              <rect x="70" y="60" width="60" height="52" rx="14" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="82" y="72" width="14" height="14" rx="7" fill="#0f0d1a" stroke="#6366f1" stroke-width="1"/>
-              <rect x="104" y="72" width="14" height="14" rx="7" fill="#0f0d1a" stroke="#6366f1" stroke-width="1"/>
-              <circle id="eye-l" cx="89" cy="79" r="4" fill="#3b82f6"/>
-              <circle id="eye-r" cx="111" cy="79" r="4" fill="#3b82f6"/>
-              <circle cx="91" cy="77" r="1.5" fill="#e0e7ff"/>
-              <circle cx="113" cy="77" r="1.5" fill="#e0e7ff"/>
-              <rect x="82" y="92" width="36" height="6" rx="3" fill="#3730a3" stroke="#6366f1" stroke-width="0.5"/>
-              <rect x="86" y="94" width="6" height="2" rx="1" fill="#8fbcff" opacity="0.9"/>
-              <rect x="94" y="94" width="4" height="2" rx="1" fill="#8fbcff" opacity="0.6"/>
-              <rect x="100" y="94" width="8" height="2" rx="1" fill="#8fbcff" opacity="0.9"/>
-              <rect x="62" y="108" width="76" height="76" rx="10" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="75" y="120" width="50" height="36" rx="6" fill="#3730a3" stroke="#6366f1" stroke-width="1"/>
-              <line x1="100" y1="120" x2="100" y2="156" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
-              <rect x="77" y="164" width="10" height="6" rx="2" fill="#3b82f6" opacity="0.8"/>
-              <rect x="91" y="164" width="10" height="6" rx="2" fill="#3b82f6" opacity="0.8"/>
-              <rect x="105" y="164" width="10" height="6" rx="2" fill="#3b82f6" opacity="0.5"/>
-              <rect x="119" y="164" width="4" height="12" rx="2" fill="#6366f1"/>
-              <rect x="77" y="164" width="4" height="12" rx="2" fill="#6366f1"/>
-              <rect x="40" y="115" width="24" height="44" rx="8" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="136" y="115" width="24" height="44" rx="8" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="47" y="122" width="10" height="4" rx="2" fill="#3730a3"/>
-              <rect x="47" y="130" width="10" height="4" rx="2" fill="#3730a3"/>
-              <rect x="143" y="122" width="10" height="4" rx="2" fill="#3730a3"/>
-              <rect x="143" y="130" width="10" height="4" rx="2" fill="#3730a3"/>
-              <rect x="78" y="184" width="18" height="28" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="104" y="184" width="18" height="28" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
-              <rect x="82" y="192" width="10" height="4" rx="2" fill="#3730a3"/>
-              <rect x="108" y="192" width="10" height="4" rx="2" fill="#3730a3"/>
-              <g clip-path="url(#scan-clip2)">
-                <rect id="scan-beam2" x="72" y="108" width="56" height="4" fill="#8fbcff" opacity="0.35" rx="2"/>
+          <div id="an-stage-icon" style="width:140px;height:160px;position:relative">
+
+            <!-- SEARCH: лупа сканирует материалы -->
+            <svg class="an-ic an-ic-search" width="140" height="160" viewBox="0 0 140 160" style="position:absolute;inset:0">
+              <rect x="30" y="26" width="80" height="106" rx="9" fill="#161335" stroke="#3b3a6b" stroke-width="1.5"/>
+              <rect x="42" y="40" width="56" height="5" rx="2.5" fill="#3b82f6" opacity="0.55"/>
+              <rect x="42" y="54" width="44" height="5" rx="2.5" fill="#5b9dff" opacity="0.4"/>
+              <rect x="42" y="68" width="50" height="5" rx="2.5" fill="#5b9dff" opacity="0.4"/>
+              <rect x="42" y="82" width="38" height="5" rx="2.5" fill="#5b9dff" opacity="0.3"/>
+              <rect x="42" y="96" width="48" height="5" rx="2.5" fill="#5b9dff" opacity="0.3"/>
+              <rect x="42" y="110" width="34" height="5" rx="2.5" fill="#5b9dff" opacity="0.25"/>
+              <g>
+                <circle r="17" fill="rgba(59,130,246,0.10)" stroke="#8fbcff" stroke-width="3.5"/>
+                <line x1="12" y1="12" x2="26" y2="26" stroke="#8fbcff" stroke-width="4.5" stroke-linecap="round"/>
+                <circle cx="-5" cy="-6" r="4.5" fill="rgba(255,255,255,0.3)"/>
+                <animateTransform attributeName="transform" type="translate"
+                  values="52,54; 90,62; 66,106; 46,80; 52,54" keyTimes="0;0.25;0.5;0.75;1"
+                  dur="4.2s" calcMode="spline"
+                  keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1" repeatCount="indefinite"/>
               </g>
-            </g>
-            <g transform="translate(152,72)">
-              <circle class="aping-ring"  cx="0" cy="0" r="6" fill="none" stroke="#8fbcff" stroke-width="1.5" opacity="0"/>
-              <circle class="aping-ring2" cx="0" cy="0" r="6" fill="none" stroke="#8fbcff" stroke-width="1.5" opacity="0"/>
-              <circle cx="0" cy="0" r="5" fill="#3b82f6" opacity="0.9"/>
-              <path d="M-3 0 L0 -3 L3 0" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-            </g>
-          </svg>
+            </svg>
+
+            <!-- BREW: колба варится -->
+            <svg class="an-ic an-ic-brew" width="140" height="160" viewBox="0 0 140 160" style="position:absolute;inset:0;display:none">
+              <defs><clipPath id="flaskClip"><path d="M60 40 h20 v28 l24 52 a8 8 0 0 1 -7 12 h-58 a8 8 0 0 1 -7 -12 l24 -52 z"/></clipPath></defs>
+              <!-- steam -->
+              <circle cx="66" cy="34" r="2.6" fill="rgba(143,188,255,0.55)"><animate attributeName="cy" values="34;12" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.6;0" dur="2.4s" repeatCount="indefinite"/></circle>
+              <circle cx="76" cy="34" r="2.1" fill="rgba(143,188,255,0.45)"><animate attributeName="cy" values="34;14" dur="2.4s" begin="1.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.5;0" dur="2.4s" begin="1.2s" repeatCount="indefinite"/></circle>
+              <rect x="56" y="31" width="28" height="8" rx="3" fill="#8fbcff"/>
+              <g clip-path="url(#flaskClip)">
+                <rect x="20" y="94" width="100" height="64" fill="#3b82f6" opacity="0.5"/>
+                <rect x="20" y="94" width="100" height="4" fill="#8fbcff" opacity="0.7"/>
+                <circle cx="56" r="3.5" fill="#bcd6ff"><animate attributeName="cy" values="142;96" dur="2.3s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.95;0" dur="2.3s" repeatCount="indefinite"/></circle>
+                <circle cx="70" r="2.6" fill="#bcd6ff"><animate attributeName="cy" values="142;96" dur="2.3s" begin="0.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.95;0" dur="2.3s" begin="0.8s" repeatCount="indefinite"/></circle>
+                <circle cx="82" cy="142" r="3" fill="#bcd6ff"><animate attributeName="cy" values="142;96" dur="2.3s" begin="1.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.95;0" dur="2.3s" begin="1.5s" repeatCount="indefinite"/></circle>
+              </g>
+              <path d="M60 40 h20 v28 l24 52 a8 8 0 0 1 -7 12 h-58 a8 8 0 0 1 -7 -12 l24 -52 z" fill="none" stroke="#8fbcff" stroke-width="3.5" stroke-linejoin="round"/>
+            </svg>
+
+            <!-- DONE -->
+            <svg class="an-ic an-ic-done" width="140" height="160" viewBox="0 0 140 160" style="position:absolute;inset:0;display:none">
+              <circle cx="70" cy="80" r="40" fill="rgba(52,211,153,0.12)" stroke="#34d399" stroke-width="3"/>
+              <path d="M52 80 l13 14 l25 -28" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
         </div>
 
         <!-- Info column -->
@@ -322,10 +347,7 @@
       @keyframes an-ping     { 0%{r:6;opacity:1} 100%{r:20;opacity:0} }
       @keyframes an-pulse-d  { 0%,100%{opacity:.4} 50%{opacity:1} }
       @keyframes an-fadein   { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
-      #robot-wrap-inner { animation: an-float 3s ease-in-out infinite; }
-      #scan-beam2       { animation: an-scan 1.2s linear infinite; }
-      .aping-ring  { animation: an-ping 1.2s ease-out infinite; }
-      .aping-ring2 { animation: an-ping 1.2s ease-out infinite 0.5s; }
+      .an-ic { animation: an-float 3.2s ease-in-out infinite; }
       .an-dot  { width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;transition:background 0.3s; }
       .an-dot.active { background:#3b82f6;animation:an-pulse-d 1s infinite; }
       .an-dot.done   { background:#34d399;animation:none; }
@@ -1213,6 +1235,39 @@
           {% endif %}
 
           {# ══════════════ DESIGN OVERVIEW (Conexi macro) ══════════════ #}
+          {# mini trend chart (sparkline + ↑/↓) from a numeric series; up=risk grows=red #}
+          {% macro spark(series, color) %}
+            {%- if series and series|length >= 2 -%}
+              {%- set mn = series|min -%}{%- set mx = series|max -%}{%- set rng = (mx - mn) if (mx - mn) > 0 else 1 -%}
+              {%- set w = 84 -%}{%- set h = 22 -%}{%- set step = w / (series|length - 1) -%}
+              {%- set _pts = [] -%}
+              {%- for v in series -%}{%- set _ = _pts.append('%.1f,%.1f'|format(loop.index0 * step, h - ((v - mn) / rng) * h)) -%}{%- endfor -%}
+              {%- set _diff = series[-1] - series[0] -%}
+              {%- set _tcol = '#f2766e' if _diff > 0 else ('#38d6b8' if _diff < 0 else '#8b86ab') -%}
+              {%- set _lp = _pts[-1].split(',') -%}
+              <span style="display:inline-flex;align-items:center;gap:7px">
+                <svg width="{{ w }}" height="{{ h }}" viewBox="0 0 {{ w }} {{ h }}" style="overflow:visible">
+                  <polyline points="{{ _pts|join(' ') }}" fill="none" stroke="{{ color }}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+                  <circle cx="{{ _lp[0] }}" cy="{{ _lp[1] }}" r="2.3" fill="{{ color }}"/>
+                </svg>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:{{ _tcol }}">{% if _diff > 0 %}↑{% elif _diff < 0 %}↓{% else %}→{% endif %}{{ _diff|abs }}</span>
+              </span>
+            {%- else -%}
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6f6b8f">нет истории</span>
+            {%- endif -%}
+          {% endmacro %}
+          {# «?» help button + popover #}
+          {% macro help(txt) %}<span style="position:relative;display:inline-flex;align-items:center;vertical-align:middle;margin-left:8px"><button type="button" onclick="toggleHelp(event,this)" aria-label="Справка" style="width:17px;height:17px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.05);color:#8b86ab;font-size:11px;font-weight:700;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;font-family:Manrope,sans-serif">?</button><span class="help-pop" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:120;width:280px;max-width:78vw;background:rgba(18,16,34,0.99);border:1px solid rgba(255,255,255,0.12);border-radius:11px;padding:12px 14px;box-shadow:0 16px 44px rgba(0,0,0,0.55);font-family:'Manrope',sans-serif;font-size:12.5px;line-height:1.55;color:#cdc9e4;text-transform:none;letter-spacing:normal;font-weight:400;white-space:normal">{{ txt }}</span></span>{% endmacro %}
+          <script>
+          function toggleHelp(e, btn){
+            e.stopPropagation();
+            var pop = btn.nextElementSibling;
+            var open = pop.style.display === 'block';
+            document.querySelectorAll('.help-pop').forEach(function(p){ p.style.display='none'; });
+            pop.style.display = open ? 'none' : 'block';
+          }
+          document.addEventListener('click', function(){ document.querySelectorAll('.help-pop').forEach(function(p){ p.style.display='none'; }); });
+          </script>
           {% set _dcats = [
             ('media','INFOFIELD & MEDIA','#5b9dff'),
             ('hr','HUMAN RESOURCES','#38d6b8'),
@@ -1236,7 +1291,7 @@
             <!-- eyebrow -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
               <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#3b82f6;box-shadow:0 0 10px #3b82f6"></span>RISK OVERVIEW
+                <span style="width:7px;height:7px;border-radius:50%;background:#3b82f6;box-shadow:0 0 10px #3b82f6"></span>RISK OVERVIEW{{ help('Общий обзор: средний риск-скор компании, краткое «что делать» и сколько источников проанализировано. Дата справа — когда обновлялось.') }}
               </div>
               {% if latest and latest.created_at %}<div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">Обновлено · {{ latest.created_at[:10] }}</div>{% endif %}
             </div>
@@ -1264,23 +1319,42 @@
               {% endif %}
             </div>
 
+            <!-- ── Мониторинг по зонам (радар активности — НЕ риск-скор) ── -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
+                <span style="width:7px;height:7px;border-radius:50%;background:#5b9dff;box-shadow:0 0 10px #5b9dff"></span>МОНИТОРИНГ ПО ЗОНАМ{{ help('Где сейчас активность по функциям/отделам. Это уровень активности и поток сигналов — НЕ оценка опасности. Опасность считается ниже, в «Оценке риска по формулам». Тренд ↑/↓ показывает динамику по прошлым анализам.') }}
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">где активность · источники сигналов</div>
+            </div>
             <!-- category grid (3×2) -->
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">
               {% for _k,_l,_c in _dcats %}
                 {% set _cs = cats[_k].score if cats and cats[_k] else none %}
                 {% set _crisks = cats[_k].risks if cats and cats[_k] else [] %}
                 {% set _cnote = _crisks[0].text if _crisks and _crisks[0] is mapping else (_crisks[0] if _crisks else '') %}
+                {% set _sr = [] %}
+                {% for run in (risk_runs[:8] | reverse) %}
+                  {% set _v = run.categories.get(_k).score if run.categories and run.categories.get(_k) and run.categories.get(_k).score is not none else none %}
+                  {% if _v is not none %}{% set _ = _sr.append(_v|int) %}{% endif %}
+                {% endfor %}
                 <a href="{{ '#' if _k == 'market' else '/companies/' + company.id + '/category/' + _k }}"
                    {% if _k == 'market' %}onclick="event.preventDefault();showTab('market',null)"{% endif %}
                    style="position:relative;display:flex;flex-direction:column;padding:18px 19px;border-radius:18px;text-decoration:none;color:inherit;border:1px solid rgba(255,255,255,0.07);background:linear-gradient(150deg, {{ _c }}21 0%, rgba(255,255,255,0.018) 42%);transition:transform .2s,border-color .2s,box-shadow .2s"
                    onmouseover="this.style.transform='translateY(-3px)';this.style.borderColor='rgba(255,255,255,0.16)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.22)'"
                    onmouseout="this.style.transform='';this.style.borderColor='rgba(255,255,255,0.07)';this.style.boxShadow=''">
+                  {% set _av = _cs|int if _cs is not none else 0 %}
+                  {% set _act = 'высокая' if _av >= 60 else ('средняя' if _av >= 30 else 'низкая') %}
                   <span style="position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:{{ _c }}"></span>
                   <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.1em;color:rgba(255,255,255,0.62);margin-bottom:8px;padding-left:8px">{{ _l }}</div>
-                  <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1;padding-left:8px;font-variant-numeric:tabular-nums;color:{{ _c }}">{{ _cs if _cs is not none else '—' }}</div>
-                  <div style="height:5px;border-radius:5px;background:rgba(255,255,255,0.08);margin:13px 0 11px 8px;overflow:hidden">
-                    <div style="height:100%;border-radius:5px;background:{{ _c }};box-shadow:0 0 10px {{ _c }};width:{{ _cs if _cs is not none else 0 }}%"></div>
+                  <div style="display:flex;align-items:baseline;gap:7px;padding-left:8px">
+                    <span style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;color:rgba(255,255,255,0.88)">{{ _cs if _cs is not none else '—' }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:#6f6b8f">активность</span>
                   </div>
+                  <div style="font-size:12.5px;color:{{ _c }};padding-left:8px;margin-top:4px">Активность: {{ _act }}</div>
+                  <div style="height:5px;border-radius:5px;background:rgba(255,255,255,0.08);margin:10px 0 10px 8px;overflow:hidden">
+                    <div style="height:100%;border-radius:5px;background:{{ _c }};opacity:0.75;width:{{ _cs if _cs is not none else 0 }}%"></div>
+                  </div>
+                  <div style="padding-left:8px;margin-bottom:9px">{{ spark(_sr, _c) }}</div>
                   <div style="font-size:13px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.45;padding-left:8px">{% if _cnote %}{{ _cnote[:55] }}{% if _cnote|length > 55 %}…{% endif %}{% endif %}</div>
                 </a>
               {% endfor %}
@@ -1301,11 +1375,97 @@
               </a>
             </div>
 
+            {# ── Оценка по типам кризиса (клиентская 5-доменная модель) ── #}
+            {% if latest.domain_scores %}
+            {% set _dtypes = [
+              ('financial','Финансовый','#5b9dff'),
+              ('operational','Операционный','#38d6b8'),
+              ('reputational','Репутационный','#a78bfa'),
+              ('regulatory','Регуляторный','#f5b544'),
+              ('supplier','Поставщика','#f2766e'),
+            ] %}
+            {% set _facru = {'probability':'Вероятность','loss':'Убыток','impact':'Воздействие','duration':'Длительность','reach':'Охват','sentiment':'Тональность','audience_influence':'Влияние аудитории','inspection_probability':'Вероятность проверки','potential_fine':'Размер штрафа','failure_probability':'Вероятность сбоя','downtime_loss':'Потери от простоя'} %}
+            {% set _formula_ru = {'financial':'Вероятность × Убыток','operational':'Вероятность × Воздействие × Длительность / 10','reputational':'Охват × Тональность × Влияние аудитории / 10','regulatory':'Вероятность проверки × Размер штрафа','supplier':'Вероятность сбоя × Потери от простоя'} %}
+            {% set _type_zones = {'financial':['market','gr'],'operational':['hr','market'],'reputational':['media','pr'],'regulatory':['gr'],'supplier':['market']} %}
+            {% set _zone_ru = {'media':'Infofield & Media','hr':'Human Resources','gr':'Gov. Relations','pr':'PR Environment','market':'Market & Industry','ci':'CI Monitor'} %}
+            <script>
+            function toggleDrill(card){
+              var d=card.querySelector('.dz-detail'), ch=card.querySelector('.dz-chev');
+              if(!d) return;
+              var open=d.style.display==='block';
+              d.style.display=open?'none':'block';
+              if(ch) ch.style.transform=open?'':'rotate(180deg)';
+            }
+            </script>
+            <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
+                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>ОЦЕНКА РИСКА · ПО ФОРМУЛАМ{{ help('Оценка опасности по типам кризиса. ИИ извлекает факторы 0–10, а балл считает формула (не ИИ). Каждый тип — отдельно, со своим порогом тревоги. Клик по типу раскрывает разбор: формулу, факторы и какие зоны его кормят.') }}
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">слой решений · насколько опасно</div>
+            </div>
+            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px">Это оценка опасности по формулам — в отличие от зон выше (там активность). Клик по типу — разбор: формула, факторы, какие зоны кормят.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+              {% for _dk,_dru,_dc in _dtypes %}
+                {% set sc = latest.domain_scores.get(_dk)|int if latest.domain_scores.get(_dk) is not none else 0 %}
+                {% set _fac = latest.domain_factors.get(_dk, {}) if latest.domain_factors else {} %}
+                {% set _lvl = 'критический' if sc>=76 else ('высокий' if sc>=51 else ('средний' if sc>=21 else 'низкий')) %}
+                {% set _lvlcol = '#f2766e' if sc>=76 else ('#f5b544' if sc>=51 else ('#5b9dff' if sc>=21 else '#38d6b8')) %}
+                {% set _dsr = [] %}
+                {% for run in (risk_runs[:8] | reverse) %}
+                  {% set _dv = run.domain_scores.get(_dk) if run.domain_scores and run.domain_scores.get(_dk) is not none else none %}
+                  {% if _dv is not none %}{% set _ = _dsr.append(_dv|int) %}{% endif %}
+                {% endfor %}
+                <div onclick="toggleDrill(this)" style="position:relative;cursor:pointer;border-radius:18px;padding:18px 20px;background:linear-gradient(150deg, {{ _dc }}14, rgba(255,255,255,0.012));border:1px solid {% if sc>=70 %}rgba(242,118,110,0.35){% else %}rgba(255,255,255,0.07){% endif %};overflow:hidden;transition:border-color .18s">
+                  <span style="position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:{{ _dc }}"></span>
+                  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;padding-left:8px">
+                    <div style="font-weight:600;font-size:15px">{{ _dru }}{% if sc>=70 %} <span style="font-size:11px;color:#f2766e;font-family:'JetBrains Mono',monospace">● тревога</span>{% endif %}</div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;color:{{ _lvlcol }};background:{{ _lvlcol }}1f;border:1px solid {{ _lvlcol }}40;white-space:nowrap">{{ _lvl }}</span>
+                      <svg class="dz-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:#8b86ab;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding-left:8px;margin-bottom:10px">
+                    <div style="display:flex;align-items:baseline;gap:6px">
+                      <span style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1;color:{{ _lvlcol }};font-variant-numeric:tabular-nums">{{ sc }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6b8f">/ 100</span>
+                    </div>
+                    <span style="margin-bottom:2px">{{ spark(_dsr, _dc) }}</span>
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;padding-left:8px;margin-bottom:9px">
+                    {% for _fk, _fv in _fac.items() if _fk != 'why' %}
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#a39fc0;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);padding:2px 7px;border-radius:6px">{{ _facru.get(_fk, _fk) }} {{ _fv|round|int if _fv is number else _fv }}</span>
+                    {% endfor %}
+                  </div>
+                  {% if _fac.why %}<div style="font-size:12.5px;line-height:1.5;color:#8b86ab;padding-left:8px">{{ _fac.why }}</div>{% endif %}
+
+                  <!-- drill-down: формула + какие зоны кормят -->
+                  <div class="dz-detail" style="display:none;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,0.08);padding-left:8px">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:5px">ФОРМУЛА</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#a39fc0;line-height:1.5;margin-bottom:13px">{{ _formula_ru.get(_dk, '') }} = <b style="color:{{ _lvlcol }}">{{ sc }}</b></div>
+
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:8px">КАКИЕ ЗОНЫ КОРМЯТ <span style="color:#6f6b8f;letter-spacing:0">· ориентировочно</span></div>
+                    {% for _z in _type_zones.get(_dk, []) %}
+                      {% set _za = cats[_z].score|int if cats and cats[_z] and cats[_z].score is not none else 0 %}
+                      {% set _zc = {'media':'#5b9dff','hr':'#38d6b8','gr':'#f2766e','pr':'#a78bfa','market':'#f5b544'}.get(_z, '#8b86ab') %}
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                        <span style="width:6px;height:6px;border-radius:50%;background:{{ _zc }};flex:0 0 6px"></span>
+                        <span style="flex:1;font-size:12.5px;color:#cdc9e4">{{ _zone_ru.get(_z, _z) }}</span>
+                        <div style="width:70px;height:4px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:{{ _za }}%;background:{{ _zc }};opacity:0.7"></div></div>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6b8f;width:54px;text-align:right">акт. {{ _za }}</span>
+                      </div>
+                    {% endfor %}
+                    <a href="/companies/{{ company.id }}/category/{{ _type_zones.get(_dk, ['media'])[0] }}" onclick="event.stopPropagation()" style="display:inline-block;margin-top:6px;font-size:12px;color:#8fbcff;text-decoration:none">Открыть зону-источник →</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
             <!-- AI recommendation -->
             <div style="border-radius:20px;padding:24px 26px;margin-bottom:18px;background:linear-gradient(160deg, rgba(59,130,246,0.10), rgba(255,255,255,0.012));border:1px solid rgba(59,130,246,0.20);display:flex;align-items:center;gap:26px">
               <div style="flex:1;min-width:0">
                 <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.13em;color:#8fbcff;margin-bottom:13px;display:flex;align-items:center;gap:9px">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z" fill="currentColor"/></svg>AI · РЕКОМЕНДАЦИЯ
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z" fill="currentColor"/></svg>AI · РЕКОМЕНДАЦИЯ{{ help('Краткая рекомендация ИИ — что сделать в первую очередь по текущим рискам. Кнопка «Открыть Crisis Protection Center» ведёт к автоматическим действиям агента.') }}
                 </div>
                 <div style="font-size:15px;line-height:1.6;color:#d6d2ec;max-width:820px">{{ latest.advice or 'Провести полный аудит рисков и обновить антикризисные протоколы.' }}</div>
               </div>
@@ -1319,18 +1479,91 @@
             {% if delta and delta.has_changes and delta.new %}
             <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>ЧТО ИЗМЕНИЛОСЬ
+                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>ЧТО ИЗМЕНИЛОСЬ{{ help('Новые риски с прошлого анализа. Клик по карточке раскрывает: срочность, описание проблемы, что делать и материалы-основания.') }}
               </div>
               <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">{{ delta.new|length }} нов{{ 'ый риск' if delta.new|length == 1 else ('ых риска' if delta.new|length in [2,3,4] else 'ых рисков') }}</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <script>
+            function toggleRC(card){
+              var d=card.querySelector('.rc-detail'), ch=card.querySelector('.rc-chev');
+              if(!d) return;
+              var open=d.style.display==='block';
+              d.style.display=open?'none':'block';
+              card.style.borderColor=open?'rgba(255,255,255,0.07)':'rgba(242,118,110,0.35)';
+              if(ch) ch.style.transform=open?'':'rotate(180deg)';
+            }
+            </script>
+            {# full-risk lookup (description/severity/type) + recent news context #}
+            {% set _rlook = namespace(d={}) %}
+            {% for rr in (latest.risks or []) %}
+              {% set _ = _rlook.d.update({ ((rr.title or rr.text or '')|string)[:50]|lower : rr }) %}
+            {% endfor %}
+            {% set _ctxnews = ((monitoring_items | selectattr('is_top') | list)[:4]) if monitoring_items else [] %}
+            {% if not _ctxnews and monitoring_items %}{% set _ctxnews = monitoring_items[:4] %}{% endif %}
+            {% set _sevmap = {'high':('Высокая','#f2766e'),'medium':('Средняя','#f5b544'),'low':('Низкая','#38d6b8')} %}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
               {% for r in delta.new %}
-              <div style="position:relative;border-radius:15px;padding:15px 18px 15px 20px;background:linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07)">
+              {% set full = _rlook.d.get(((r.get('title') or '')|string)[:50]|lower) %}
+              {% set _sev = (full.severity if full and full.severity else 'medium') %}
+              {% set _isinc = (full.type == 'incident') if full else false %}
+              {% set _desc = (full.text if full and full.text else '') %}
+              {% set _sevlbl, _sevcol = _sevmap.get(_sev, ('Средняя','#f5b544')) %}
+              {% if _isinc %}{% set _urg, _urgcol, _urgsub = 'Реагировать немедленно', '#f2766e', 'Инцидент уже произошёл — действуйте в первые часы' %}
+              {% elif _sev == 'high' %}{% set _urg, _urgcol, _urgsub = 'В течение 24–48 часов', '#f5b544', 'Высокая серьёзность — нужен быстрый ответ' %}
+              {% elif _sev == 'low' %}{% set _urg, _urgcol, _urgsub = 'Плановый контроль', '#38d6b8', 'Низкая серьёзность — держите в поле зрения' %}
+              {% else %}{% set _urg, _urgcol, _urgsub = 'В течение недели', '#f5b544', 'Средняя серьёзность — подготовьте реакцию' %}{% endif %}
+              <div onclick="toggleRC(this)" style="position:relative;border-radius:15px;padding:15px 18px 15px 20px;background:linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);cursor:pointer;transition:border-color .18s">
                 <span style="position:absolute;left:0;top:13px;bottom:13px;width:3px;border-radius:3px;background:#f2766e"></span>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.14em;font-weight:600;color:#f2766e;margin-bottom:7px">НОВЫЙ РИСК</div>
-                <div style="font-weight:600;font-size:15px;line-height:1.4;margin-bottom:6px">{{ r.get('title','') }}</div>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                  <div style="min-width:0">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.14em;font-weight:600;color:#f2766e;margin-bottom:7px">{% if _isinc %}ИНЦИДЕНТ{% else %}НОВЫЙ РИСК{% endif %}</div>
+                    <div style="font-weight:600;font-size:15px;line-height:1.4;margin-bottom:6px">{{ r.get('title','') }}</div>
+                  </div>
+                  <svg class="rc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 16px;margin-top:2px;color:#8b86ab;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
                 <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6f6b8f">
                   <span style="width:6px;height:6px;border-radius:50%;background:#f2766e;flex:0 0 6px"></span>{{ (r.get('category','') or '')|upper }} · Скор {{ r.get('score','—') }}
+                </div>
+
+                <!-- expandable detail -->
+                <div class="rc-detail" style="display:none;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,0.08)">
+                  <!-- urgency -->
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:11px;background:{{ _urgcol }}14;border:1px solid {{ _urgcol }}33;margin-bottom:13px">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ _urgcol }};box-shadow:0 0 8px {{ _urgcol }};flex:0 0 8px"></span>
+                    <div style="min-width:0">
+                      <div style="font-weight:700;font-size:13px;color:{{ _urgcol }}">Срочность: {{ _urg }}</div>
+                      <div style="font-size:12px;color:#a39fc0;margin-top:1px">{{ _urgsub }}</div>
+                    </div>
+                  </div>
+                  <!-- meta chips -->
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:{{ _sevcol }};background:{{ _sevcol }}18;border:1px solid {{ _sevcol }}3a">Серьёзность: {{ _sevlbl }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:#8fbcff;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3)">{% if _isinc %}Инцидент (факт){% else %}Прогноз{% endif %}</span>
+                    {% set _cr = r.get('consecutive_runs', 1) %}
+                    {% if _cr and _cr > 1 %}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:#a39fc0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12)">Держится {{ _cr }} прогон{{ 'а' if _cr in [2,3,4] else 'ов' }}</span>{% endif %}
+                  </div>
+                  <!-- description -->
+                  {% if _desc %}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:6px">ОПИСАНИЕ ПРОБЛЕМЫ</div>
+                  <div style="font-size:13.5px;line-height:1.6;color:#cdc9e4;margin-bottom:13px">{{ _desc }}</div>
+                  {% endif %}
+                  <!-- what to do -->
+                  {% if latest.advice %}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8fbcff;margin-bottom:6px">ЧТО ДЕЛАТЬ</div>
+                  <div style="font-size:13px;line-height:1.6;color:#a39fc0;margin-bottom:13px">{{ latest.advice }}</div>
+                  {% endif %}
+                  <!-- related news -->
+                  {% if _ctxnews %}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:8px">НА ОСНОВЕ МАТЕРИАЛОВ</div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    {% for it in _ctxnews %}
+                    <a href="{{ it.url or '#' }}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:flex;align-items:flex-start;gap:8px;text-decoration:none;color:inherit;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:5px;color:#8fbcff;background:rgba(59,130,246,0.14);border:1px solid rgba(59,130,246,0.28);white-space:nowrap;flex:0 0 auto;margin-top:1px">{{ it.source }}</span>
+                      <span style="font-size:12.5px;line-height:1.4;color:#cdc9e4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ it.title }}</span>
+                    </a>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
                 </div>
               </div>
               {% endfor %}
@@ -1344,7 +1577,7 @@
             {% if _news %}
             <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f5b544;box-shadow:0 0 10px #f5b544"></span>ТОП НОВОСТЕЙ И ПОСТОВ
+                <span style="width:7px;height:7px;border-radius:50%;background:#f5b544;box-shadow:0 0 10px #f5b544"></span>ТОП НОВОСТЕЙ И ПОСТОВ{{ help('Свежие материалы из мониторинга — новости и посты по компании. Клик по карточке открывает оригинал статьи.') }}
               </div>
               <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">{{ _news|length }} материалов · свежие</div>
             </div>
@@ -1354,7 +1587,7 @@
               <a href="{{ item.url or '#' }}" target="_blank" rel="noopener" style="scroll-snap-align:start;flex:0 0 300px;width:300px;display:flex;flex-direction:column;border-radius:18px;background:linear-gradient(165deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);overflow:hidden;text-decoration:none;color:inherit;box-shadow:0 20px 44px -38px rgba(0,0,0,0.9);transition:transform .2s,border-color .2s" onmouseover="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(59,130,246,0.3)'" onmouseout="this.style.transform='';this.style.borderColor='rgba(255,255,255,0.07)'">
                 <div style="position:relative;height:128px;background:repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 8px, rgba(255,255,255,0.015) 8px 16px);display:flex;align-items:center;justify-content:center;overflow:hidden">
                   <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style="color:rgba(255,255,255,0.22)"><rect x="3.5" y="5" width="17" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="M5 17l4.5-4 3 2.5L16 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  {% if item.url and item.url.startswith('http') %}
+                  {% if item.url and item.url.startswith('http') and item.source not in ['instagram','threads'] %}
                   <img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=""
                        src="/news-image?u={{ item.url|urlencode }}"
                        data-fb="https://s0.wp.com/mshots/v1/{{ item.url|urlencode }}?w=600&h=320"
@@ -1382,7 +1615,7 @@
             {% set _lscol = {'media':'#5b9dff','hr':'#38d6b8','gr':'#f2766e','pr':'#a78bfa','market':'#f5b544'} %}
             <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>СЦЕНАРИИ ПОТЕРЬ
+                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>СЦЕНАРИИ ПОТЕРЬ{{ help('Сколько компания может потерять, если риск реализуется: худший / базовый / если вовремя среагировать. Цифры — оценка ИИ по топ-рискам.') }}
               </div>
               <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">если риск реализуется</div>
             </div>
@@ -4515,6 +4748,14 @@ function _robotSet(title, subtitle) {
   if (s) s.textContent = subtitle;
 }
 
+// Swap the stage animation: 'search' (лупа ищет) → 'brew' (колба варится) → 'done'
+function _setStageIcon(kind) {
+  ['search', 'brew', 'done'].forEach(function(k) {
+    var e = document.querySelector('.an-ic-' + k);
+    if (e) e.style.display = (k === kind) ? 'block' : 'none';
+  });
+}
+
 function _anSetDot(idx, state) {
   var el = document.getElementById('an-dot' + idx);
   if (!el) return;
@@ -4586,12 +4827,14 @@ function setStage(id, state, status) {
   // Update robot UI
   var labels = { news:' Новости', reddit:' Reddit', youtube:' YouTube', instagram:' Instagram', threads:' Threads', ai:' AI агенты' };
   if (state === 'loading') {
-    _robotSet('Собираю данные…', labels[id] || id);
+    if (id === 'ai') { _robotSet('Анализирую…', 'ИИ обрабатывает материалы'); _setStageIcon('brew'); }
+    else { _robotSet('Собираю данные…', labels[id] || id); _setStageIcon('search'); }
     _anLog('→ ' + (labels[id] || id) + ': загружаем…', 'active');
   } else if (state === 'done') {
     _robotSet('Нашёл данные!', status);
     _anLog('✓ ' + (labels[id] || id) + ': ' + status, 'done');
-    if (id !== 'ai') { _stageDone++; _anPhase(Math.min(_stageDone, 1)); }
+    if (id === 'ai') { _setStageIcon('done'); }
+    else { _stageDone++; _anPhase(Math.min(_stageDone, 1)); }
   } else if (state === 'error') {
     _robotSet('Источник недоступен', status);
     _anLog('✗ ' + (labels[id] || id) + ': ' + status, 'warn');
@@ -4605,8 +4848,9 @@ async function runFullAnalysis() {
   document.getElementById('analysis-stages').style.display = 'block';
   document.getElementById('full-analysis-result').style.display = 'none';
 
-  // Start robot animation
+  // Start stage animation
   _robotSet('Запускаю анализ…', 'Инициализация агентов');
+  _setStageIcon('search');
   _setProgress(0);
   _stageDone = 0;
   for (var _di = 0; _di < 5; _di++) {
@@ -5226,4 +5470,184 @@ async function copilotSend() {
     </button>
   </div>
 </div>
+
+<!-- ══ Risk scoring & formulas modal ══ -->
+<div id="riskScoringModal" style="display:none;position:fixed;inset:0;z-index:320;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeRiskScoring()">
+  <div style="width:760px;max-width:100%;max-height:90vh;display:flex;flex-direction:column;background:rgba(18,16,34,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.6)">
+    <div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:12px">
+      <div style="flex:1">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Оценка риска и формулы</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Каждый тип риска оценивается отдельно своей формулой</div>
+      </div>
+      <button onclick="closeRiskScoring()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 22px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:6px">НАСТРОЙКА ПО ТИПАМ</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Следить за типом и когда поднимать тревогу (Рано 60 · Средне 70 · Поздно 80).</div>
+      <div id="rs-types"></div>
+      <div id="rs-preview" style="margin-top:16px"></div>
+      <div id="rs-formulas-wrap" style="display:none;margin-top:24px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:6px">ФОРМУЛЫ ПО ТИПАМ · только админ</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Можно заменить стандартную формулу типа своей. Активируется только после проверки.</div>
+        <div id="rs-formulas"></div>
+      </div>
+      {% if editable_categories %}
+      <div style="margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:6px">ИСТОЧНИКИ И КЛЮЧЕВЫЕ СЛОВА</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Приоритетные источники, ключевые слова и веса по категориям (Media / HR / GR / PR / Market) — влияют на сбор материалов и анализ.</div>
+        <button onclick="closeRiskScoring();openScoreSettings()" class="btn btn-secondary btn-sm">Открыть настройки категорий →</button>
+      </div>
+      {% endif %}
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px">
+      <button onclick="resetRiskConfig()" class="btn btn-secondary btn-sm">Сбросить к стандарту</button>
+      <div style="flex:1"></div>
+      <span id="rs-save-status" style="font-size:12px;color:var(--text-muted)"></span>
+      <button onclick="saveRiskConfig()" class="btn btn-primary btn-sm" id="rs-save-btn">Сохранить</button>
+    </div>
+  </div>
+</div>
+<script>
+const RISK_IS_ADMIN = {{ is_admin | tojson }};
+const RS_THRESH = {60:'Рано',70:'Средне',80:'Поздно'};
+let rsState = { per_type:{}, domains:[], domain_ru:{} };
+let rsPreviewTimer = null;
+
+function openRiskScoring(){
+  const m=document.getElementById('riskScoringModal');
+  m.style.display='flex'; document.body.style.overflow='hidden';
+  loadRiskConfig();
+}
+function closeRiskScoring(){
+  document.getElementById('riskScoringModal').style.display='none';
+  document.body.style.overflow='';
+}
+
+async function loadRiskConfig(){
+  try{
+    const r=await fetch(`/companies/${COMPANY_ID}/risk-config`);
+    const d=await r.json();
+    rsState.per_type=d.per_type||{}; rsState.domains=d.domains||[]; rsState.domain_ru=d.domain_ru||{};
+    renderRsTypes(); schedulePreview();
+    if(RISK_IS_ADMIN){ document.getElementById('rs-formulas-wrap').style.display='block'; loadFormulas(); }
+  }catch(e){ console.error(e); }
+}
+
+function renderRsTypes(){
+  const box=document.getElementById('rs-types');
+  box.innerHTML = rsState.domains.map(d=>{
+    const c=rsState.per_type[d]||{enabled:true,threshold:70};
+    const radios=[60,70,80].map(t=>`<button onclick="setRsThreshold('${d}',${t})" ${c.enabled?'':'disabled'} style="padding:5px 11px;border-radius:8px;border:1px solid ${c.threshold===t&&c.enabled?'rgba(59,130,246,0.5)':'rgba(255,255,255,0.1)'};background:${c.threshold===t&&c.enabled?'rgba(59,130,246,0.2)':'transparent'};color:${c.enabled?(c.threshold===t?'#bcd6ff':'#a39fc0'):'#555'};font-size:12px;font-weight:600;cursor:${c.enabled?'pointer':'default'}">${RS_THRESH[t]}</button>`).join('');
+    return `<div style="display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+      <div style="flex:1;min-width:0;font-weight:600;font-size:14px;${c.enabled?'':'opacity:0.5'}">${rsState.domain_ru[d]||d}</div>
+      <button onclick="toggleRsType('${d}')" title="Следить" style="width:42px;height:24px;border-radius:99px;border:none;cursor:pointer;background:${c.enabled?'#2563eb':'rgba(255,255,255,0.12)'};position:relative;transition:background .15s;flex:0 0 42px">
+        <span style="position:absolute;top:3px;left:${c.enabled?'21px':'3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s"></span>
+      </button>
+      <div style="display:flex;gap:6px;flex:0 0 auto">${radios}</div>
+    </div>`;
+  }).join('');
+}
+function toggleRsType(d){ const c=rsState.per_type[d]||{enabled:true,threshold:70}; c.enabled=!c.enabled; rsState.per_type[d]=c; renderRsTypes(); schedulePreview(); }
+function setRsThreshold(d,t){ const c=rsState.per_type[d]||{enabled:true,threshold:70}; if(!c.enabled)return; c.threshold=t; rsState.per_type[d]=c; renderRsTypes(); schedulePreview(); }
+
+function schedulePreview(){ clearTimeout(rsPreviewTimer); rsPreviewTimer=setTimeout(runRsPreview,300); }
+async function runRsPreview(){
+  const box=document.getElementById('rs-preview');
+  try{
+    const r=await fetch(`/companies/${COMPANY_ID}/risk/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({per_type:rsState.per_type})});
+    const d=await r.json();
+    if(!d.by_type){ box.innerHTML=''; return; }
+    if(!d.sample_size){ box.innerHTML=`<div style="font-size:12px;color:var(--text-muted);padding:10px 0">Превью появится после накопления сигналов (пока 0).</div>`; return; }
+    const rows=d.by_type.filter(t=>t.alerts_before||t.alerts_after).map(t=>{
+      const ch=t.alerts_after-t.alerts_before, col=ch>0?'#f2766e':(ch<0?'#38d6b8':'#a39fc0');
+      return `<div style="display:flex;align-items:center;gap:10px;font-size:13px;padding:5px 0"><span style="flex:1">${t.type_ru}</span><span style="color:#6f6b8f">в тревоге ${t.alerts_before} → <span style="color:${col};font-weight:700">${t.alerts_after}</span></span></div>`;
+    }).join('') || `<div style="font-size:12px;color:var(--text-muted)">Нет сигналов в тревоге при текущих настройках.</div>`;
+    box.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px"><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.1em;color:#8b86ab;margin-bottom:8px">ПРЕВЬЮ · последние ${d.sample_size} сигналов</div>${rows}</div>`;
+  }catch(e){ box.innerHTML=''; }
+}
+
+async function saveRiskConfig(){
+  const btn=document.getElementById('rs-save-btn'), st=document.getElementById('rs-save-status');
+  btn.disabled=true; st.textContent='Сохраняю…';
+  try{ const r=await fetch(`/companies/${COMPANY_ID}/risk-config`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({per_type:rsState.per_type})}); const d=await r.json(); st.textContent=d.ok?'Сохранено ✓':(d.error||'Ошибка'); }
+  catch(e){ st.textContent='Ошибка'; }
+  btn.disabled=false; setTimeout(()=>{st.textContent='';},2500);
+}
+async function resetRiskConfig(){
+  if(!confirm('Сбросить настройки оценки к стандарту?'))return;
+  try{ await fetch(`/companies/${COMPANY_ID}/risk-config/reset`,{method:'POST'}); }catch(e){}
+  loadRiskConfig();
+}
+
+async function loadFormulas(){
+  const box=document.getElementById('rs-formulas');
+  try{
+    const r=await fetch(`/companies/${COMPANY_ID}/formulas`); const d=await r.json();
+    const activeCustom={}; (d.custom||[]).forEach(c=>{ if(c.is_active) activeCustom[c.domain]=c; });
+    box.innerHTML = rsState.domains.map(dom=>{
+      const ac=activeCustom[dom], std=(d.standard||[]).find(s=>s.domain===dom)||{};
+      const expr=ac?ac.expression:std.expression, src=ac?'своя':'стандартная';
+      return `<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:13px 15px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-weight:600;font-size:14px;flex:1">${rsState.domain_ru[dom]||dom}</span>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;padding:2px 8px;border-radius:6px;color:${ac?'#bcd6ff':'#a39fc0'};background:${ac?'rgba(59,130,246,0.14)':'rgba(255,255,255,0.06)'};border:1px solid rgba(255,255,255,0.1)">${src}</span>
+          <button onclick="editFormula('${dom}')" style="font-size:12px;padding:4px 11px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#cdc9e4;cursor:pointer">Изменить</button>
+          ${ac?`<button onclick="rollbackFormula('${ac.id}')" style="font-size:12px;padding:4px 11px;border-radius:8px;border:1px solid rgba(242,118,110,0.3);background:rgba(242,118,110,0.1);color:#ffb4ad;cursor:pointer">Откатить</button>`:''}
+        </div>
+        <code style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#a39fc0;word-break:break-all">${expr}</code>
+        <div id="rs-fedit-${dom}" style="display:none;margin-top:10px"></div>
+      </div>`;
+    }).join('');
+  }catch(e){ box.innerHTML='<div style="color:var(--text-muted);font-size:12px">Не удалось загрузить формулы</div>'; }
+}
+function editFormula(dom){
+  const box=document.getElementById('rs-fedit-'+dom);
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML=`<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Переменные — имена факторов 0–10. Функции: min,max,clamp,abs,log,sqrt,pow. Результат обрезается в 0–100.</div>
+    <textarea id="rs-fexpr-${dom}" rows="2" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;outline:none" placeholder="reach * sentiment * audience_influence / 10"></textarea>
+    <input id="rs-fvars-${dom}" type="text" placeholder="переменные через запятую (опц., иначе стандартные)" style="width:100%;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;outline:none">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="checkFormula('${dom}')" class="btn btn-secondary btn-sm">Проверить</button>
+      <button onclick="activateNewFormula('${dom}')" class="btn btn-primary btn-sm">Сохранить и активировать</button>
+    </div>
+    <div id="rs-fresult-${dom}" style="margin-top:10px"></div>`;
+}
+async function checkFormula(dom){
+  const expr=document.getElementById('rs-fexpr-'+dom).value.trim();
+  const vr=document.getElementById('rs-fvars-'+dom).value.trim();
+  const variables=vr?vr.split(',').map(s=>s.trim()).filter(Boolean):undefined;
+  const res=document.getElementById('rs-fresult-'+dom); res.innerHTML='Проверяю…';
+  try{
+    const r=await fetch(`/companies/${COMPANY_ID}/formulas/validate-expression`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain:dom,expression:expr,variables})});
+    const d=await r.json();
+    if(!d.ok){ res.innerHTML=`<div style="color:#ffb4ad;font-size:12px">✕ ${d.error}</div>`; return; }
+    const rng=(d.range_check||[]).map(c=>`<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#a39fc0;margin-right:10px">${c.case}: ${c.score}</span>`).join('');
+    const bt=(d.backtest||[]).slice(0,5).map(b=>`<div style="font-size:11.5px;color:#a39fc0;display:flex;gap:8px;padding:2px 0"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.signal||'—'}</span><span style="color:#6f6b8f">станд ${b.standard} → <b style="color:#8fbcff">${b.custom}</b></span></div>`).join('');
+    res.innerHTML=`<div style="color:#7be3c4;font-size:12px;margin-bottom:6px">✓ Формула безопасна и валидна</div><div style="margin-bottom:6px">${rng}</div>${bt?`<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#8b86ab;margin:6px 0 3px">БЭКТЕСТ (станд → ваша)</div>${bt}`:''}`;
+  }catch(e){ res.innerHTML='<div style="color:#ffb4ad;font-size:12px">Ошибка проверки</div>'; }
+}
+async function activateNewFormula(dom){
+  const expr=document.getElementById('rs-fexpr-'+dom).value.trim();
+  const vr=document.getElementById('rs-fvars-'+dom).value.trim();
+  const variables=vr?vr.split(',').map(s=>s.trim()).filter(Boolean):undefined;
+  const res=document.getElementById('rs-fresult-'+dom); res.innerHTML='Сохраняю…';
+  try{
+    const cr=await fetch(`/companies/${COMPANY_ID}/formulas`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain:dom,expression:expr,variables})});
+    const cd=await cr.json();
+    if(cd.error){ res.innerHTML=`<div style="color:#ffb4ad;font-size:12px">✕ ${cd.error}</div>`; return; }
+    const lr=await fetch(`/companies/${COMPANY_ID}/formulas?domain=${dom}`); const ld=await lr.json();
+    const newest=(ld.custom||[])[0];
+    if(!newest){ res.innerHTML='<div style="color:#ffb4ad;font-size:12px">Не удалось найти формулу</div>'; return; }
+    const ar=await fetch(`/companies/${COMPANY_ID}/formulas/${newest.id}/activate`,{method:'POST'}); const ad=await ar.json();
+    if(ad.error){ res.innerHTML=`<div style="color:#ffb4ad;font-size:12px">✕ ${ad.error}</div>`; return; }
+    res.innerHTML='<div style="color:#7be3c4;font-size:12px">✓ Активирована</div>'; loadFormulas();
+  }catch(e){ res.innerHTML='<div style="color:#ffb4ad;font-size:12px">Ошибка</div>'; }
+}
+async function rollbackFormula(id){
+  if(!confirm('Откатить к предыдущей/стандартной формуле?'))return;
+  try{ await fetch(`/companies/${COMPANY_ID}/formulas/${id}/rollback`,{method:'POST'}); }catch(e){}
+  loadFormulas();
+}
+</script>
 {% endblock %}
