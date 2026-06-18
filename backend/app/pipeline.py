@@ -467,27 +467,30 @@ async def run_pipeline(
                     sum(1 for r in staging_rows if r["entity_type"] == "own"),
                     sum(1 for r in staging_rows if r["entity_type"] == "competitor"))
 
-    # ── Load previous risk run ─────────────────────────────────────────────────
+    # ── Load previous risk run + history window (for pattern detection) ────────
     prev_fps: list[dict] = []
     prev_run_id: str | None = None
     prev_rows: list[dict] = []
+    history_runs: list[dict] = []
     if sk:
         try:
-            prev_rows = await supabase.rest_select_service(
+            history_runs = await supabase.rest_select_service(
                 table="risk_runs", service_key=sk,
-                select="id,risk_fingerprints,top_articles",
+                select="id,score,created_at,risk_fingerprints,top_articles",
                 query_params={
                     "company_id": f"eq.{company_id}",
                     "status":     "eq.done",
                     "order":      "created_at.desc",
-                    "limit":      "1",
+                    "limit":      "8",
                 },
-            )
+            ) or []
+            prev_rows = history_runs[:1]
             if prev_rows:
                 prev_run_id = prev_rows[0].get("id")
                 prev_fps    = prev_rows[0].get("risk_fingerprints") or []
-                logger.info("[pipeline] prev run id=%s, %d fingerprints, %d articles loaded",
-                            prev_run_id, len(prev_fps), len(prev_rows[0].get("top_articles") or []))
+                logger.info("[pipeline] prev run id=%s, %d fingerprints, %d articles, %d history runs",
+                            prev_run_id, len(prev_fps),
+                            len(prev_rows[0].get("top_articles") or []), len(history_runs))
         except Exception as e:
             logger.warning("[pipeline] load prev run failed: %s", e)
 
@@ -551,6 +554,41 @@ async def run_pipeline(
         except Exception as e:
             logger.warning("[pipeline] loss scenarios failed: %s", e)
     analysis["loss_scenarios"] = loss_scenarios
+
+    # ── Connection Agent: synthesize cross-event risk map (AI-2) ──────────────
+    # Runs once on Sonnet — links events into causal chains, finds patterns
+    # across run history, and produces best/base/worst forecast + early warnings.
+    connection_map: dict = {}
+    if api_key and (own_rows or risks):
+        _stage(" Связывание событий в единую картину…")
+        # ── RAG: retrieve top-k chunks from THIS company's knowledge base ──────
+        kb_chunks: list[dict] = []
+        try:
+            from . import knowledge_base as _kb
+            _q_parts = [company_name]
+            _q_parts += [r.get("title", "") for r in (risks or [])[:6] if r.get("title")]
+            _q_parts += [r.get("title", "") for r in own_rows[:8] if r.get("title")]
+            kb_query = " · ".join([p for p in _q_parts if p])[:1500]
+            kb_chunks = await _kb.search(company_id, kb_query)  # always scoped to company_id
+            if kb_chunks:
+                logger.info("[pipeline] KB retrieval: %d chunks for company=%s", len(kb_chunks), company_id)
+        except Exception as e:
+            logger.warning("[pipeline] KB retrieval failed: %s", e)
+        try:
+            from .connection_agent import build_connection_map as _bcm
+            connection_map = await asyncio.to_thread(
+                _bcm,
+                company_name=company_name,
+                own_rows=own_rows,
+                risks=risks,
+                api_key=api_key,
+                prev_articles=prev_articles,
+                history=history_runs,
+                kb_chunks=kb_chunks,
+            )
+        except Exception as e:
+            logger.warning("[pipeline] connection agent failed: %s", e)
+    analysis["connection_map"] = connection_map
 
     # Fingerprints = active risks + decaying (not yet resolved) risks
     new_fps = [

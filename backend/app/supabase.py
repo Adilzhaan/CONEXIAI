@@ -166,6 +166,34 @@ class SupabaseClient:
         r = await self._http.post(url, headers=headers, json=rows)
         r.raise_for_status()
 
+    async def rest_insert_service_return(
+        self,
+        table: str,
+        service_key: str,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """INSERT using service role key and return the inserted rows."""
+        url = f"{self._base}/rest/v1/{table}"
+        headers = self._headers(service_key=service_key)
+        headers["Prefer"] = "return=representation"
+        r = await self._http.post(url, headers=headers, json=rows)
+        r.raise_for_status()
+        return r.json()
+
+    async def rest_rpc(
+        self,
+        fn: str,
+        service_key: str,
+        args: dict[str, Any],
+        timeout: int = 30,
+    ) -> Any:
+        """Call a Postgres function via PostgREST RPC (bypassing RLS)."""
+        url = f"{self._base}/rest/v1/rpc/{fn}"
+        r = await self._http.post(url, headers=self._headers(service_key=service_key),
+                                  json=args, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+
     async def rest_insert_ignore_service(
         self,
         table: str,

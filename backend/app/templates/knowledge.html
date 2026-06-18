@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Документы для обучения — {{ company.name }} · {{ app_name }}{% endblock %}
+
+{% block body %}
+<div class="sidebar-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <a href="/dashboard" style="display:block;line-height:0">
+        <img src="/static/logo.png" class="logo-img" alt="CONEXIAI" style="height:84px" />
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-item"><span class="sidebar-item-icon">⊞</span> Command Center</a>
+      <a href="/companies/{{ company.id }}" class="sidebar-item"><span class="sidebar-item-icon">◎</span> Компания</a>
+      <a href="/companies/{{ company.id }}/knowledge" class="sidebar-item active"><span class="sidebar-item-icon">▤</span> База знаний</a>
+      <div class="sidebar-section-label">Система</div>
+      <a href="/logout" class="sidebar-item"><span class="sidebar-item-icon">⚙</span> Выйти</a>
+    </nav>
+  </aside>
+
+  <div class="sidebar-content">
+    <div class="sidebar-topbar">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Документы для обучения · {{ company.name }}</div>
+        <div style="font-size:11px;color:var(--text-muted)">Плейбуки, регламенты, политики, кейсы — анализ по правилам вашей компании (RAG)</div>
+      </div>
+      <a href="/companies/{{ company.id }}" class="btn btn-secondary btn-sm">← К компании</a>
+    </div>
+
+    <div class="sidebar-wrap">
+      <div style="max-width:820px;margin:0 auto">
+
+        {% if msg == 'uploaded' %}<div style="margin-bottom:16px;border-radius:12px;padding:12px 16px;background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.25);color:#7fe0c0;font-size:13px">Документ загружен — идёт обработка и индексация…</div>{% endif %}
+        {% if msg == 'deleted' %}<div style="margin-bottom:16px;border-radius:12px;padding:12px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:#cdc9e4;font-size:13px">Документ удалён.</div>{% endif %}
+        {% if error == 'unsupported' %}<div style="margin-bottom:16px;border-radius:12px;padding:12px 16px;background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.25);color:#f0a8a2;font-size:13px">Формат не поддерживается. Допустимо: PDF, DOCX, TXT, MD.</div>{% endif %}
+        {% if error == 'too_large' %}<div style="margin-bottom:16px;border-radius:12px;padding:12px 16px;background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.25);color:#f0a8a2;font-size:13px">Файл слишком большой (макс. 20 МБ).</div>{% endif %}
+        {% if error == 'no_service_key' %}<div style="margin-bottom:16px;border-radius:12px;padding:12px 16px;background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.25);color:#f0a8a2;font-size:13px">Не настроен SUPABASE_SERVICE_KEY.</div>{% endif %}
+
+        {% if not embeddings_ready %}
+        <div style="margin-bottom:18px;border-radius:12px;padding:13px 16px;background:rgba(245,181,68,0.09);border:1px solid rgba(245,181,68,0.25);color:#f0d9a8;font-size:12.5px;line-height:1.5">
+          ⚠ Провайдер embeddings не настроен — документы сохранятся, но поиск по смыслу (RAG) не активен,
+          пока не задан ключ. Установите <code>EMBEDDING_PROVIDER</code> + ключ (<code>OPENAI_API_KEY</code> или <code>VOYAGE_API_KEY</code>) в окружении.
+        </div>
+        {% endif %}
+
+        {# ── Upload (drag & drop) ── #}
+        <form method="post" action="/companies/{{ company.id }}/documents" enctype="multipart/form-data" id="kb-form">
+          <label id="kb-drop" for="kb-file" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;border:1.5px dashed rgba(255,255,255,0.18);border-radius:18px;padding:36px 20px;background:rgba(255,255,255,0.02);transition:.18s;text-align:center">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" style="color:#8fbcff"><path d="M12 16V4m0 0L7 9m5-5l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <div style="font-size:14px;font-weight:600;color:#e7e4f3">Перетащите файл сюда или нажмите для выбора</div>
+            <div style="font-size:12px;color:var(--text-muted)">PDF · DOCX · TXT · MD · до 20 МБ</div>
+            <div id="kb-fname" style="font-size:12.5px;color:#8fbcff;font-weight:600"></div>
+            <input id="kb-file" type="file" name="file" accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,text/markdown" style="display:none" onchange="kbPick(this)">
+          </label>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px">
+            <button type="submit" id="kb-submit" class="btn btn-primary btn-sm" disabled>Загрузить и проиндексировать</button>
+          </div>
+        </form>
+
+        {# ── Documents list ── #}
+        <div style="margin-top:28px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:#8b86ab;margin-bottom:10px">ЗАГРУЖЕННЫЕ ДОКУМЕНТЫ · {{ documents|length }}</div>
+        {% if documents %}
+        <div style="display:flex;flex-direction:column;gap:9px">
+          {% for d in documents %}
+          {% set st = d.status or 'parsing' %}
+          {% set stc = {'ready':'#38d6b8','parsing':'#f5b544','failed':'#f2766e'} %}
+          {% set stl = {'ready':'готов','parsing':'обработка…','failed':'ошибка'} %}
+          <div style="display:flex;align-items:center;gap:14px;border-radius:13px;padding:13px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+            <div style="flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:rgba(143,188,255,0.12);display:flex;align-items:center;justify-content:center;color:#8fbcff;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700">{{ (d.name.split('.')[-1] if '.' in d.name else 'DOC')|upper|truncate(4, true, '') }}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13.5px;font-weight:600;color:#e7e4f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</div>
+              <div style="font-size:11px;color:#6f6b8f;font-family:'JetBrains Mono',monospace;margin-top:2px">
+                {{ (d.size / 1024)|round|int }} КБ
+                {% if d.status == 'ready' %} · {{ d.chunk_count or 0 }} фрагм.{% endif %}
+                {% if d.created_at %} · {{ d.created_at[:10] }}{% endif %}
+              </div>
+              {% if d.status == 'failed' and d.error %}<div style="font-size:11px;color:#e08e88;margin-top:3px">{{ d.error }}</div>{% endif %}
+            </div>
+            <span class="kb-status" data-status="{{ st }}" style="flex:0 0 auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;text-transform:uppercase;color:{{ stc.get(st,'#f5b544') }};background:rgba(255,255,255,0.05);border:1px solid {{ stc.get(st,'#f5b544') }}40;border-radius:7px;padding:3px 9px">{{ stl.get(st, st) }}</span>
+            <form method="post" action="/companies/{{ company.id }}/documents/{{ d.id }}/delete" onsubmit="return confirm('Удалить документ и его фрагменты?')" style="flex:0 0 auto;margin:0">
+              <button type="submit" title="Удалить" style="cursor:pointer;background:transparent;border:1px solid rgba(255,255,255,0.10);border-radius:8px;color:#8b86ab;width:32px;height:32px;display:flex;align-items:center;justify-content:center" onmouseover="this.style.color='#f2766e';this.style.borderColor='rgba(242,118,110,0.4)'" onmouseout="this.style.color='#8b86ab';this.style.borderColor='rgba(255,255,255,0.10)'">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0v12a2 2 0 002 2h6a2 2 0 002-2V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="border-radius:13px;padding:30px 20px;text-align:center;color:#6f6b8f;font-size:13px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
+          Пока нет документов. Загрузите плейбуки и регламенты — система будет учитывать их при анализе рисков.
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function kbPick(inp){
+    var f = inp.files && inp.files[0];
+    document.getElementById('kb-fname').textContent = f ? f.name : '';
+    document.getElementById('kb-submit').disabled = !f;
+  }
+  (function(){
+    var drop = document.getElementById('kb-drop'), inp = document.getElementById('kb-file');
+    if (drop){
+      ['dragover','dragenter'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.style.borderColor='rgba(143,188,255,0.6)'; drop.style.background='rgba(143,188,255,0.06)'; }); });
+      ['dragleave','drop'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.style.borderColor='rgba(255,255,255,0.18)'; drop.style.background='rgba(255,255,255,0.02)'; }); });
+      drop.addEventListener('drop', function(ev){ if (ev.dataTransfer.files.length){ inp.files = ev.dataTransfer.files; kbPick(inp); } });
+    }
+    // auto-refresh while any document is still parsing
+    if (document.querySelector('.kb-status[data-status="parsing"]')){
+      setTimeout(function(){ location.reload(); }, 4000);
+    }
+  })();
+</script>
+{% endblock %}

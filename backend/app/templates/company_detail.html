@@ -52,6 +52,9 @@
       <a href="/companies/{{ company.id }}/crisis" class="sidebar-item">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Crisis Protection Center
       </a>
+      <a href="/companies/{{ company.id }}/knowledge" class="sidebar-item">
+        <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg></span> База знаний
+      </a>
       <div class="sidebar-section-label" data-i18n="nav_system">Система</div>
       <a href="#" class="sidebar-item" onclick="event.preventDefault();openRiskScoring()">
         <span class="sidebar-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-3" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Настройки оценки
@@ -1375,6 +1378,77 @@
               </a>
             </div>
 
+            {# top news carousel — под «Мониторинг по зонам» #}
+            {% set _news = (monitoring_items | selectattr('is_top') | list) if monitoring_items else [] %}
+            {% if not _news and monitoring_items %}{% set _news = monitoring_items[:12] %}{% endif %}
+            {% set _srccol = {'google_news':'#5b9dff','news':'#8fbcff','gdelt':'#5b9dff','instagram':'#e2729f','threads':'#a78bfa','youtube':'#f2766e','reddit':'#f5b544','hh':'#38d6b8','kase':'#5b9dff'} %}
+            {% if _news %}
+            {# категория источника (откуда сигнал) — независимо от зоны мониторинга #}
+            {% set _catcnt = namespace(d={}) %}
+            {% for item in _news %}
+              {% set _c = source_category(source=item.source, url=item.url, source_type=item._type) %}
+              {% set _ = item.update({'_srccat': _c}) %}
+              {% set _ = _catcnt.d.update({_c: _catcnt.d.get(_c, 0) + 1}) %}
+            {% endfor %}
+            <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
+                <span style="width:7px;height:7px;border-radius:50%;background:#f5b544;box-shadow:0 0 10px #f5b544"></span>ТОП НОВОСТЕЙ И ПОСТОВ{{ help('Свежие материалы из мониторинга. Бейдж — категория источника (откуда сигнал: СМИ, соцсети, форумы…), это НЕ зона риска. Чипы сверху фильтруют по категории источника.') }}
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">{{ _news|length }} материалов · свежие</div>
+            </div>
+            {# фильтр-чипы по категориям источника (только непустые) #}
+            <div id="srccat-chips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px">
+              <button type="button" data-cat="all" data-color="#8fbcff" onclick="srccatFilter('all',this)" style="cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:#13111c;background:#8fbcff;border:1px solid #8fbcff;border-radius:8px;padding:5px 11px;font-weight:600">Все · {{ _news|length }}</button>
+              {% for ck, clbl in SOURCE_CATEGORIES.items() %}{% if _catcnt.d.get(ck) %}
+              {% set cc = source_cat_color(ck) %}
+              <button type="button" data-cat="{{ ck }}" data-color="{{ cc }}" onclick="srccatFilter('{{ ck }}',this)" style="cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ cc }};background:rgba(255,255,255,0.04);border:1px solid {{ cc }}55;border-radius:8px;padding:5px 11px">{{ clbl }} · {{ _catcnt.d[ck] }}</button>
+              {% endif %}{% endfor %}
+            </div>
+            <div id="topnews-grid" style="display:flex;gap:15px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 14px;margin:0 -2px;scrollbar-width:none">
+              {% for item in _news %}
+              {% set _sc = _srccol.get(item.source, '#8fbcff') %}
+              {% set _scat = item._srccat or 'media' %}
+              {% set _scatcol = source_cat_color(_scat) %}
+              <a href="{{ item.url or '#' }}" target="_blank" rel="noopener" data-cat="{{ _scat }}" style="scroll-snap-align:start;flex:0 0 300px;width:300px;display:flex;flex-direction:column;border-radius:18px;background:linear-gradient(165deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);overflow:hidden;text-decoration:none;color:inherit;box-shadow:0 20px 44px -38px rgba(0,0,0,0.9);transition:transform .2s,border-color .2s" onmouseover="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(59,130,246,0.3)'" onmouseout="this.style.transform='';this.style.borderColor='rgba(255,255,255,0.07)'">
+                <div style="position:relative;height:128px;background:repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 8px, rgba(255,255,255,0.015) 8px 16px);display:flex;align-items:center;justify-content:center;overflow:hidden">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style="color:rgba(255,255,255,0.22)"><rect x="3.5" y="5" width="17" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="M5 17l4.5-4 3 2.5L16 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  {% if item.url and item.url.startswith('http') and item.source not in ['instagram','threads'] %}
+                  <img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=""
+                       src="/news-image?u={{ item.url|urlencode }}"
+                       data-fb="https://s0.wp.com/mshots/v1/{{ item.url|urlencode }}?w=600&h=320"
+                       onerror="if(!this.dataset.t){this.dataset.t='1';this.src=this.dataset.fb;}else{this.remove();}"
+                       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+                  <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(16,13,32,0) 45%, rgba(16,13,32,0.55));z-index:1;pointer-events:none"></div>
+                  {% endif %}
+                  <span style="position:absolute;top:12px;left:12px;z-index:2;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:7px;color:{{ _sc }};background:{{ _sc }}29;border:1px solid {{ _sc }}4d;backdrop-filter:blur(8px)">{{ item.source }}</span>
+                </div>
+                <div style="padding:15px 16px 16px;display:flex;flex-direction:column;flex:1">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;text-transform:uppercase;color:{{ _scatcol }};background:{{ _scatcol }}1f;border:1px solid {{ _scatcol }}40;border-radius:5px;padding:2px 6px">{{ source_cat_label(_scat) }}</span>
+                    <span style="font-size:12.5px;font-weight:600;color:#cdc9e4">{{ item.source_name or item.source }}</span>
+                    {% if item.pub_date %}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6b8f">{{ item.pub_date }}</span>{% endif %}
+                  </div>
+                  <div style="font-weight:600;font-size:14.5px;line-height:1.42;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{ item.title }}</div>
+                </div>
+              </a>
+              {% endfor %}
+            </div>
+            <script>
+            function srccatFilter(cat, btn){
+              var grid = document.getElementById('topnews-grid');
+              if (grid) Array.prototype.forEach.call(grid.children, function(el){
+                el.style.display = (cat === 'all' || el.dataset.cat === cat) ? '' : 'none';
+              });
+              var box = document.getElementById('srccat-chips');
+              if (box) Array.prototype.forEach.call(box.children, function(b){
+                var col = b.dataset.color || '#8fbcff';
+                if (b.dataset.cat === cat){ b.style.background = col; b.style.color = '#13111c'; b.style.fontWeight = '600'; }
+                else { b.style.background = 'rgba(255,255,255,0.04)'; b.style.color = col; b.style.fontWeight = ''; }
+              });
+            }
+            </script>
+            {% endif %}
+
             {# ── Оценка по типам кризиса (клиентская 5-доменная модель) ── #}
             {% if latest.domain_scores %}
             {% set _dtypes = [
@@ -1475,92 +1549,235 @@
               </a>
             </div>
 
-            {# what changed #}
-            {% if delta and delta.has_changes and delta.new %}
+            {# «Что изменилось» убрано — риски теперь доступны через разворот выводов
+               (Выводы → Риски → Новости) в блоке «Раннее выявление рисков» ниже. #}
+
+            {# connection agent — единая картина: связи, прогноз, ранние предупреждения #}
+            {% set cmap = latest.connection_map if latest and latest.connection_map else {} %}
+            {% if cmap and (cmap.nodes or cmap.chains or cmap.risks or cmap.assets or cmap.forecast or cmap.early_warnings or cmap.conclusions) %}
+            {% set amap = namespace(d={}) %}
+            {% for _a in (cmap.assets or []) %}{% set _ = amap.d.update({_a.id: _a}) %}{% endfor %}
+            {% set atype_lbl = {'company':'компания','plant':'завод','facility':'объект','brand':'бренд','executive':'руководитель','contractor':'подрядчик','supplier':'поставщик','license':'лицензия','equipment':'оборудование','is':'ИС','project':'проект','product':'продукт','other':'актив'} %}
             <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>ЧТО ИЗМЕНИЛОСЬ{{ help('Новые риски с прошлого анализа. Клик по карточке раскрывает: срочность, описание проблемы, что делать и материалы-основания.') }}
+                <span style="width:7px;height:7px;border-radius:50%;background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>РАННЕЕ ВЫЯВЛЕНИЕ РИСКОВ{{ help('ИИ-агент связывает сигналы в единую картину: граф событий, затронутые активы, причинно-следственные цепочки, прогноз ущерба по 4 категориям, сценарии реакции A/B/C и ранние предупреждения до наступления кризиса.') }}
               </div>
-              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">{{ delta.new|length }} нов{{ 'ый риск' if delta.new|length == 1 else ('ых риска' if delta.new|length in [2,3,4] else 'ых рисков') }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">локализовать угрозу · вернуть контроль</div>
             </div>
-            <script>
-            function toggleRC(card){
-              var d=card.querySelector('.rc-detail'), ch=card.querySelector('.rc-chev');
-              if(!d) return;
-              var open=d.style.display==='block';
-              d.style.display=open?'none':'block';
-              card.style.borderColor=open?'rgba(255,255,255,0.07)':'rgba(242,118,110,0.35)';
-              if(ch) ch.style.transform=open?'':'rotate(180deg)';
-            }
-            </script>
-            {# full-risk lookup (description/severity/type) + recent news context #}
-            {% set _rlook = namespace(d={}) %}
-            {% for rr in (latest.risks or []) %}
-              {% set _ = _rlook.d.update({ ((rr.title or rr.text or '')|string)[:50]|lower : rr }) %}
-            {% endfor %}
-            {% set _ctxnews = ((monitoring_items | selectattr('is_top') | list)[:4]) if monitoring_items else [] %}
-            {% if not _ctxnews and monitoring_items %}{% set _ctxnews = monitoring_items[:4] %}{% endif %}
-            {% set _sevmap = {'high':('Высокая','#f2766e'),'medium':('Средняя','#f5b544'),'low':('Низкая','#38d6b8')} %}
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
-              {% for r in delta.new %}
-              {% set full = _rlook.d.get(((r.get('title') or '')|string)[:50]|lower) %}
-              {% set _sev = (full.severity if full and full.severity else 'medium') %}
-              {% set _isinc = (full.type == 'incident') if full else false %}
-              {% set _desc = (full.text if full and full.text else '') %}
-              {% set _sevlbl, _sevcol = _sevmap.get(_sev, ('Средняя','#f5b544')) %}
-              {% if _isinc %}{% set _urg, _urgcol, _urgsub = 'Реагировать немедленно', '#f2766e', 'Инцидент уже произошёл — действуйте в первые часы' %}
-              {% elif _sev == 'high' %}{% set _urg, _urgcol, _urgsub = 'В течение 24–48 часов', '#f5b544', 'Высокая серьёзность — нужен быстрый ответ' %}
-              {% elif _sev == 'low' %}{% set _urg, _urgcol, _urgsub = 'Плановый контроль', '#38d6b8', 'Низкая серьёзность — держите в поле зрения' %}
-              {% else %}{% set _urg, _urgcol, _urgsub = 'В течение недели', '#f5b544', 'Средняя серьёзность — подготовьте реакцию' %}{% endif %}
-              <div onclick="toggleRC(this)" style="position:relative;border-radius:15px;padding:15px 18px 15px 20px;background:linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);cursor:pointer;transition:border-color .18s">
-                <span style="position:absolute;left:0;top:13px;bottom:13px;width:3px;border-radius:3px;background:#f2766e"></span>
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-                  <div style="min-width:0">
-                    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.14em;font-weight:600;color:#f2766e;margin-bottom:7px">{% if _isinc %}ИНЦИДЕНТ{% else %}НОВЫЙ РИСК{% endif %}</div>
-                    <div style="font-weight:600;font-size:15px;line-height:1.4;margin-bottom:6px">{{ r.get('title','') }}</div>
-                  </div>
-                  <svg class="rc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 16px;margin-top:2px;color:#8b86ab;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
-                <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6f6b8f">
-                  <span style="width:6px;height:6px;border-radius:50%;background:#f2766e;flex:0 0 6px"></span>{{ (r.get('category','') or '')|upper }} · Скор {{ r.get('score','—') }}
-                </div>
 
-                <!-- expandable detail -->
-                <div class="rc-detail" style="display:none;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,0.08)">
-                  <!-- urgency -->
-                  <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:11px;background:{{ _urgcol }}14;border:1px solid {{ _urgcol }}33;margin-bottom:13px">
-                    <span style="width:8px;height:8px;border-radius:50%;background:{{ _urgcol }};box-shadow:0 0 8px {{ _urgcol }};flex:0 0 8px"></span>
-                    <div style="min-width:0">
-                      <div style="font-weight:700;font-size:13px;color:{{ _urgcol }}">Срочность: {{ _urg }}</div>
-                      <div style="font-size:12px;color:#a39fc0;margin-top:1px">{{ _urgsub }}</div>
+            {# реестр затронутых активов #}
+            {% if cmap.assets %}
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:10px">ЗАТРОНУТЫЕ АКТИВЫ · {{ cmap.assets|length }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+              {% for a in cmap.assets %}
+              <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#d8d5ea;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:6px 11px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;text-transform:uppercase;color:#8fbcff;background:rgba(59,130,246,0.12);border-radius:5px;padding:2px 6px">{{ atype_lbl.get(a.type, a.type) }}</span>
+                {{ a.name }}
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {# выводы из связей — единая панель; строка раскрывается в риски → новости #}
+            {% if cmap.conclusions %}
+            {% set rlook = namespace(d={}) %}
+            {% for _r in (cmap.risks or []) %}{% set _ = rlook.d.update({_r.id: _r}) %}{% endfor %}
+            {% set pv_lvlcol = {'low':'#38d6b8','medium':'#f5b544','high':'#f2766e','critical':'#d4434e'} %}
+            {% set pv_catlbl = {'media':'Инфо/СМИ','hr':'HR','gr':'GR','pr':'PR','market':'Рынок'} %}
+            <div style="margin-bottom:16px;border-radius:15px;padding:16px 18px;background:linear-gradient(120deg,rgba(167,139,250,0.09),rgba(255,255,255,0.012));border:1px solid rgba(167,139,250,0.20)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:#c9b8fb;margin-bottom:11px">ВЫВОДЫ ИЗ СВЯЗЕЙ{{ help('Клик по выводу раскрывает риски, на которых он построен; клик по риску — новости-источники.') }}</div>
+              {% for c in cmap.conclusions %}
+              {% set crisks = [] %}
+              {% for rid in (c.based_on_risks or []) %}{% if rlook.d.get(rid) %}{% set _ = crisks.append(rlook.d[rid]) %}{% endif %}{% endfor %}
+              <div style="margin-bottom:7px">
+                {# уровень 1 — вывод (как раньше: → и полный текст) #}
+                <div {% if crisks %}onclick="var d=this.nextElementSibling;var o=d.style.display==='block';d.style.display=o?'none':'block';var c=this.querySelector('.pv-chev');if(c)c.style.transform=o?'':'rotate(180deg)'" style="cursor:pointer;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(167,139,250,0.06)'" onmouseout="this.style.background='transparent'"{% endif %} {% if crisks %}{% else %}style="border-radius:8px"{% endif %}>
+                  <div style="display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.5;color:#d8d5ea;padding:3px 4px">
+                    <span style="color:#a78bfa;flex:0 0 auto">→</span>
+                    <span style="flex:1;min-width:0">{{ c.text or c }}</span>
+                    {% if crisks %}
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#9b96bb;background:rgba(255,255,255,0.05);border-radius:6px;padding:2px 6px;white-space:nowrap;margin-top:1px">{{ crisks|length }} риск.</span>
+                    <svg class="pv-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex:0 0 14px;margin-top:4px;color:#9b96bb;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    {% endif %}
+                  </div>
+                </div>
+                {# уровень 2 — риски этого вывода #}
+                {% if crisks %}
+                <div style="display:none;padding:4px 4px 8px 26px">
+                  {% for r in crisks %}
+                  {% set rc = pv_lvlcol.get(r.risk_level, '#f5b544') %}
+                  <div style="border-left:2px solid rgba(167,139,250,0.30);padding-left:14px;margin-top:9px">
+                    <div {% if r.based_on_articles %}onclick="var d=this.nextElementSibling;var o=d.style.display==='block';d.style.display=o?'none':'block';var c=this.querySelector('.pv-chev2');if(c)c.style.transform=o?'':'rotate(180deg)'" style="cursor:pointer;"{% endif %} >
+                      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;text-transform:uppercase;color:{{ rc }};background:rgba(255,255,255,0.05);border-radius:5px;padding:2px 7px">{{ 'Инцидент' if r.kind == 'incident' else 'Риск' }}</span>
+                        <span style="font-weight:600;font-size:13.5px;color:#e7e4f3">{{ r.risk }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b86ab">{{ pv_catlbl.get(r.category, r.category) }} · скор {{ r.probability }}</span>
+                        {% if r.based_on_articles %}<svg class="pv-chev2" width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex:0 0 13px;color:#8b86ab;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        {% else %}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6f6b8f">нет источника</span>{% endif %}
+                      </div>
+                    </div>
+                    {# уровень 3 — новости-источники риска #}
+                    {% if r.based_on_articles %}
+                    <div style="display:none;border-left:2px solid rgba(255,255,255,0.08);padding-left:14px;margin:8px 0 2px 4px">
+                      {% for art in r.based_on_articles %}
+                      {% set _acat = art.category or source_category(source=art.source, url=art.url) %}
+                      {% set _acatcol = source_cat_color(_acat) %}
+                      <a href="{{ art.url or '#' }}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;text-decoration:none;color:inherit;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;text-transform:uppercase;padding:2px 5px;border-radius:5px;color:{{ _acatcol }};background:{{ _acatcol }}1f;border:1px solid {{ _acatcol }}40;white-space:nowrap;flex:0 0 auto;margin-top:1px">{{ source_cat_label(_acat) }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:5px;color:#8fbcff;background:rgba(59,130,246,0.14);border:1px solid rgba(59,130,246,0.28);white-space:nowrap;flex:0 0 auto;margin-top:1px">{{ art.source or 'источник' }}</span>
+                        <span style="font-size:12.5px;line-height:1.4;color:#cdc9e4">{{ art.title }}{% if art.date %} <span style="color:#6f6b8f">· {{ art.date }}</span>{% endif %}</span>
+                      </a>
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {# карта связей — слоистый граф: триггеры → механизмы → последствия #}
+            <div id="cmap-card" style="position:relative;border-radius:22px;padding:26px 28px 22px;margin-bottom:14px;background:radial-gradient(130% 120% at 50% 0%, rgba(46,44,92,0.50), rgba(17,15,28,0.65));border:1px solid rgba(255,255,255,0.08);box-shadow:0 30px 70px -50px rgba(0,0,0,0.9);overflow:hidden">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:6px">
+                <div style="display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.18em;color:#8b86ab">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#5b9dff;box-shadow:0 0 10px #5b9dff"></span>КАРТА СВЯЗЕЙ РИСКОВ
+                </div>
+                <div id="cmap-graph-legend" style="display:none;align-items:center;gap:14px;font-size:11px;color:#b6b2cf;font-family:'JetBrains Mono',monospace">
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#E24B4A"></span>высокий</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#EF9F27"></span>средний</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#1D9E75"></span>низкий</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:13px;height:13px;border-radius:50%;border:2px solid #378ADD;box-shadow:0 0 8px rgba(55,138,221,0.6)"></span>хаб</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;transform:rotate(45deg);border:1.5px solid #E24B4A;background:rgba(226,75,74,0.18)"></span>итог</span>
+                </div>
+              </div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;letter-spacing:-0.01em;color:#f4f3fb;margin-bottom:6px">Как риски усиливают друг друга</div>
+              <div id="cmap-sub" style="font-size:14px;color:#8b86ab;margin-bottom:18px">Наведи на узел — подсветятся связи · кликни — детали цепочки.</div>
+
+              <div style="position:relative;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.18)">
+                <div id="cmap-graph" style="width:100%;height:480px"></div>
+                <div id="cmap-graph-empty" style="display:none;padding:60px 20px;text-align:center;color:#6f6b8f;font-size:13px">Граф связей пока не построен — запустите анализ.</div>
+                <button id="cmap-fit" type="button" onclick="cmapFit()" style="display:none;position:absolute;top:10px;right:10px;z-index:3;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:#b6b2cf;background:rgba(20,18,30,0.7);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:5px 10px;backdrop-filter:blur(8px)">⤢ Вписать</button>
+                <div id="cmap-detail" style="display:none;position:absolute;right:10px;top:10px;bottom:10px;z-index:4;width:300px;max-width:80%;overflow:auto;border-radius:14px;background:rgba(17,15,28,0.92);border:1px solid rgba(255,255,255,0.12);box-shadow:0 20px 60px -30px #000;backdrop-filter:blur(12px);padding:16px 16px 18px"></div>
+              </div>
+              {# легенда рёбер #}
+              <div id="cmap-edge-legend" style="display:none;align-items:center;gap:18px;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b86ab">
+                <span style="display:inline-flex;align-items:center;gap:8px"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#E24B4A" stroke-width="2.4"/></svg>усиление</span>
+                <span style="display:inline-flex;align-items:center;gap:8px"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#9b96bb" stroke-width="2" stroke-dasharray="5 5"/></svg>косвенная связь</span>
+              </div>
+            </div>
+            {# цепочки как «истории» — клик подсвечивает путь в графе #}
+            <div id="cmap-chains" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px"></div>
+
+            {# per-risk интеллект — причина, последствия 1/2/3, ущерб 4 кат., сценарии A/B/C #}
+            {% set lvlcol = {'low':'#38d6b8','medium':'#f5b544','high':'#f2766e','critical':'#d4434e'} %}
+            {% set lvllbl = {'low':'низкий','medium':'средний','high':'высокий','critical':'критический'} %}
+            {% set spdlbl = {'low':'медленно','medium':'средне','high':'быстро','critical':'молниеносно'} %}
+            {% set scllbl = {'local':'локальный','regional':'региональный','corporate':'корпоративный','systemic':'системный'} %}
+            {% set dmglbl = {'financial':'Финансовый','operational':'Операционный','reputational':'Репутационный','legal':'Юридический'} %}
+            {% set scn = {'A_no_action':('A · Бездействие','#d4434e'),'B_partial':('B · Частичная реакция','#f5b544'),'C_immediate':('C · Немедленная реакция','#38d6b8')} %}
+            {% set aglbl = {'crisis_commander':'Crisis Commander','communications':'Communications','stakeholder':'Stakeholder','intelligence':'Intelligence','execution':'Execution','reporting':'Reporting'} %}
+            {% if cmap.risks %}
+            <div id="cmap-risks" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:10px;scroll-margin-top:80px">АНАЛИЗ РИСКОВ · {{ cmap.risks|length }} · УЩЕРБ + СЦЕНАРИИ A/B/C</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+              {% for r in cmap.risks %}
+              {% set lc = lvlcol.get(r.risk_level, '#f5b544') %}
+              {% set pc = lvlcol.get(r.priority, '#f5b544') %}
+              <div style="border-radius:16px;background:linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.08);border-left:3px solid {{ lc }};overflow:hidden">
+                {# header — always visible, clickable #}
+                <div onclick="var d=this.nextElementSibling;var o=d.style.display==='block';d.style.display=o?'none':'block';this.querySelector('.rk-chev').style.transform=o?'':'rotate(180deg)'" style="cursor:pointer;padding:15px 18px;display:flex;align-items:flex-start;gap:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;text-transform:uppercase;color:{{ pc }};background:rgba(255,255,255,0.05);border:1px solid {{ pc }}55;border-radius:6px;padding:2px 7px">приоритет: {{ lvllbl.get(r.priority, r.priority) }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;text-transform:uppercase;color:{{ lc }};background:rgba(255,255,255,0.05);border-radius:6px;padding:2px 7px">риск: {{ lvllbl.get(r.risk_level, r.risk_level) }}</span>
+                    </div>
+                    <div style="font-weight:600;font-size:15px;line-height:1.35;color:#e7e4f3">{{ r.risk }}</div>
+                    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b86ab">
+                      <span>вероятность <span style="color:{{ lc }};font-weight:700">{{ r.probability }}%</span></span>
+                      <span>эскалация: {{ spdlbl.get(r.escalation_speed, r.escalation_speed) }}</span>
+                      <span>масштаб: {{ scllbl.get(r.impact_scale, r.impact_scale) }}</span>
                     </div>
                   </div>
-                  <!-- meta chips -->
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:{{ _sevcol }};background:{{ _sevcol }}18;border:1px solid {{ _sevcol }}3a">Серьёзность: {{ _sevlbl }}</span>
-                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:#8fbcff;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3)">{% if _isinc %}Инцидент (факт){% else %}Прогноз{% endif %}</span>
-                    {% set _cr = r.get('consecutive_runs', 1) %}
-                    {% if _cr and _cr > 1 %}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;color:#a39fc0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12)">Держится {{ _cr }} прогон{{ 'а' if _cr in [2,3,4] else 'ов' }}</span>{% endif %}
+                  <svg class="rk-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 16px;margin-top:3px;color:#8b86ab;transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                {# detail — expandable #}
+                <div class="risk-detail" style="display:none;padding:0 18px 18px;border-top:1px solid rgba(255,255,255,0.07)">
+                  {% if r.description %}<div style="font-size:13px;line-height:1.6;color:#cdc9e4;margin:14px 0">{{ r.description }}</div>{% endif %}
+                  <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px;font-size:12.5px;color:#a39fc0">
+                    {% if r.cause %}<div><span style="color:#8b86ab">Причина:</span> {{ r.cause }}</div>{% endif %}
+                    {% if r.signal_source %}<div><span style="color:#8b86ab">Источник сигнала:</span> {{ r.signal_source }}</div>{% endif %}
+                    {% if r.weak_signals %}<div><span style="color:#8b86ab">Слабые сигналы:</span> {{ r.weak_signals|join(' · ') }}</div>{% endif %}
+                    {% set _anames = [] %}
+                    {% for aid in r.affected_assets %}{% if amap.d.get(aid) %}{% set _ = _anames.append(amap.d[aid].name) %}{% endif %}{% endfor %}
+                    {% if _anames %}<div><span style="color:#8b86ab">Затронутые активы:</span> {{ _anames|join(' · ') }}</div>{% endif %}
+                    {% if r.related_objects %}<div><span style="color:#8b86ab">Объекты:</span> {{ r.related_objects|join(' · ') }}</div>{% endif %}
                   </div>
-                  <!-- description -->
-                  {% if _desc %}
-                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:6px">ОПИСАНИЕ ПРОБЛЕМЫ</div>
-                  <div style="font-size:13.5px;line-height:1.6;color:#cdc9e4;margin-bottom:13px">{{ _desc }}</div>
+
+                  {# последствия: первичные → вторичные → третичные #}
+                  {% if r.consequences and (r.consequences.primary or r.consequences.secondary or r.consequences.tertiary) %}
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+                    {% for lvl, lbl, col in [('primary','ПЕРВИЧНЫЕ','#f2766e'),('secondary','ВТОРИЧНЫЕ','#f5b544'),('tertiary','ТРЕТИЧНЫЕ','#a78bfa')] %}
+                    <div style="border-radius:12px;padding:11px 13px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06)">
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:{{ col }};margin-bottom:7px">{{ lbl }}</div>
+                      {% for c in r.consequences.get(lvl, []) %}<div style="font-size:12px;line-height:1.45;color:#cdc9e4;margin-bottom:4px;display:flex;gap:6px"><span style="color:{{ col }};flex:0 0 auto">·</span>{{ c }}</div>{% endfor %}
+                    </div>
+                    {% endfor %}
+                  </div>
                   {% endif %}
-                  <!-- what to do -->
-                  {% if latest.advice %}
-                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8fbcff;margin-bottom:6px">ЧТО ДЕЛАТЬ</div>
-                  <div style="font-size:13px;line-height:1.6;color:#a39fc0;margin-bottom:13px">{{ latest.advice }}</div>
+
+                  {# прогноз ущерба — 4 категории #}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8b86ab;margin-bottom:8px">ПРОГНОЗ УЩЕРБА · 4 КАТЕГОРИИ</div>
+                  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
+                    {% for cat in ['financial','operational','reputational','legal'] %}
+                    {% set dm = r.damage_forecast.get(cat, {}) %}
+                    <div style="border-radius:12px;padding:11px 13px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06)">
+                      <div style="font-size:11px;font-weight:700;color:#d8d5ea;margin-bottom:4px">{{ dmglbl.get(cat, cat) }}</div>
+                      <div style="font-size:12.5px;color:#e7e4f3;line-height:1.4">{{ dm.estimate or '—' }}</div>
+                      {% if dm.basis %}<div style="font-size:11px;color:#8b86ab;margin-top:3px">{{ dm.basis }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                  </div>
+
+                  {# сценарии A/B/C — реакция #}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8b86ab;margin-bottom:8px">СЦЕНАРИИ РЕАКЦИИ · A / B / C</div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+                    {% for key in ['A_no_action','B_partial','C_immediate'] %}
+                    {% set sc = r.scenarios.get(key, {}) %}
+                    {% set slbl, scol = scn[key] %}
+                    <div style="border-radius:12px;padding:12px 13px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-top:3px solid {{ scol }}">
+                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:{{ scol }}">{{ slbl }}</span>
+                        <span style="font-size:10.5px;color:#8b86ab">{{ sc.probability }}%</span>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:#cdc9e4">
+                        {% if sc.financial %}<div><span style="color:#8b86ab">Фин:</span> {{ sc.financial }}</div>{% endif %}
+                        {% if sc.operational %}<div><span style="color:#8b86ab">Опер:</span> {{ sc.operational }}</div>{% endif %}
+                        {% if sc.reputational %}<div><span style="color:#8b86ab">Реп:</span> {{ sc.reputational }}</div>{% endif %}
+                        {% if sc.legal %}<div><span style="color:#8b86ab">Юр:</span> {{ sc.legal }}</div>{% endif %}
+                        {% if sc.timeline %}<div style="color:{{ scol }};margin-top:3px">⏱ {{ sc.timeline }}</div>{% endif %}
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+
+                  {# рекомендуемые действия #}
+                  {% if r.recommended_actions %}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8fbcff;margin-bottom:8px">РЕКОМЕНДУЕМЫЕ ДЕЙСТВИЯ</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+                    {% for act in r.recommended_actions %}
+                    <div style="display:flex;gap:9px;font-size:12.5px;line-height:1.45;color:#d8d5ea"><span style="font-family:'JetBrains Mono',monospace;color:#8fbcff;flex:0 0 auto">{{ loop.index }}.</span><span>{{ act }}</span></div>
+                    {% endfor %}
+                  </div>
                   {% endif %}
-                  <!-- related news -->
-                  {% if _ctxnews %}
-                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:8px">НА ОСНОВЕ МАТЕРИАЛОВ</div>
-                  <div style="display:flex;flex-direction:column;gap:7px">
-                    {% for it in _ctxnews %}
-                    <a href="{{ it.url or '#' }}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:flex;align-items:flex-start;gap:8px;text-decoration:none;color:inherit;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
-                      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:5px;color:#8fbcff;background:rgba(59,130,246,0.14);border:1px solid rgba(59,130,246,0.28);white-space:nowrap;flex:0 0 auto;margin-top:1px">{{ it.source }}</span>
-                      <span style="font-size:12.5px;line-height:1.4;color:#cdc9e4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ it.title }}</span>
-                    </a>
+
+                  {# передача агентам — рекомендация #}
+                  {% if r.required_agents %}
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8b86ab;margin-bottom:8px">ПЕРЕДАТЬ АГЕНТАМ</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:7px">
+                    {% for ag in r.required_agents %}
+                    <span style="font-size:11.5px;color:#c9b8fb;background:rgba(167,139,250,0.10);border:1px solid rgba(167,139,250,0.25);border-radius:8px;padding:4px 10px">{{ aglbl.get(ag, ag) }}</span>
                     {% endfor %}
                   </div>
                   {% endif %}
@@ -1568,93 +1785,275 @@
               </div>
               {% endfor %}
             </div>
-            {% endif %}
-
-            {# top news carousel #}
-            {% set _news = (monitoring_items | selectattr('is_top') | list) if monitoring_items else [] %}
-            {% if not _news and monitoring_items %}{% set _news = monitoring_items[:12] %}{% endif %}
-            {% set _srccol = {'google_news':'#5b9dff','news':'#8fbcff','gdelt':'#5b9dff','instagram':'#e2729f','threads':'#a78bfa','youtube':'#f2766e','reddit':'#f5b544','hh':'#38d6b8','kase':'#5b9dff'} %}
-            {% if _news %}
-            <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-              <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f5b544;box-shadow:0 0 10px #f5b544"></span>ТОП НОВОСТЕЙ И ПОСТОВ{{ help('Свежие материалы из мониторинга — новости и посты по компании. Клик по карточке открывает оригинал статьи.') }}
-              </div>
-              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">{{ _news|length }} материалов · свежие</div>
-            </div>
-            <div style="display:flex;gap:15px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 14px;margin:0 -2px;scrollbar-width:none">
-              {% for item in _news %}
-              {% set _sc = _srccol.get(item.source, '#8fbcff') %}
-              <a href="{{ item.url or '#' }}" target="_blank" rel="noopener" style="scroll-snap-align:start;flex:0 0 300px;width:300px;display:flex;flex-direction:column;border-radius:18px;background:linear-gradient(165deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);overflow:hidden;text-decoration:none;color:inherit;box-shadow:0 20px 44px -38px rgba(0,0,0,0.9);transition:transform .2s,border-color .2s" onmouseover="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(59,130,246,0.3)'" onmouseout="this.style.transform='';this.style.borderColor='rgba(255,255,255,0.07)'">
-                <div style="position:relative;height:128px;background:repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 8px, rgba(255,255,255,0.015) 8px 16px);display:flex;align-items:center;justify-content:center;overflow:hidden">
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style="color:rgba(255,255,255,0.22)"><rect x="3.5" y="5" width="17" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="M5 17l4.5-4 3 2.5L16 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  {% if item.url and item.url.startswith('http') and item.source not in ['instagram','threads'] %}
-                  <img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=""
-                       src="/news-image?u={{ item.url|urlencode }}"
-                       data-fb="https://s0.wp.com/mshots/v1/{{ item.url|urlencode }}?w=600&h=320"
-                       onerror="if(!this.dataset.t){this.dataset.t='1';this.src=this.dataset.fb;}else{this.remove();}"
-                       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
-                  <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(16,13,32,0) 45%, rgba(16,13,32,0.55));z-index:1;pointer-events:none"></div>
-                  {% endif %}
-                  <span style="position:absolute;top:12px;left:12px;z-index:2;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:7px;color:{{ _sc }};background:{{ _sc }}29;border:1px solid {{ _sc }}4d;backdrop-filter:blur(8px)">{{ item.source }}</span>
+            {% elif cmap.forecast %}
+            {% set fcol = {'best':('#38d6b8','Лучший'),'base':('#f5b544','Базовый'),'worst':('#f2766e','Худший')} %}
+            <div id="cmap-forecast" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:10px;scroll-margin-top:80px">ПРОГНОЗ РАЗВИТИЯ · 3 СЦЕНАРИЯ</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+              {% for key in ['best','base','worst'] %}
+              {% set sc = cmap.forecast.get(key) %}
+              {% if sc %}
+              {% set fc, flbl = fcol[key] %}
+              <div style="border-radius:15px;padding:16px 18px;background:linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);border-top:3px solid {{ fc }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;color:{{ fc }}">{{ flbl }}</span>
+                  <span style="font-size:11px;color:#8b86ab">{{ sc.probability }}%</span>
                 </div>
-                <div style="padding:15px 16px 16px;display:flex;flex-direction:column;flex:1">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
-                    <span style="font-size:12.5px;font-weight:600;color:#cdc9e4">{{ item.source_name or item.source }}</span>
-                    {% if item.pub_date %}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6b8f">{{ item.pub_date }}</span>{% endif %}
-                  </div>
-                  <div style="font-weight:600;font-size:14.5px;line-height:1.42;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{ item.title }}</div>
+                <div style="display:flex;align-items:baseline;gap:5px;margin-bottom:10px">
+                  <span style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;line-height:1;color:{{ fc }};font-variant-numeric:tabular-nums">{{ sc.score_estimate }}</span>
+                  <span style="font-size:11px;color:#6f6b8f">прогноз скора</span>
                 </div>
-              </a>
-              {% endfor %}
-            </div>
-            {% endif %}
-
-            {# loss scenarios #}
-            {% set _loss2 = latest.loss_scenarios if latest and latest.loss_scenarios else [] %}
-            {% if _loss2 %}
-            {% set _lscol = {'media':'#5b9dff','hr':'#38d6b8','gr':'#f2766e','pr':'#a78bfa','market':'#f5b544'} %}
-            <div style="margin-top:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-              <div style="display:flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-size:12.5px;letter-spacing:0.16em;color:#8b86ab;white-space:nowrap">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f2766e;box-shadow:0 0 10px #f2766e"></span>СЦЕНАРИИ ПОТЕРЬ{{ help('Сколько компания может потерять, если риск реализуется: худший / базовый / если вовремя среагировать. Цифры — оценка ИИ по топ-рискам.') }}
-              </div>
-              <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;white-space:nowrap">если риск реализуется</div>
-            </div>
-            {% if risk_impact %}
-            <div style="border-radius:20px;padding:22px 26px;margin-bottom:16px;background:linear-gradient(120deg, rgba(242,118,110,0.10), rgba(255,255,255,0.012));border:1px solid rgba(242,118,110,0.20);display:flex;align-items:center;gap:26px;box-shadow:0 26px 60px -44px rgba(0,0,0,0.8)">
-              <div style="flex:1;min-width:0">
-                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.14em;color:#e08e88;margin-bottom:10px">ПОТЕНЦИАЛЬНЫЕ ПОТЕРИ · ИТОГО</div>
-                <div style="font-family:'Space Grotesk',sans-serif;font-size:46px;font-weight:700;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;background:linear-gradient(120deg,#ffb4ad,#f2766e);-webkit-background-clip:text;background-clip:text;color:transparent">${{ "{:,.0f}".format(risk_impact.potential_loss) }}</div>
-              </div>
-              <div style="text-align:right;flex:0 0 auto;padding-left:24px;border-left:1px solid rgba(255,255,255,0.08)">
-                <div style="font-size:14px;color:#a39fc0">при реализации рисков</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#6f6b8f;margin-top:8px">{{ risk_impact.sentiment_factor }} × {{ "{:,.0f}".format(risk_impact.reach_factor) }} × {{ risk_impact.sector_mult }}</div>
-              </div>
-            </div>
-            {% endif %}
-            <div style="display:flex;flex-direction:column;gap:16px">
-              {% for ls in _loss2 %}
-              {% set _lc = _lscol.get(ls.category, '#8fbcff') %}
-              <div style="border-radius:20px;background:linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.07);overflow:hidden;box-shadow:0 26px 60px -44px rgba(0,0,0,0.8)">
-                <div style="display:flex;align-items:center;gap:12px;padding:17px 22px;border-bottom:1px solid rgba(255,255,255,0.06)">
-                  <span style="width:9px;height:9px;border-radius:50%;background:{{ _lc }};box-shadow:0 0 10px {{ _lc }};flex:0 0 9px"></span>
-                  <span style="font-weight:700;font-size:16px;line-height:1.35;flex:1;min-width:0">{{ ls.title }}</span>
-                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 10px;border-radius:8px;color:{{ _lc }};background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);white-space:nowrap">{{ (ls.category or '')|upper }}</span>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr">
-                  {% set _br = [('ХУДШИЙ', ls.worst, '#f2766e'), ('БАЗОВЫЙ', ls.base, '#f5b544'), ('ЕСЛИ СРЕАГИРОВАТЬ', ls.reacted, '#38d6b8')] %}
-                  {% for _bn, _b, _bc in _br %}
-                  <div style="padding:18px 20px;{% if not loop.last %}border-right:1px solid rgba(255,255,255,0.06);{% endif %}background:linear-gradient(180deg, {{ _bc }}12, transparent 70%)">
-                    <div style="display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;font-weight:600;color:{{ _bc }};margin-bottom:9px"><span style="width:6px;height:6px;border-radius:50%;background:{{ _bc }}"></span>{{ _bn }}</div>
-                    {% if _b and _b.money %}<div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:{{ _bc }};margin-bottom:10px">{{ _b.money }}</div>{% endif %}
-                    <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b86ab;margin-bottom:11px">{% if _b and _b.churn %}отток {{ _b.churn }} · {% endif %}{% if _b and _b.rep %}репутация {{ _b.rep }} · {% endif %}{% if _b and _b.days %}{{ _b.days }} дн.{% endif %}</div>
-                    {% if _b and _b.text %}<div style="font-size:13px;line-height:1.5;color:#a39fc0">{{ _b.text[:120] }}</div>{% endif %}
-                  </div>
+                <div style="font-size:12.5px;line-height:1.5;color:#cdc9e4;margin-bottom:{% if sc.drivers %}10px{% else %}0{% endif %}">{{ sc.summary }}</div>
+                {% if sc.drivers %}
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  {% for d in sc.drivers %}
+                  <div style="font-size:11.5px;color:#8b86ab;display:flex;gap:6px"><span style="color:{{ fc }};flex:0 0 auto">·</span>{{ d }}</div>
                   {% endfor %}
                 </div>
+                {% endif %}
+              </div>
+              {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {# ранние предупреждения #}
+            {% if cmap.early_warnings %}
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#f5b544;margin-bottom:10px">⚠ РАННИЕ ПРЕДУПРЕЖДЕНИЯ · ДО КРИЗИСА</div>
+            <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:{% if cmap.patterns %}20px{% else %}0{% endif %}">
+              {% for w in cmap.early_warnings %}
+              <div style="border-radius:13px;padding:13px 16px;background:linear-gradient(120deg,rgba(245,181,68,0.08),rgba(255,255,255,0.01));border:1px solid rgba(245,181,68,0.20)">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+                  <span style="font-weight:600;font-size:13.5px;color:#f0d9a8">{{ w.signal }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b86ab">{{ w.horizon }}</span>
+                </div>
+                <div style="font-size:12.5px;color:#cdc9e4;line-height:1.45"><span style="color:#f5b544">→ ведёт к:</span> {{ w.leads_to }}</div>
+                {% if w.watch %}<div style="font-size:12px;color:#8b86ab;margin-top:4px">Отслеживать: {{ w.watch }}</div>{% endif %}
               </div>
               {% endfor %}
             </div>
             {% endif %}
+
+            {# закономерности по истории #}
+            {% if cmap.patterns %}
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#8b86ab;margin-bottom:10px">ЗАКОНОМЕРНОСТИ ПО ИСТОРИИ ПРОГОНОВ</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              {% for p in cmap.patterns %}
+              <div style="border-radius:13px;padding:12px 16px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.18)">
+                <div style="font-weight:600;font-size:13px;color:#c9b8fb;margin-bottom:4px">{{ p.pattern }}</div>
+                <div style="font-size:12px;color:#9b96bb">{{ p.implication }}{% if p.based_on %} <span style="color:#6f6b8f">· {{ p.based_on }}</span>{% endif %}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <script>
+            (function initConnectionGraph(){
+              var CID = '{{ company.id }}';
+              var SEV = { high:'#E24B4A', medium:'#EF9F27', low:'#1D9E75' };
+              var HUB = '#378ADD';
+              var STLBL = { forming:'формируется', active:'развивается', resolved:'затухает' };
+              var STCOL = { forming:'#EF9F27', active:'#E24B4A', resolved:'#1D9E75' };
+              var CATLBL = { media:'Инфо/СМИ', hr:'HR', gr:'GR', pr:'PR', market:'Рынок' };
+              var graphEl = document.getElementById('cmap-graph');
+              if (!graphEl) return;
+              var DATA = null, cy = null, pinned = null;
+
+              function showEmpty(msg){
+                graphEl.style.display = 'none';
+                var e = document.getElementById('cmap-graph-empty');
+                if (e){ e.style.display = 'block'; if (msg) e.textContent = msg; }
+              }
+              function loadLibs(cb){
+                function need(src, test, next){
+                  if (test()){ return next(); }
+                  var s = document.createElement('script');
+                  s.src = src; s.onload = next;
+                  s.onerror = function(){ showEmpty('Не удалось загрузить граф.'); };
+                  document.head.appendChild(s);
+                }
+                need('https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js', function(){ return window.cytoscape; }, function(){
+                  need('https://unpkg.com/dagre@0.8.5/dist/dagre.min.js', function(){ return window.dagre; }, function(){
+                    need('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js', function(){ return window.cytoscapeDagre; }, function(){
+                      try { if (window.cytoscapeDagre) window.cytoscape.use(window.cytoscapeDagre); } catch(e){}
+                      cb();
+                    });
+                  });
+                });
+              }
+              function shortLabel(s){ s = s || ''; return s.length > 26 ? s.slice(0, 24) + '…' : s; }
+
+              fetch('/companies/' + CID + '/connection-graph')
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                  var nodes = (d && d.nodes) || [], edges = (d && d.edges) || [],
+                      chains = (d && d.chains) || [], risks = (d && d.risks) || [];
+                  if (!nodes.length){ showEmpty(); return; }
+                  DATA = { nodes: nodes, edges: edges, chains: chains, risks: risks };
+                  document.getElementById('cmap-graph-legend').style.display = 'flex';
+                  var _el = document.getElementById('cmap-edge-legend'); if (_el) _el.style.display = 'flex';
+                  var _byId = {}; nodes.forEach(function(n){ _byId[n.id] = true; });
+                  var _ne = edges.filter(function(e){ return _byId[e.from] && _byId[e.to] && e.from !== e.to; }).length;
+                  var sub = document.getElementById('cmap-sub');
+                  if (sub) sub.textContent = 'Наведи на узел — подсветятся связи · кликни — детали цепочки · '
+                    + nodes.length + ' узл' + (nodes.length % 10 === 1 && nodes.length % 100 !== 11 ? 'а' : 'ов')
+                    + ', ' + _ne + ' связ' + (_ne % 10 === 1 && _ne % 100 !== 11 ? 'ь' : (_ne % 10 >= 2 && _ne % 10 <= 4 && (_ne % 100 < 10 || _ne % 100 >= 20) ? 'и' : 'ей'));
+                  loadLibs(function(){ render(); buildChips(chains); });
+                })
+                .catch(function(){ showEmpty('Граф недоступен.'); });
+
+              function render(){
+                var nodes = DATA.nodes, edges = DATA.edges;
+                var byId = {}; nodes.forEach(function(n){ byId[n.id] = true; });
+                var els = [];
+                nodes.forEach(function(n){
+                  els.push({ data: {
+                    id: n.id, label: shortLabel(n.label), full: n.label || n.id,
+                    sev: (SEV[n.severity] ? n.severity : 'medium'),
+                    deg: n.degree || 0, hub: (n.is_hub || n.role === 'hub') ? 1 : 0,
+                    terminal: n.terminal ? 1 : 0, cat: n.category || ''
+                  }});
+                });
+                var ecount = 0;
+                edges.forEach(function(e, i){
+                  if (!byId[e.from] || !byId[e.to] || e.from === e.to) return;  // drop broken refs
+                  ecount++;
+                  els.push({ data: { id: 'e' + i, source: e.from, target: e.to,
+                    etype: e.type || 'causal', conf: e.confidence || 'medium' } });
+                });
+                if (cy){ try { cy.destroy(); } catch(e){} cy = null; }
+                cy = cytoscape({
+                  container: graphEl, elements: els, wheelSensitivity: 0.2,
+                  style: [
+                    { selector: 'node', style: {
+                      'background-color': function(n){ return SEV[n.data('sev')] || SEV.medium; },
+                      'width':  function(n){ return 30 + Math.min(n.data('deg'), 6) * 7; },
+                      'height': function(n){ return 30 + Math.min(n.data('deg'), 6) * 7; },
+                      'label': 'data(label)', 'color': '#e7e4f3', 'font-size': '9px',
+                      'text-wrap': 'wrap', 'text-max-width': '96px', 'text-valign': 'bottom',
+                      'text-margin-y': 5, 'text-outline-color': '#13111c', 'text-outline-width': 2,
+                      'border-width': 0, 'transition-property': 'opacity', 'transition-duration': '0.15s'
+                    }},
+                    { selector: 'node[hub = 1]', style: {
+                      'border-width': 4, 'border-color': HUB,
+                      'shadow-blur': 20, 'shadow-color': HUB, 'shadow-opacity': 0.55 } },
+                    { selector: 'node[terminal = 1]', style: { 'shape': 'round-diamond' } },
+                    { selector: 'edge', style: {
+                      'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
+                      'line-color': 'rgba(226,75,74,0.45)', 'target-arrow-color': 'rgba(226,75,74,0.62)',
+                      'arrow-scale': 1.1,
+                      'width': function(e){ return ({low:1.5, medium:2.5, high:3.5})[e.data('conf')] || 2; },
+                      'transition-property': 'opacity', 'transition-duration': '0.15s' }},
+                    { selector: 'edge[etype = "escalation"]', style: {
+                      'width': 4, 'line-color': 'rgba(226,75,74,0.62)', 'target-arrow-color': 'rgba(226,75,74,0.78)' }},
+                    { selector: 'edge[etype = "correlation"]', style: {
+                      'line-style': 'dashed', 'target-arrow-shape': 'none',
+                      'line-color': 'rgba(155,150,187,0.55)' }},
+                    { selector: '.dim', style: { 'opacity': 0.12 }},
+                    { selector: '.hl',  style: { 'opacity': 1 }}
+                  ],
+                  layout: { name: 'dagre', rankDir: 'LR', nodeSep: 28, rankSep: 90, fit: true, padding: 26 }
+                });
+                document.getElementById('cmap-fit').style.display = 'block';
+                cy.on('mouseover', 'node', function(ev){ if (pinned) return; focusNode(ev.target, false); });
+                cy.on('mouseout', 'node', function(){ if (pinned) return; cy.elements().removeClass('dim hl'); });
+                cy.on('tap', 'node', function(ev){ pinned = ev.target.id(); focusNode(ev.target, true); showDetail(ev.target); });
+                cy.on('tap', function(ev){ if (ev.target === cy){ pinned = null; cy.elements().removeClass('dim hl'); hideDetail(); } });
+                window.__cmapCy = cy;
+              }
+
+              function focusNode(n, strong){
+                cy.elements().addClass('dim').removeClass('hl');
+                n.removeClass('dim').addClass('hl');
+                n.neighborhood().removeClass('dim');
+                n.connectedEdges().removeClass('dim').addClass('hl');
+              }
+
+              function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+              function showDetail(n){
+                var id = n.id();
+                var sev = n.data('sev'), cat = n.data('cat');
+                var sevlbl = {high:'высокий', medium:'средний', low:'низкий'}[sev] || sev;
+                var sevcol = SEV[sev] || SEV.medium;
+                var indeg = n.incomers('edge').length, outdeg = n.outgoers('edge').length;
+                // chains containing this node
+                var inChains = (DATA.chains || []).filter(function(c){ return (c.node_ids||[]).indexOf(id) >= 0; });
+                // risk whose chain passes through this node
+                var risk = (DATA.risks || []).filter(function(r){ return (r.chain_node_ids||[]).indexOf(id) >= 0; })[0];
+                var html = '';
+                html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">';
+                html += '<div style="font-weight:700;font-size:14.5px;line-height:1.35;color:#f4f3fb">' + escapeHtml(n.data('full')) + '</div>';
+                html += '<span onclick="cmapCloseDetail()" style="cursor:pointer;color:#8b86ab;flex:0 0 auto;font-size:18px;line-height:1">×</span></div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
+                html += '<span style="font-family:JetBrains Mono,monospace;font-size:10px;font-weight:700;text-transform:uppercase;color:'+sevcol+';background:'+sevcol+'1f;border:1px solid '+sevcol+'40;border-radius:6px;padding:2px 7px">риск '+sevlbl+'</span>';
+                if (cat) html += '<span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#a39fc0;background:rgba(255,255,255,0.05);border-radius:6px;padding:2px 7px">'+escapeHtml(CATLBL[cat]||cat)+'</span>';
+                if (n.data('hub')) html += '<span style="font-family:JetBrains Mono,monospace;font-size:10px;color:'+HUB+';background:rgba(55,138,221,0.12);border:1px solid '+HUB+'55;border-radius:6px;padding:2px 7px">ХАБ</span>';
+                html += '</div>';
+                html += '<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#8b86ab;margin-bottom:12px">← входящих: '+indeg+' · исходящих: '+outdeg+' →</div>';
+                if (inChains.length){
+                  html += '<div style="font-family:JetBrains Mono,monospace;font-size:9.5px;letter-spacing:.1em;color:#8b86ab;margin-bottom:6px">В ЦЕПОЧКАХ</div>';
+                  inChains.slice(0,4).forEach(function(c){
+                    var col = STCOL[c.status] || '#a78bfa';
+                    html += '<div style="font-size:12px;color:#cdc9e4;margin-bottom:5px;display:flex;gap:7px"><span style="color:'+col+'">•</span><span>'+escapeHtml(c.title||'цепочка')+'</span></div>';
+                  });
+                }
+                if (risk){
+                  html += '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px">';
+                  html += '<div style="font-family:JetBrains Mono,monospace;font-size:9.5px;letter-spacing:.1em;color:#8b86ab;margin-bottom:6px">РИСК</div>';
+                  html += '<div style="font-size:12.5px;color:#e7e4f3;font-weight:600;margin-bottom:4px">'+escapeHtml(risk.risk||'')+'</div>';
+                  var dmg = risk.damage_forecast || {};
+                  ['financial','operational','reputational','legal'].forEach(function(k){
+                    var lbl = {financial:'Фин',operational:'Опер',reputational:'Реп',legal:'Юр'}[k];
+                    if (dmg[k] && dmg[k].estimate) html += '<div style="font-size:11.5px;color:#a39fc0;margin-bottom:2px"><span style="color:#8b86ab">'+lbl+':</span> '+escapeHtml(dmg[k].estimate)+'</div>';
+                  });
+                  var arts = risk.based_on_articles || [];
+                  if (arts.length){
+                    html += '<div style="font-family:JetBrains Mono,monospace;font-size:9.5px;letter-spacing:.1em;color:#8b86ab;margin:9px 0 5px">ИСТОЧНИКИ ('+arts.length+')</div>';
+                    arts.slice(0,3).forEach(function(a){
+                      html += '<a href="'+(a.url||'#')+'" target="_blank" rel="noopener" style="display:block;font-size:11.5px;color:#8fbcff;text-decoration:none;margin-bottom:4px">'+escapeHtml((a.source?a.source+' · ':'')+(a.title||''))+'</a>';
+                    });
+                  }
+                  html += '</div>';
+                }
+                var box = document.getElementById('cmap-detail');
+                box.innerHTML = html; box.style.display = 'block';
+              }
+              function hideDetail(){ var b = document.getElementById('cmap-detail'); if (b) b.style.display = 'none'; }
+              window.cmapCloseDetail = function(){ pinned = null; if (cy) cy.elements().removeClass('dim hl'); hideDetail(); };
+              window.cmapFit = function(){ if (cy) cy.animate({ fit: { padding: 26 } }, { duration: 300 }); };
+
+              function buildChips(chains){
+                var box = document.getElementById('cmap-chains'); if (!box) return;
+                box.innerHTML = '';
+                chains.forEach(function(ch, idx){
+                  var col = STCOL[ch.status] || '#a78bfa';
+                  var chip = document.createElement('button'); chip.type = 'button';
+                  chip.style.cssText = 'cursor:pointer;text-align:left;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);border-left:3px solid ' + col + ';border-radius:10px;padding:8px 12px;color:#cdc9e4;font-size:12.5px;max-width:100%';
+                  chip.innerHTML = '<span style="font-weight:600">' + (ch.title || ('Цепочка ' + (idx + 1))) + '</span>'
+                    + ' <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:' + col + '">· ' + (STLBL[ch.status] || ch.status || '') + '</span>';
+                  chip.onclick = function(){
+                    if (!cy) return;
+                    if (pinned === 'chain' + idx){ pinned = null; cy.elements().removeClass('dim hl'); chip.style.background = 'rgba(255,255,255,0.04)'; return; }
+                    pinned = 'chain' + idx;
+                    Array.prototype.forEach.call(box.children, function(c){ c.style.background = 'rgba(255,255,255,0.04)'; });
+                    chip.style.background = 'rgba(167,139,250,0.16)';
+                    var ids = ch.node_ids || [], set = {}; ids.forEach(function(id){ set[id] = true; });
+                    cy.elements().addClass('dim').removeClass('hl');
+                    var coll = cy.collection();
+                    ids.forEach(function(id){ var n = cy.getElementById(id); if (n && n.length){ n.removeClass('dim').addClass('hl'); coll = coll.union(n); } });
+                    cy.edges().forEach(function(e){ if (set[e.data('source')] && set[e.data('target')]) e.removeClass('dim').addClass('hl'); });
+                    if (coll.length) cy.animate({ fit: { eles: coll, padding: 60 } }, { duration: 350 });
+                  };
+                  box.appendChild(chip);
+                });
+              }
+            })();
+            </script>
+            {% endif %}
+
+            {# «Топ новостей и постов» перенесён выше — под «Мониторинг по зонам» #}
+
+            {# «Сценарии потерь» убраны по запросу #}
 
           </div>
           {# ══════════════ END DESIGN OVERVIEW ══════════════ #}
