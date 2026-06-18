@@ -7,7 +7,7 @@ from urllib.parse import quote
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, Form, UploadFile, File
+from fastapi import FastAPI, Request, Form, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -113,6 +113,13 @@ templates.env.filters["tojson"] = lambda v: _Markup(
     .replace("<", "\\u003c")
     .replace(">", "\\u003e")
 )
+
+# Source-category classifier (single source of truth) exposed to templates.
+from . import source_categories as _srccat
+templates.env.globals["SOURCE_CATEGORIES"] = _srccat.SOURCE_CATEGORIES
+templates.env.globals["source_category"] = _srccat.classify
+templates.env.globals["source_cat_label"] = _srccat.label
+templates.env.globals["source_cat_color"] = _srccat.color
 
 
 # ── Always-admin emails (owners). Login is open to everyone. ──────────────────
@@ -1575,6 +1582,7 @@ async def _company_detail_inner(req: Request, company_id: str):
 
     async def _safe_risk_runs(token: str, cid: str):
         _selects = [
+            "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios,domain_factors,domain_scores,connection_map",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios,domain_factors,domain_scores",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles,loss_scenarios",
             "id,status,created_at,updated_at,score,advice,risks,categories,scenarios,social_posts,risk_fingerprints,positive_signals,top_articles",
@@ -1984,6 +1992,7 @@ async def _run_combined_job(
                         "loss_scenarios":    pipeline_result.get("loss_scenarios", []),
                         "domain_factors":    pipeline_result.get("domain_factors", {}),
                         "domain_scores":     pipeline_result.get("domain_scores", {}),
+                        "connection_map":    pipeline_result.get("connection_map", {}),
                         "top_articles": [
                             {
                                 "title":     r["title"],
@@ -2429,6 +2438,194 @@ async def loss_scenarios(req: Request, company_id: str):
             logger.warning("loss_scenarios cache write failed: %s", e)
 
     return {"scenarios": scen}
+
+
+@app.get("/companies/{company_id}/connection-graph")
+async def connection_graph(req: Request, company_id: str):
+    """
+    Clean graph data for the connection map (consumed by the UI render and by
+    external/custom designs). Returns nodes/edges/chains/forecast/early_warnings.
+    """
+    user = await get_current_user(req)
+    if not user:
+        return {"error": "unauthorized"}
+    svc = settings.SUPABASE_SERVICE_KEY
+    if not svc:
+        return {"nodes": [], "edges": [], "chains": [], "forecast": {}, "early_warnings": []}
+
+    try:
+        rows = await supabase.rest_select_service(
+            table="risk_runs", service_key=svc,
+            select="connection_map,created_at",
+            query_params={"company_id": f"eq.{company_id}", "status": "eq.done",
+                          "order": "created_at.desc", "limit": "1"},
+        )
+    except Exception as e:
+        logger.warning("connection_graph load failed: %s", e)
+        rows = []
+
+    cmap = (rows[0].get("connection_map") if rows else None) or {}
+
+    # Older runs may have been stored before graph metrics existed — backfill.
+    if cmap and not cmap.get("nodes") and (cmap.get("chains") or cmap.get("connections")):
+        try:
+            from .connection_agent import _clean, _compute_graph_metrics
+            cmap = _clean(cmap)
+            _compute_graph_metrics(cmap)
+        except Exception as e:
+            logger.warning("connection_graph backfill failed: %s", e)
+
+    return {
+        "assets": cmap.get("assets", []),
+        "nodes": cmap.get("nodes", []),
+        "edges": cmap.get("connections", []),
+        "chains": cmap.get("chains", []),
+        "risks": cmap.get("risks", []),
+        "patterns": cmap.get("patterns", []),
+        "early_warnings": cmap.get("early_warnings", []),
+        # legacy (older runs may still carry these)
+        "conclusions": cmap.get("conclusions", []),
+        "forecast": cmap.get("forecast", {}),
+        "generated_at": (rows[0].get("created_at") if rows else None),
+    }
+
+
+# ── Knowledge base (RAG): client documents → retrieval into the agent ────────
+
+async def _process_document(company_id: str, doc_id: int, name: str, kind: str, data: bytes) -> None:
+    """Background: parse → chunk → embed → store; update document status."""
+    sk = settings.SUPABASE_SERVICE_KEY
+    from . import knowledge_base as _kb
+    try:
+        sections = await asyncio.to_thread(_kb.extract_sections, kind, data)
+        if not sections:
+            raise ValueError("текст не извлечён (пустой или не распознан)")
+        count = await _kb.index_document(company_id, doc_id, name, sections)
+        await supabase.rest_update_service(
+            f"rest/v1/knowledge_documents?id=eq.{doc_id}", sk,
+            {"status": "ready", "chunk_count": count},
+        )
+        logger.info("[kb] document %s ready: %d chunks", doc_id, count)
+    except Exception as e:
+        logger.warning("[kb] document %s failed: %s", doc_id, e)
+        try:
+            await supabase.rest_update_service(
+                f"rest/v1/knowledge_documents?id=eq.{doc_id}", sk,
+                {"status": "failed", "error": str(e)[:300]},
+            )
+        except Exception:
+            pass
+
+
+@app.get("/companies/{company_id}/knowledge", response_class=HTMLResponse)
+async def knowledge_page(req: Request, company_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    company_rows = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id,name", query_params={"id": f"eq.{company_id}"},
+    )
+    company = company_rows[0] if company_rows else None
+    if not company:   # RLS hides companies the user can't access → isolation
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    documents = []
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            documents = await supabase.rest_select_service(
+                table="knowledge_documents", service_key=settings.SUPABASE_SERVICE_KEY,
+                select="id,name,mime,size,status,error,chunk_count,created_at",
+                query_params={"company_id": f"eq.{company_id}", "order": "created_at.desc"},
+            ) or []
+        except Exception as e:
+            logger.warning("knowledge_page load failed: %s", e)
+
+    from . import embeddings as _emb
+    return templates.TemplateResponse(
+        req, "knowledge.html",
+        {
+            "company": company,
+            "documents": documents,
+            "embeddings_ready": _emb.is_configured(),
+            "msg": req.query_params.get("msg"),
+            "error": req.query_params.get("error"),
+            "app_name": settings.APP_NAME,
+        },
+    )
+
+
+@app.post("/companies/{company_id}/documents")
+async def upload_document(req: Request, company_id: str, background: BackgroundTasks,
+                         file: UploadFile = File(...)):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    # Verify access to this company (RLS) before touching the service key.
+    comp = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id", query_params={"id": f"eq.{company_id}"},
+    )
+    if not comp:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    if not settings.SUPABASE_SERVICE_KEY:
+        return RedirectResponse(url=f"/companies/{company_id}/knowledge?error=no_service_key", status_code=302)
+
+    from . import knowledge_base as _kb
+    kind = _kb.detect_kind(file.filename or "", file.content_type or "")
+    if not kind:
+        return RedirectResponse(url=f"/companies/{company_id}/knowledge?error=unsupported", status_code=302)
+
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        return RedirectResponse(url=f"/companies/{company_id}/knowledge?error=too_large", status_code=302)
+
+    rows = await supabase.rest_insert_service_return(
+        table="knowledge_documents", service_key=settings.SUPABASE_SERVICE_KEY,
+        rows=[{
+            "company_id": company_id,
+            "name": (file.filename or "document")[:200],
+            "mime": file.content_type or "",
+            "size": len(data),
+            "status": "parsing",
+        }],
+    )
+    doc_id = rows[0]["id"] if rows else None
+    if doc_id is not None:
+        background.add_task(_process_document, company_id, doc_id, file.filename or "document", kind, data)
+    return RedirectResponse(url=f"/companies/{company_id}/knowledge?msg=uploaded", status_code=302)
+
+
+@app.post("/companies/{company_id}/documents/{doc_id}/delete")
+async def delete_document(req: Request, company_id: str, doc_id: str):
+    user = await get_current_user(req)
+    access_token, _ = _get_tokens(req)
+    if not user or not access_token:
+        return RedirectResponse(url="/login", status_code=302)
+    effective_token = getattr(req.state, "new_access_token", None) or access_token
+
+    comp = await supabase.rest_select(
+        table="companies", access_token=effective_token,
+        select="id", query_params={"id": f"eq.{company_id}"},
+    )
+    if not comp:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            # chunks are removed via ON DELETE CASCADE
+            await supabase.rest_delete_service(
+                "knowledge_documents", settings.SUPABASE_SERVICE_KEY,
+                {"id": f"eq.{doc_id}", "company_id": f"eq.{company_id}"},
+            )
+        except Exception as e:
+            logger.warning("delete_document failed: %s", e)
+    return RedirectResponse(url=f"/companies/{company_id}/knowledge?msg=deleted", status_code=302)
 
 
 @app.get("/companies/{company_id}/analyze-status/{job_id}")

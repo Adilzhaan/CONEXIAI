@@ -69,6 +69,19 @@ class Settings:
     APP_NAME: str = os.getenv("APP_NAME", "CONEXIAI")
     SITE_URL: str = os.getenv("SITE_URL", "")
 
+    # ── Knowledge base / RAG (client documents → retrieval into the agent) ──────
+    KNOWLEDGE_BASE_ENABLED: bool = os.getenv("KNOWLEDGE_BASE_ENABLED", "true").lower() == "true"
+    # Embeddings provider — NOT hardcoded; switch in env. "openai" or "voyage".
+    EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "1536"))  # must match the vector(N) column
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    VOYAGE_API_KEY: str = os.getenv("VOYAGE_API_KEY", "")
+    # Chunking — not hardcoded
+    KB_CHUNK_TOKENS: int = int(os.getenv("KB_CHUNK_TOKENS", "600"))
+    KB_CHUNK_OVERLAP: int = int(os.getenv("KB_CHUNK_OVERLAP", "90"))
+    KB_TOP_K: int = int(os.getenv("KB_TOP_K", "6"))
+
 
 settings = Settings()
 
